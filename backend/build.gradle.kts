@@ -30,7 +30,7 @@ dependencies {
   implementation("org.springframework.boot:spring-boot-starter-web")
   implementation("org.flywaydb:flyway-core")
   implementation("org.flywaydb:flyway-database-postgresql")
-  implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:2.8.9")
+  implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:3.0.3")
   runtimeOnly("org.postgresql:postgresql")
   testImplementation("org.springframework.boot:spring-boot-starter-test")
   testImplementation("org.springframework.boot:spring-boot-testcontainers")
