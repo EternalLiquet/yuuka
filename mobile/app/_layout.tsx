@@ -1,3 +1,4 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, ThemeProvider } from 'expo-router';
 import { usePreventScreenCapture } from 'expo-screen-capture';
 import { StatusBar } from 'expo-status-bar';
@@ -20,9 +21,11 @@ export default function RootLayout() {
   usePreventScreenCapture();
 
   return (
-    <SettingsProvider>
-      <RootProviders />
-    </SettingsProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SettingsProvider>
+        <RootProviders />
+      </SettingsProvider>
+    </GestureHandlerRootView>
   );
 }
 
