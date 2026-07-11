@@ -117,6 +117,62 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void fullyPostedPaycheckLeavesActiveAndAppearsInHistory() throws Exception {
+    String token = registerAndGetAccessToken("completed-active@yuuka.local");
+
+    MvcResult created =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"name":"Complete","amountMinor":15000,"incomeDate":"2026-07-17"}
+                        """))
+            .andExpect(status().isCreated())
+            .andReturn();
+    JsonNode paycheck = objectMapper.readTree(created.getResponse().getContentAsString());
+    String paycheckId = paycheck.path("id").asText();
+
+    MvcResult entryResult =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks/{id}/entries", paycheckId)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"entryType":"BILL","name":"Verizon","amountMinor":15000}
+                        """))
+            .andExpect(status().isCreated())
+            .andReturn();
+    JsonNode entry = objectMapper.readTree(entryResult.getResponse().getContentAsString());
+
+    mockMvc
+        .perform(
+            post("/api/v1/entries/{id}/status", entry.path("id").asText())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"toStatus":"POSTED","effectiveAt":"2026-07-17T12:00:00Z","version":%d}
+                    """
+                        .formatted(entry.path("version").asLong())))
+        .andExpect(status().isOk());
+
+    mockMvc
+        .perform(get("/api/v1/paychecks/active").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalItems").value(0));
+
+    mockMvc
+        .perform(get("/api/v1/paychecks/history").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].id").value(paycheckId));
+  }
+
+  @Test
   void rejectsMissingMoneyAmountsInsteadOfDefaultingToZero() throws Exception {
     String token = registerAndGetAccessToken("amount-required@yuuka.local");
 

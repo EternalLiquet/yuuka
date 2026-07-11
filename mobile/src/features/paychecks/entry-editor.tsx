@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Save, Trash2, X } from 'lucide-react-native';
 import { useEffect } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Entry } from '@/api/contracts';
@@ -50,12 +50,11 @@ export function EntryEditor({
     handleSubmit,
     reset,
     setError,
-    watch,
   } = useForm<EntryFormValues>({
     resolver: zodResolver(entryFormSchema),
     defaultValues: defaults(entry),
   });
-  const entryType = watch('entryType');
+  const entryType = useWatch({ control, name: 'entryType' });
 
   useEffect(() => {
     if (visible) reset(defaults(entry));
