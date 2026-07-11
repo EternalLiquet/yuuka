@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-yuuka}
+      POSTGRES_USER: ${POSTGRES_USER:-yuuka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yuuka_dev_password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yuuka} -d ${POSTGRES_DB:-yuuka}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "5432"
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - yuuka-postgres-data:/var/lib/postgresql/data
+    networks:
+      - database
+
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-yuuka}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-yuuka}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-yuuka_dev_password}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      YUUKA_JWT_ISSUER: ${YUUKA_JWT_ISSUER:-yuuka}
+      YUUKA_JWT_AUDIENCE: ${YUUKA_JWT_AUDIENCE:-yuuka-api}
+      YUUKA_JWT_SECRET: ${YUUKA_JWT_SECRET:-change-me-to-a-32-byte-minimum-secret}
+      YUUKA_JWT_ACCESS_TOKEN_TTL: ${YUUKA_JWT_ACCESS_TOKEN_TTL:-PT15M}
+      YUUKA_JWT_REFRESH_TOKEN_TTL: ${YUUKA_JWT_REFRESH_TOKEN_TTL:-P30D}
+      YUUKA_CORS_ALLOWED_ORIGINS: ${YUUKA_CORS_ALLOWED_ORIGINS:-http://localhost:8081,http://localhost:19006}
+      YUUKA_HTTP_MAX_REQUEST_BODY_SIZE_BYTES: ${YUUKA_HTTP_MAX_REQUEST_BODY_SIZE_BYTES:-65536}
+      YUUKA_AUTH_REGISTRATION_ENABLED: ${YUUKA_AUTH_REGISTRATION_ENABLED:-false}
+      YUUKA_AUTH_RATE_LIMIT_MAX_ATTEMPTS: ${YUUKA_AUTH_RATE_LIMIT_MAX_ATTEMPTS:-5}
+      YUUKA_AUTH_RATE_LIMIT_WINDOW: ${YUUKA_AUTH_RATE_LIMIT_WINDOW:-PT15M}
+      YUUKA_AUTH_RATE_LIMIT_MAX_TRACKED_KEYS: ${YUUKA_AUTH_RATE_LIMIT_MAX_TRACKED_KEYS:-10000}
+      YUUKA_OWNER_EMAIL: ${YUUKA_OWNER_EMAIL:-}
+      YUUKA_OWNER_PASSWORD_HASH: ${YUUKA_OWNER_PASSWORD_HASH:-}
+      YUUKA_OWNER_BOOTSTRAP_PASSWORD: ${YUUKA_OWNER_BOOTSTRAP_PASSWORD:-}
+      YUUKA_OWNER_TOTP_SECRET: ${YUUKA_OWNER_TOTP_SECRET:-}
+    ports:
+      - "${YUUKA_BIND_ADDRESS:-127.0.0.1}:${YUUKA_API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/health/ready >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - api
+      - database
+
+volumes:
+  yuuka-postgres-data:
+
+networks:
+  api:
+  database:
+    internal: true

@@ -1,0 +1,262 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Save, Trash2, X } from 'lucide-react-native';
+import { useEffect } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+
+import { Entry } from '@/api/contracts';
+import { AppText } from '@/components/app-text';
+import { Button } from '@/components/button';
+import { SegmentedControl } from '@/components/segmented-control';
+import { TextField } from '@/components/text-field';
+import { minorToInput, parseMoneyToMinor } from '@/domain/money';
+import { useAppTheme } from '@/theme/use-app-theme';
+
+import { EntryFormValues, entryFormSchema } from './form-schemas';
+
+const typeOptions = [
+  { label: 'Bill', value: 'BILL' },
+  { label: 'Spending Bucket', value: 'SPENDING_BUCKET' },
+  { label: 'Sinking Fund', value: 'SINKING_FUND' },
+] as const;
+
+export function EntryEditor({
+  entry,
+  onClose,
+  onDelete,
+  onSubmit,
+  visible,
+}: {
+  entry?: Entry | null;
+  onClose: () => void;
+  onDelete?: () => Promise<void>;
+  onSubmit: (values: {
+    accountName: string | null;
+    amountMinor: number;
+    dueDate: string | null;
+    entryType: EntryFormValues['entryType'];
+    name: string;
+    notes: string | null;
+    payee: string | null;
+    targetDate: string | null;
+    targetMinor: number | null;
+  }) => Promise<void>;
+  visible: boolean;
+}) {
+  const { colors } = useAppTheme();
+  const {
+    control,
+    formState: { errors, isSubmitting },
+    handleSubmit,
+    reset,
+    setError,
+    watch,
+  } = useForm<EntryFormValues>({
+    resolver: zodResolver(entryFormSchema),
+    defaultValues: defaults(entry),
+  });
+  const entryType = watch('entryType');
+
+  useEffect(() => {
+    if (visible) reset(defaults(entry));
+  }, [entry, reset, visible]);
+
+  async function submit(values: EntryFormValues) {
+    try {
+      await onSubmit({
+        entryType: values.entryType,
+        name: values.name.trim(),
+        amountMinor: parseMoneyToMinor(values.amount),
+        dueDate: values.entryType === 'BILL' && values.dueDate ? values.dueDate : null,
+        accountName:
+          values.entryType === 'BILL' && values.accountName.trim()
+            ? values.accountName.trim()
+            : null,
+        payee: values.entryType === 'BILL' && values.payee.trim() ? values.payee.trim() : null,
+        notes: values.notes.trim() || null,
+        targetMinor:
+          values.entryType === 'SINKING_FUND' && values.target
+            ? parseMoneyToMinor(values.target)
+            : null,
+        targetDate:
+          values.entryType === 'SINKING_FUND' && values.targetDate ? values.targetDate : null,
+      });
+      onClose();
+    } catch (error) {
+      setError('root', {
+        message: error instanceof Error ? error.message : 'The entry was not saved.',
+      });
+    }
+  }
+
+  async function remove() {
+    if (!onDelete) return;
+    try {
+      await onDelete();
+      onClose();
+    } catch (error) {
+      setError('root', {
+        message: error instanceof Error ? error.message : 'The entry was not deleted.',
+      });
+    }
+  }
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <View>
+            <AppText variant="title">{entry ? 'Edit entry' : 'New entry'}</AppText>
+            <AppText style={{ color: colors.muted }} variant="caption">
+              {entry?.name ?? 'Paycheck allocation'}
+            </AppText>
+          </View>
+          <Pressable accessibilityLabel="Close entry editor" onPress={onClose} style={styles.close}>
+            <X color={colors.text} size={23} />
+          </Pressable>
+        </View>
+        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+          <Controller
+            control={control}
+            name="entryType"
+            render={({ field }) => (
+              <View style={styles.fieldGroup}>
+                <AppText variant="label">Type</AppText>
+                <SegmentedControl
+                  label="Entry type"
+                  onChange={field.onChange}
+                  options={typeOptions}
+                  value={field.value}
+                />
+              </View>
+            )}
+          />
+          <ControlledField
+            control={control}
+            error={errors.name?.message}
+            label="Name"
+            name="name"
+          />
+          <ControlledField
+            control={control}
+            error={errors.amount?.message}
+            keyboardType="decimal-pad"
+            label={entryType === 'SPENDING_BUCKET' ? 'Budget amount' : 'Amount'}
+            name="amount"
+          />
+          {entryType === 'BILL' ? (
+            <>
+              <ControlledField
+                control={control}
+                error={errors.dueDate?.message}
+                label="Due date (optional)"
+                name="dueDate"
+                placeholder="YYYY-MM-DD"
+              />
+              <ControlledField control={control} label="Account (optional)" name="accountName" />
+              <ControlledField control={control} label="Payee (optional)" name="payee" />
+            </>
+          ) : null}
+          {entryType === 'SINKING_FUND' ? (
+            <>
+              <ControlledField
+                control={control}
+                error={errors.target?.message}
+                keyboardType="decimal-pad"
+                label="Target amount (optional)"
+                name="target"
+              />
+              <ControlledField
+                control={control}
+                error={errors.targetDate?.message}
+                label="Target date (optional)"
+                name="targetDate"
+                placeholder="YYYY-MM-DD"
+              />
+            </>
+          ) : null}
+          <ControlledField control={control} label="Notes (optional)" multiline name="notes" />
+          {errors.root?.message ? (
+            <AppText style={{ color: colors.danger }} variant="error">
+              {errors.root.message}
+            </AppText>
+          ) : null}
+          <Button
+            icon={Save}
+            label="Save entry"
+            loading={isSubmitting}
+            onPress={handleSubmit(submit)}
+          />
+          {entry && onDelete ? (
+            <Button icon={Trash2} label="Delete entry" onPress={remove} variant="danger" />
+          ) : null}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function ControlledField({
+  control,
+  error,
+  keyboardType,
+  label,
+  multiline,
+  name,
+  placeholder,
+}: {
+  control: ReturnType<typeof useForm<EntryFormValues>>['control'];
+  error?: string;
+  keyboardType?: 'decimal-pad';
+  label: string;
+  multiline?: boolean;
+  name: keyof EntryFormValues;
+  placeholder?: string;
+}) {
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <TextField
+          error={error}
+          keyboardType={keyboardType}
+          label={label}
+          multiline={multiline}
+          onBlur={field.onBlur}
+          onChangeText={field.onChange}
+          placeholder={placeholder}
+          value={String(field.value ?? '')}
+        />
+      )}
+    />
+  );
+}
+
+function defaults(entry?: Entry | null): EntryFormValues {
+  return {
+    entryType: entry?.entryType ?? 'BILL',
+    name: entry?.name ?? '',
+    amount: entry ? minorToInput(entry.amountMinor) : '',
+    dueDate: entry?.dueDate ?? '',
+    accountName: entry?.accountName ?? '',
+    payee: entry?.payee ?? '',
+    notes: entry?.notes ?? '',
+    target: entry?.targetMinor == null ? '' : minorToInput(entry.targetMinor),
+    targetDate: entry?.targetDate ?? '',
+  };
+}
+
+const styles = StyleSheet.create({
+  close: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
+  fieldGroup: { gap: 8 },
+  form: { gap: 17, padding: 18, paddingBottom: 40 },
+  header: {
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 18,
+  },
+  screen: { flex: 1 },
+});

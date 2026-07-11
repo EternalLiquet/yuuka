@@ -1,0 +1,35 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+.idea/
+.vscode/
+backups/
+
+# Generated native projects and local test artifacts
+mobile/android/
+mobile/ios/
+.artifacts/
+
+backend/.gradle/
+backend/build/
+backend/out/
+backend/bin/
+
+mobile/.expo/
+mobile/dist/
+mobile/node_modules/
+mobile/npm-debug.log*
+
+# Signing keys and certificates
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+*.p8
+*.mobileprovision
+**/local.properties

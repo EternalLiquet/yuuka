@@ -1,0 +1,87 @@
+appId: com.yuuka.mobile
+name: Scratch paycheck lifecycle
+---
+- runFlow: shared/sign-in.yaml
+- tapOn: "New paycheck"
+- tapOn: "Name"
+- inputText: "E2E Scratch"
+- tapOn: "Exact paycheck amount"
+- inputText: "200.00"
+- hideKeyboard
+- tapOn: "Create paycheck"
+- extendedWaitUntil:
+    visible: "E2E Scratch"
+    timeout: 10000
+
+- tapOn: "Add entry"
+- tapOn: "Name"
+- inputText: "Phone"
+- tapOn: "Amount"
+- inputText: "50.00"
+- hideKeyboard
+- tapOn: "Save entry"
+- extendedWaitUntil:
+    visible: "Phone"
+    timeout: 10000
+
+- tapOn: "Add entry"
+- tapOn: "Spending Bucket"
+- tapOn: "Name"
+- inputText: "Food"
+- tapOn: "Budget amount"
+- inputText: "150.00"
+- hideKeyboard
+- tapOn: "Save entry"
+- extendedWaitUntil:
+    visible: "Food"
+    timeout: 10000
+
+- tapOn: "Move Food up"
+- tapOn: "Change status for Phone"
+- tapOn: "Processing"
+- tapOn: "Effective date and time"
+- eraseText
+- inputText: "2026-07-16T12:00:00Z"
+- tapOn: "Note (optional)"
+- inputText: "Scheduled"
+- hideKeyboard
+- tapOn: "Save status"
+- extendedWaitUntil:
+    visible: "Status: Processing"
+    timeout: 10000
+
+- tapOn: "Change status for Phone"
+- tapOn: "Posted"
+- hideKeyboard
+- tapOn: "Save status"
+- extendedWaitUntil:
+    visible: "Status: Posted"
+    timeout: 10000
+
+- tapOn: "Change status for Food"
+- tapOn: "Posted"
+- hideKeyboard
+- tapOn: "Save status"
+- extendedWaitUntil:
+    visible: "Close paycheck"
+    timeout: 10000
+
+- tapOn: "View status history for Phone"
+- assertVisible: "Not Paid"
+- assertVisible: "Processing"
+- assertVisible: "Posted"
+- tapOn: "Close status history"
+- tapOn: "Close paycheck"
+- extendedWaitUntil:
+    visible: "Reopen paycheck"
+    timeout: 10000
+- back
+- tapOn: "History"
+- extendedWaitUntil:
+    visible: "E2E Scratch"
+    timeout: 10000
+- tapOn: 'E2E Scratch, \$200\.00, \$0\.00 unallocated'
+- tapOn: "Reopen paycheck"
+- extendedWaitUntil:
+    visible: "Add entry"
+    timeout: 10000

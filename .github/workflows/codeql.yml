@@ -1,0 +1,44 @@
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "37 8 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - java-kotlin
+          - javascript-typescript
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+      - uses: actions/setup-java@v5.2.0
+        if: matrix.language == 'java-kotlin'
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Make Gradle wrapper executable
+        if: matrix.language == 'java-kotlin'
+        run: chmod +x backend/gradlew
+      - name: Build backend
+        if: matrix.language == 'java-kotlin'
+        working-directory: backend
+        run: ./gradlew testClasses --no-daemon
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"

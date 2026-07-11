@@ -1,0 +1,14 @@
+appId: com.yuuka.mobile
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Yuuka"
+- tapOn: "Email"
+- inputText: "${YUUKA_EMAIL}"
+- tapOn: "Password"
+- inputText: "${YUUKA_PASSWORD}"
+- hideKeyboard
+- tapOn: "Sign in"
+- extendedWaitUntil:
+    visible: "Active"
+    timeout: 15000

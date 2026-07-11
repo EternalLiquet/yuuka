@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Yuuka",
+    "slug": "yuuka",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/yuuka-emblem.png",
+    "scheme": "yuuka",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.yuuka.mobile",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.yuuka.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#090D12",
+        "foregroundImage": "./assets/images/yuuka-emblem.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/yuuka-emblem.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/yuuka-emblem.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#090D12"
+        }
+      ],
+      "expo-localization",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
