@@ -102,14 +102,14 @@ public class PaybackService {
 
   @Transactional
   public PaybackResponse update(UUID ownerId, UUID paybackId, UpdatePaybackRequest request) {
-    Payback payback = requirePayback(ownerId, paybackId);
+    Payback payback = requirePaybackForUpdate(ownerId, paybackId);
     assertVersion(payback.getVersion(), request.version());
     long repaidMinor = activeRepaidMinor(payback);
     validateBaseline(request.originalAmountMinor(), request.openingRemainingAmountMinor());
     if (request.openingRemainingAmountMinor() < repaidMinor) {
       throw new BusinessRuleException(
           "PAYBACK_BASELINE_BELOW_REPAYMENTS",
-          "Amount currently left cannot be lower than the amount already repaid in Yuuka.",
+          "Balance when tracking began cannot be lower than recorded repayments.",
           Map.of(
               "amountMinor",
               repaidMinor - request.openingRemainingAmountMinor(),
@@ -222,7 +222,7 @@ public class PaybackService {
           Map.of());
     }
     if (repayments.findByEntryIdAndOwnerIdAndReversedAtIsNull(entry.getId(), ownerId).isPresent()) {
-      syncState(payback);
+      syncState(payback, appliedAt);
       return;
     }
     long remainingMinor = remainingMinor(payback);
@@ -232,7 +232,7 @@ public class PaybackService {
     repayments.saveAndFlush(
         new PaybackRepayment(
             ownerId, payback.getId(), entry.getId(), entry.getAmountMinor(), appliedAt));
-    syncState(payback);
+    syncState(payback, appliedAt);
   }
 
   public void reversePostedEntryRepayment(UUID ownerId, UUID entryId, Instant reversedAt) {
@@ -246,13 +246,19 @@ public class PaybackService {
                       .orElseThrow(ResourceNotFoundException::new);
               repayment.reverse(reversedAt);
               repayments.flush();
-              syncState(payback);
+              syncState(payback, reversedAt);
             });
   }
 
   public Payback requirePayback(UUID ownerId, UUID paybackId) {
     return paybacks
         .findByIdAndOwnerIdAndDeletedAtIsNull(paybackId, ownerId)
+        .orElseThrow(ResourceNotFoundException::new);
+  }
+
+  private Payback requirePaybackForUpdate(UUID ownerId, UUID paybackId) {
+    return paybacks
+        .findByIdAndOwnerIdForUpdate(paybackId, ownerId)
         .orElseThrow(ResourceNotFoundException::new);
   }
 
@@ -275,13 +281,20 @@ public class PaybackService {
     return PaybackRepaymentResponse.from(repayment, entry, paycheck);
   }
 
-  private void syncState(Payback payback) {
-    payback.syncState(remainingMinor(payback));
+  private void syncState(Payback payback, Instant recordedAt) {
+    payback.recordRepaymentBalanceChange(remainingMinor(payback), recordedAt);
     paybacks.flush();
   }
 
   private long remainingMinor(Payback payback) {
-    return payback.getOpeningRemainingAmountMinor() - activeRepaidMinor(payback);
+    long remainingMinor = payback.getOpeningRemainingAmountMinor() - activeRepaidMinor(payback);
+    if (remainingMinor < 0) {
+      throw new BusinessRuleException(
+          "PAYBACK_REMAINING_NEGATIVE",
+          "Recorded repayments cannot exceed the balance when tracking began.",
+          Map.of());
+    }
+    return remainingMinor;
   }
 
   private long activeRepaidMinor(Payback payback) {
@@ -292,7 +305,7 @@ public class PaybackService {
     if (openingRemainingAmountMinor > originalAmountMinor) {
       throw new BusinessRuleException(
           "PAYBACK_OPENING_EXCEEDS_ORIGINAL",
-          "Amount currently left cannot be greater than the original amount.",
+          "Balance when tracking began cannot be greater than the original amount.",
           Map.of());
     }
   }

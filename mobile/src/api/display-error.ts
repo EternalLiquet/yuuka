@@ -31,7 +31,7 @@ function moneyError(error: ApiError, currencyCode: string) {
     return `This repayment is ${formatMoney(amountMinor, currencyCode)} more than the amount left on this Payback.`;
   }
   if (error.code === 'PAYBACK_BASELINE_BELOW_REPAYMENTS') {
-    return `Amount currently left must cover the ${formatMoney(amountMinor, currencyCode)} already repaid in Yuuka.`;
+    return `Increase the balance when tracking began by at least ${formatMoney(amountMinor, currencyCode)} to cover recorded repayments.`;
   }
   return null;
 }

@@ -1,7 +1,9 @@
 package com.yuuka.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -9,10 +11,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuuka.backend.support.AbstractIntegrationTest;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -20,6 +25,7 @@ import org.springframework.test.web.servlet.MvcResult;
 class PaybackWorkflowTests extends AbstractIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @Test
   void createsPaybacksWithOpeningBalancesAndSummarizesOnlyActiveRemaining() throws Exception {
@@ -103,6 +109,149 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.totalItems").value(2))
         .andExpect(jsonPath("$.items[0].reversedAt").isEmpty())
         .andExpect(jsonPath("$.items[1].reversedAt").isNotEmpty());
+  }
+
+  @Test
+  void repaymentApplyAndReverseAdvancePaybackVersionEvenWhenStillActive() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-version@yuuka.local");
+    JsonNode payback = createPayback(token, "Partial repayment", 10000, 10000);
+    JsonNode paycheck = createPaycheck(token, 10000);
+    JsonNode entry =
+        createEntry(
+            token, paycheck.path("id").asText(), "Partial", 4000, payback.path("id").asText());
+
+    long initialVersion = payback.path("version").asLong();
+    JsonNode posted =
+        changeStatus(token, entry.path("id").asText(), "POSTED", entry.path("version").asLong());
+    JsonNode afterPost = getPayback(token, payback.path("id").asText());
+
+    assertThat(afterPost.path("state").asText()).isEqualTo("ACTIVE");
+    assertThat(afterPost.path("version").asLong()).isGreaterThan(initialVersion);
+    assertThat(afterPost.path("remainingMinor").asLong()).isEqualTo(6000);
+
+    JsonNode processing =
+        changeStatus(
+            token, entry.path("id").asText(), "PROCESSING", posted.path("version").asLong());
+    JsonNode afterReverse = getPayback(token, payback.path("id").asText());
+
+    assertThat(processing.path("status").asText()).isEqualTo("PROCESSING");
+    assertThat(afterReverse.path("state").asText()).isEqualTo("ACTIVE");
+    assertThat(afterReverse.path("version").asLong())
+        .isGreaterThan(afterPost.path("version").asLong());
+    assertThat(afterReverse.path("remainingMinor").asLong()).isEqualTo(10000);
+  }
+
+  @Test
+  void lockedBaselineUpdateCannotFallBelowRecordedRepayments() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-baseline@yuuka.local");
+    JsonNode payback = createPayback(token, "Baseline", 10000, 10000);
+    JsonNode paycheck = createPaycheck(token, 10000);
+    JsonNode entry =
+        createEntry(
+            token, paycheck.path("id").asText(), "Repayment", 4000, payback.path("id").asText());
+    changeStatus(token, entry.path("id").asText(), "POSTED", entry.path("version").asLong());
+    JsonNode current = getPayback(token, payback.path("id").asText());
+
+    JsonNode exactBaseline =
+        updatePayback(
+            token,
+            payback.path("id").asText(),
+            "Baseline",
+            10000,
+            4000,
+            current.path("version").asLong(),
+            200);
+
+    assertThat(exactBaseline.path("remainingMinor").asLong()).isZero();
+    assertThat(exactBaseline.path("state").asText()).isEqualTo("PAID_OFF");
+
+    JsonNode rejected =
+        updatePayback(
+            token,
+            payback.path("id").asText(),
+            "Baseline",
+            10000,
+            3999,
+            exactBaseline.path("version").asLong(),
+            422);
+    assertThat(rejected.path("code").asText()).isEqualTo("PAYBACK_BASELINE_BELOW_REPAYMENTS");
+    assertThat(rejected.path("details").path("amountMinor").asLong()).isEqualTo(1);
+  }
+
+  @Test
+  void staleBaselineUpdateAfterRepaymentIsRejectedByAdvancedVersion() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-stale-boundary@yuuka.local");
+    JsonNode payback = createPayback(token, "Boundary", 10000, 10000);
+    JsonNode paycheck = createPaycheck(token, 10000);
+    JsonNode entry =
+        createEntry(
+            token, paycheck.path("id").asText(), "Repayment", 4000, payback.path("id").asText());
+
+    changeStatus(token, entry.path("id").asText(), "POSTED", entry.path("version").asLong());
+
+    updatePayback(
+        token,
+        payback.path("id").asText(),
+        "Boundary",
+        10000,
+        10000,
+        payback.path("version").asLong(),
+        409);
+  }
+
+  @Test
+  void databaseRejectsCrossOwnerPaybackRelationships() throws Exception {
+    String ownerToken = registerAndGetAccessToken("paybacks-db-owner@yuuka.local");
+    String otherToken = registerAndGetAccessToken("paybacks-db-other@yuuka.local");
+    JsonNode payback = createPayback(ownerToken, "Owner Payback", 10000, 10000);
+    JsonNode otherPaycheck = createPaycheck(otherToken, 10000);
+    JsonNode otherEntry =
+        createEntry(otherToken, otherPaycheck.path("id").asText(), "Other entry", 1000, null);
+    UUID paybackId = UUID.fromString(payback.path("id").asText());
+    UUID otherOwnerId =
+        jdbcTemplate.queryForObject(
+            "select owner_id from paycheck_entries where id = ?",
+            UUID.class,
+            UUID.fromString(otherEntry.path("id").asText()));
+    UUID ownerId =
+        jdbcTemplate.queryForObject(
+            "select owner_id from paybacks where id = ?", UUID.class, paybackId);
+
+    assertThatThrownBy(
+            () ->
+                jdbcTemplate.update(
+                    "update paycheck_entries set payback_id = ? where id = ?",
+                    paybackId,
+                    UUID.fromString(otherEntry.path("id").asText())))
+        .isInstanceOf(DataAccessException.class);
+
+    assertThatThrownBy(
+            () ->
+                jdbcTemplate.update(
+                    """
+                    insert into payback_repayments
+                        (id, owner_id, payback_id, entry_id, amount_minor, applied_at, created_at, updated_at, version)
+                    values (?, ?, ?, ?, 1000, now(), now(), now(), 0)
+                    """,
+                    UUID.randomUUID(),
+                    otherOwnerId,
+                    paybackId,
+                    UUID.fromString(otherEntry.path("id").asText())))
+        .isInstanceOf(DataAccessException.class);
+
+    assertThatThrownBy(
+            () ->
+                jdbcTemplate.update(
+                    """
+                    insert into payback_repayments
+                        (id, owner_id, payback_id, entry_id, amount_minor, applied_at, created_at, updated_at, version)
+                    values (?, ?, ?, ?, 1000, now(), now(), now(), 0)
+                    """,
+                    UUID.randomUUID(),
+                    ownerId,
+                    paybackId,
+                    UUID.fromString(otherEntry.path("id").asText())))
+        .isInstanceOf(DataAccessException.class);
   }
 
   @Test
@@ -232,7 +381,8 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
   private JsonNode createEntry(
       String token, String paycheckId, String name, long amountMinor, String paybackId)
       throws Exception {
-    MvcResult result =
+    String paybackJson = paybackId == null ? "null" : "\"%s\"".formatted(paybackId);
+    var action =
         mockMvc
             .perform(
                 post("/api/v1/paychecks/{id}/entries", paycheckId)
@@ -244,12 +394,57 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
                           "entryType": "BILL",
                           "name": "%s",
                           "amountMinor": %d,
-                          "paybackId": "%s"
+                          "paybackId": %s
                         }
                         """
-                            .formatted(name, amountMinor, paybackId)))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.paybackId").value(paybackId))
+                            .formatted(name, amountMinor, paybackJson)))
+            .andExpect(status().isCreated());
+    if (paybackId == null) {
+      action.andExpect(jsonPath("$.paybackId").isEmpty());
+    } else {
+      action.andExpect(jsonPath("$.paybackId").value(paybackId));
+    }
+    MvcResult result = action.andReturn();
+    return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private JsonNode getPayback(String token, String paybackId) throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                get("/api/v1/paybacks/{id}", paybackId).header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andReturn();
+    return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private JsonNode updatePayback(
+      String token,
+      String paybackId,
+      String name,
+      long originalAmount,
+      long openingRemaining,
+      long version,
+      int expectedStatus)
+      throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                patch("/api/v1/paybacks/{id}", paybackId)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "name": "%s",
+                          "originalAmountMinor": %d,
+                          "openingRemainingAmountMinor": %d,
+                          "borrowedDate": "2026-07-12",
+                          "version": %d
+                        }
+                        """
+                            .formatted(name, originalAmount, openingRemaining, version)))
+            .andExpect(status().is(expectedStatus))
             .andReturn();
     return objectMapper.readTree(result.getResponse().getContentAsString());
   }

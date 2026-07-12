@@ -110,7 +110,15 @@ public class Payback {
   }
 
   public void syncState(long remainingMinor) {
+    if (remainingMinor < 0) {
+      throw new IllegalArgumentException("Payback remaining amount cannot be negative.");
+    }
     state = remainingMinor == 0 ? PaybackState.PAID_OFF : PaybackState.ACTIVE;
+  }
+
+  public void recordRepaymentBalanceChange(long remainingMinor, Instant now) {
+    syncState(remainingMinor);
+    updatedAt = now;
   }
 
   public void delete(Instant now) {

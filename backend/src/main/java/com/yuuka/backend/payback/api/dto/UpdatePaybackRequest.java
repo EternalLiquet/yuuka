@@ -13,7 +13,8 @@ public record UpdatePaybackRequest(
         @Positive(message = "Original amount must be greater than $0.00.")
         Long originalAmountMinor,
     @NotNull(message = "Enter the amount currently left.")
-        @PositiveOrZero(message = "Amount currently left must be greater than or equal to $0.00.")
+        @PositiveOrZero(
+            message = "Balance when tracking began must be greater than or equal to $0.00.")
         Long openingRemainingAmountMinor,
     @NotNull(message = "Enter a borrowed or start date.") LocalDate borrowedDate,
     @Size(max = 160) String source,

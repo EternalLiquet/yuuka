@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Save, X } from 'lucide-react-native';
-import { useEffect } from 'react';
-import { Controller, useForm, useWatch } from 'react-hook-form';
+import { useEffect, useRef } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { z } from 'zod';
 
@@ -10,7 +10,7 @@ import { Payback } from '@/api/contracts';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { TextField } from '@/components/text-field';
-import { minorToInput, parseMoneyToMinor } from '@/domain/money';
+import { formatMoney, minorToInput, parseMoneyToMinor } from '@/domain/money';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
@@ -49,7 +49,7 @@ const paybackFormSchema = z
         context.addIssue({
           code: 'custom',
           path: ['openingRemainingAmount'],
-          message: 'Amount currently left cannot be greater than the original amount.',
+          message: 'Balance when tracking began cannot be greater than the original amount.',
         });
       }
     } catch {
@@ -77,6 +77,7 @@ export function PaybackEditor({
 }) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const openingEdited = useRef(Boolean(payback));
   const {
     control,
     formState: { errors, isSubmitting },
@@ -88,18 +89,10 @@ export function PaybackEditor({
     resolver: zodResolver(paybackFormSchema),
     defaultValues: defaults(payback),
   });
-  const originalAmount = useWatch({ control, name: 'originalAmount' });
-  const openingRemainingAmount = useWatch({ control, name: 'openingRemainingAmount' });
-
   useEffect(() => {
     reset(defaults(payback));
+    openingEdited.current = Boolean(payback);
   }, [payback, reset]);
-
-  useEffect(() => {
-    if (!payback && originalAmount && !openingRemainingAmount) {
-      setValue('openingRemainingAmount', originalAmount);
-    }
-  }, [openingRemainingAmount, originalAmount, payback, setValue]);
 
   async function submit(values: PaybackFormValues) {
     try {
@@ -111,7 +104,6 @@ export function PaybackEditor({
         source: values.source.trim() || null,
         notes: values.notes.trim() || null,
       });
-      onClose();
     } catch (error) {
       setError('root', {
         message: displayError(error, settings.currencyCode, 'The Payback was not saved.'),
@@ -140,6 +132,11 @@ export function PaybackEditor({
           keyboardType="decimal-pad"
           label="Original amount owed"
           name="originalAmount"
+          onTextChanged={(value) => {
+            if (!payback && !openingEdited.current) {
+              setValue('openingRemainingAmount', value);
+            }
+          }}
         />
         <AppText style={{ color: colors.muted }} variant="caption">
           Original amount is the full amount you initially owed yourself.
@@ -148,12 +145,26 @@ export function PaybackEditor({
           control={control}
           error={errors.openingRemainingAmount?.message}
           keyboardType="decimal-pad"
-          label="Amount currently left"
+          label="Balance when tracking began"
           name="openingRemainingAmount"
+          onTextChanged={(_value) => {
+            openingEdited.current = true;
+          }}
         />
         <AppText style={{ color: colors.muted }} variant="caption">
-          Amount currently left is what remained before you started tracking this Payback in Yuuka.
+          This is the historical balance before you started tracking this Payback in Yuuka. Current
+          remaining is calculated from recorded repayments.
         </AppText>
+        {payback ? (
+          <View style={[styles.derivedMetric, { borderColor: colors.border }]}>
+            <AppText style={{ color: colors.muted }} variant="caption">
+              Current remaining
+            </AppText>
+            <AppText variant="label">
+              {formatMoney(payback.remainingMinor, settings.currencyCode)}
+            </AppText>
+          </View>
+        ) : null}
         <ControlledField
           control={control}
           error={errors.borrowedDate?.message}
@@ -187,6 +198,7 @@ function ControlledField({
   multiline,
   name,
   placeholder,
+  onTextChanged,
 }: {
   control: ReturnType<typeof useForm<PaybackFormValues>>['control'];
   error?: string;
@@ -195,6 +207,7 @@ function ControlledField({
   multiline?: boolean;
   name: keyof PaybackFormValues;
   placeholder?: string;
+  onTextChanged?: (value: string) => void;
 }) {
   return (
     <Controller
@@ -207,7 +220,10 @@ function ControlledField({
           label={label}
           multiline={multiline}
           onBlur={field.onBlur}
-          onChangeText={field.onChange}
+          onChangeText={(value) => {
+            onTextChanged?.(value);
+            field.onChange(value);
+          }}
           placeholder={placeholder}
           value={String(field.value ?? '')}
         />
@@ -235,6 +251,7 @@ function today() {
 
 const styles = StyleSheet.create({
   close: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
+  derivedMetric: { borderRadius: 8, borderWidth: 1, gap: 4, padding: 12 },
   form: { gap: 13, padding: 18, paddingBottom: 40 },
   header: {
     alignItems: 'center',

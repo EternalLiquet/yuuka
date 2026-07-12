@@ -68,4 +68,18 @@ describe('API error mapping', () => {
     expect(message).toBe('The request could not be completed.');
     expect(message).not.toMatch(/minor unit|amountMinor/i);
   });
+
+  it('describes Payback baseline shortfall as the amount that must be added', () => {
+    const error = mapApiError(422, {
+      code: 'PAYBACK_BASELINE_BELOW_REPAYMENTS',
+      message: 'Balance when tracking began cannot be lower than recorded repayments.',
+      details: { amountMinor: 2500, currencyCode: 'USD' },
+      fieldErrors: {},
+      traceId: 'trace-1',
+    });
+
+    expect(displayError(error, 'USD')).toBe(
+      'Increase the balance when tracking began by at least $25.00 to cover recorded repayments.',
+    );
+  });
 });

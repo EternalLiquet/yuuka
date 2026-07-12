@@ -75,6 +75,7 @@ export default function PaycheckDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['paycheck', id] }),
       queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
       queryClient.invalidateQueries({ queryKey: ['paybacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['payback'] }),
     ]);
   };
 
