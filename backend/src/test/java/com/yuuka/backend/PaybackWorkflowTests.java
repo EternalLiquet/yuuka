@@ -10,8 +10,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuuka.backend.common.api.BusinessRuleException;
+import com.yuuka.backend.common.api.ResourceNotFoundException;
+import com.yuuka.backend.payback.application.PaybackService;
+import com.yuuka.backend.paycheck.api.dto.CreateEntryRequest;
+import com.yuuka.backend.paycheck.api.dto.StatusChangeRequest;
+import com.yuuka.backend.paycheck.application.PaycheckService;
+import com.yuuka.backend.paycheck.domain.EntryStatus;
+import com.yuuka.backend.paycheck.domain.EntryType;
+import com.yuuka.backend.paycheck.domain.PaycheckEntry;
+import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
 import com.yuuka.backend.support.AbstractIntegrationTest;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,12 +37,17 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @AutoConfigureMockMvc
 class PaybackWorkflowTests extends AbstractIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private TransactionTemplate transactionTemplate;
+  @Autowired private PaybackService paybackService;
+  @Autowired private PaycheckService paycheckService;
+  @Autowired private JpaPaycheckEntryRepository entryRepository;
 
   @Test
   void createsPaybacksWithOpeningBalancesAndSummarizesOnlyActiveRemaining() throws Exception {
@@ -197,6 +219,223 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
         10000,
         payback.path("version").asLong(),
         409);
+  }
+
+  @Test
+  void deleteRechecksAssignmentHistoryAfterWaitingForPaybackLock() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-delete-race@yuuka.local");
+    JsonNode payback = createPayback(token, "Delete race", 10000, 10000);
+    JsonNode paycheck = createPaycheck(token, 10000);
+    JsonNode entry = createEntry(token, paycheck.path("id").asText(), "Race entry", 1000, null);
+    UUID paybackId = UUID.fromString(payback.path("id").asText());
+    UUID entryId = UUID.fromString(entry.path("id").asText());
+    UUID ownerId = ownerIdForEntry(entryId);
+    long version = payback.path("version").asLong();
+    CountDownLatch lockHeld = new CountDownLatch(1);
+    CountDownLatch deleteStarted = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+
+    try {
+      Future<?> assignment =
+          executor.submit(
+              () ->
+                  transactionTemplate.executeWithoutResult(
+                      status -> {
+                        lockPayback(paybackId);
+                        lockHeld.countDown();
+                        await(deleteStarted);
+                        jdbcTemplate.update(
+                            "update paycheck_entries set payback_id = ? where id = ?",
+                            paybackId,
+                            entryId);
+                      }));
+      Future<String> deletion =
+          executor.submit(
+              () -> {
+                await(lockHeld);
+                deleteStarted.countDown();
+                try {
+                  paybackService.delete(ownerId, paybackId, version);
+                  return "DELETED";
+                } catch (BusinessRuleException ex) {
+                  return ex.code();
+                }
+              });
+
+      assignment.get(5, TimeUnit.SECONDS);
+
+      assertThat(deletion.get(5, TimeUnit.SECONDS)).isEqualTo("PAYBACK_HAS_HISTORY");
+      assertThat(deletedAtForPayback(paybackId)).isNull();
+      assertThat(paybackIdForEntry(entryId)).isEqualTo(paybackId);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
+  void assignmentValidationRechecksPaybackAfterWaitingForPaybackLock() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-assignment-race@yuuka.local");
+    JsonNode payback = createPayback(token, "Assignment race", 10000, 10000);
+    JsonNode paycheck = createPaycheck(token, 10000);
+    UUID paybackId = UUID.fromString(payback.path("id").asText());
+    UUID paycheckId = UUID.fromString(paycheck.path("id").asText());
+    UUID ownerId = ownerIdForPayback(paybackId);
+    CountDownLatch lockHeld = new CountDownLatch(1);
+    CountDownLatch assignmentStarted = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+
+    try {
+      Future<?> deletion =
+          executor.submit(
+              () ->
+                  transactionTemplate.executeWithoutResult(
+                      status -> {
+                        lockPayback(paybackId);
+                        lockHeld.countDown();
+                        await(assignmentStarted);
+                        jdbcTemplate.update(
+                            "update paybacks set deleted_at = now() where id = ?", paybackId);
+                      }));
+      Future<String> assignment =
+          executor.submit(
+              () -> {
+                await(lockHeld);
+                assignmentStarted.countDown();
+                try {
+                  paycheckService.addEntry(
+                      ownerId,
+                      paycheckId,
+                      new CreateEntryRequest(
+                          EntryType.BILL,
+                          "Late assignment",
+                          1000L,
+                          null,
+                          null,
+                          null,
+                          null,
+                          null,
+                          null,
+                          paybackId));
+                  return "ASSIGNED";
+                } catch (ResourceNotFoundException ex) {
+                  return "NOT_FOUND";
+                }
+              });
+
+      deletion.get(5, TimeUnit.SECONDS);
+
+      assertThat(assignment.get(5, TimeUnit.SECONDS)).isEqualTo("NOT_FOUND");
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "select count(*) from paycheck_entries where paycheck_id = ? and payback_id = ?",
+                  Long.class,
+                  paycheckId,
+                  paybackId))
+          .isZero();
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
+  void concurrentPostedRepaymentsCannotOverpayPayback() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-concurrent-post@yuuka.local");
+    JsonNode payback = createPayback(token, "Concurrent repayment", 10000, 10000);
+    JsonNode paycheck = createPaycheck(token, 20000);
+    JsonNode firstEntry =
+        createEntry(
+            token,
+            paycheck.path("id").asText(),
+            "First repayment",
+            6000,
+            payback.path("id").asText());
+    JsonNode secondEntry =
+        createEntry(
+            token,
+            paycheck.path("id").asText(),
+            "Second repayment",
+            6000,
+            payback.path("id").asText());
+    UUID paybackId = UUID.fromString(payback.path("id").asText());
+    UUID ownerId = ownerIdForPayback(paybackId);
+    UUID firstEntryId = UUID.fromString(firstEntry.path("id").asText());
+    UUID secondEntryId = UUID.fromString(secondEntry.path("id").asText());
+    CountDownLatch lockHeld = new CountDownLatch(1);
+    CountDownLatch bothPosting = new CountDownLatch(2);
+    ExecutorService executor = Executors.newFixedThreadPool(3);
+
+    try {
+      Future<?> lockHolder =
+          executor.submit(
+              () ->
+                  transactionTemplate.executeWithoutResult(
+                      status -> {
+                        lockPayback(paybackId);
+                        lockHeld.countDown();
+                        await(bothPosting);
+                      }));
+      Future<String> firstPost =
+          executor.submit(
+              () ->
+                  postEntryStatusAfterLock(
+                      lockHeld,
+                      bothPosting,
+                      ownerId,
+                      firstEntryId,
+                      firstEntry.path("version").asLong()));
+      Future<String> secondPost =
+          executor.submit(
+              () ->
+                  postEntryStatusAfterLock(
+                      lockHeld,
+                      bothPosting,
+                      ownerId,
+                      secondEntryId,
+                      secondEntry.path("version").asLong()));
+
+      lockHolder.get(5, TimeUnit.SECONDS);
+
+      assertThat(List.of(firstPost.get(5, TimeUnit.SECONDS), secondPost.get(5, TimeUnit.SECONDS)))
+          .containsExactlyInAnyOrder("POSTED", "PAYBACK_REPAYMENT_OVERPAID");
+      assertThat(activeRepaymentCount(paybackId)).isEqualTo(1);
+      assertThat(activeRepaymentSum(paybackId)).isEqualTo(6000);
+      assertThat(postedEntryCount(paycheck.path("id").asText())).isEqualTo(1);
+      JsonNode current = getPayback(token, payback.path("id").asText());
+      assertThat(current.path("remainingMinor").asLong()).isEqualTo(4000);
+      assertThat(current.path("state").asText()).isEqualTo("ACTIVE");
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
+  void reapplyingExistingRepaymentToPaidOffPaybackIsNoOp() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-paid-idempotent@yuuka.local");
+    JsonNode payback = createPayback(token, "Paid idempotency", 10000, 10000);
+    JsonNode paycheck = createPaycheck(token, 10000);
+    JsonNode entry =
+        createEntry(
+            token,
+            paycheck.path("id").asText(),
+            "Final repayment",
+            10000,
+            payback.path("id").asText());
+    changeStatus(token, entry.path("id").asText(), "POSTED", entry.path("version").asLong());
+    JsonNode paid = getPayback(token, payback.path("id").asText());
+    UUID entryId = UUID.fromString(entry.path("id").asText());
+    UUID ownerId = ownerIdForEntry(entryId);
+    PaycheckEntry persistedEntry =
+        entryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, ownerId).orElseThrow();
+
+    paybackService.applyPostedEntryRepayment(
+        ownerId, persistedEntry, Instant.parse("2026-07-17T13:00:00Z"));
+
+    JsonNode afterRetry = getPayback(token, payback.path("id").asText());
+    assertThat(afterRetry.path("state").asText()).isEqualTo("PAID_OFF");
+    assertThat(afterRetry.path("remainingMinor").asLong()).isZero();
+    assertThat(afterRetry.path("repaymentCount").asLong()).isEqualTo(1);
+    assertThat(afterRetry.path("version").asLong()).isEqualTo(paid.path("version").asLong());
+    assertThat(afterRetry.path("updatedAt").asText()).isEqualTo(paid.path("updatedAt").asText());
   }
 
   @Test
@@ -471,6 +710,82 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
             .andExpect(status().is(expectedStatus))
             .andReturn();
     return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private String postEntryStatusAfterLock(
+      CountDownLatch lockHeld,
+      CountDownLatch bothPosting,
+      UUID ownerId,
+      UUID entryId,
+      long version) {
+    await(lockHeld);
+    bothPosting.countDown();
+    try {
+      paycheckService.changeStatus(
+          ownerId,
+          entryId,
+          new StatusChangeRequest(
+              EntryStatus.POSTED, Instant.parse("2026-07-17T12:00:00Z"), null, version));
+      return "POSTED";
+    } catch (BusinessRuleException ex) {
+      return ex.code();
+    }
+  }
+
+  private void lockPayback(UUID paybackId) {
+    jdbcTemplate.queryForObject(
+        "select id from paybacks where id = ? for update", UUID.class, paybackId);
+  }
+
+  private UUID ownerIdForPayback(UUID paybackId) {
+    return jdbcTemplate.queryForObject(
+        "select owner_id from paybacks where id = ?", UUID.class, paybackId);
+  }
+
+  private UUID ownerIdForEntry(UUID entryId) {
+    return jdbcTemplate.queryForObject(
+        "select owner_id from paycheck_entries where id = ?", UUID.class, entryId);
+  }
+
+  private UUID paybackIdForEntry(UUID entryId) {
+    return jdbcTemplate.queryForObject(
+        "select payback_id from paycheck_entries where id = ?", UUID.class, entryId);
+  }
+
+  private Instant deletedAtForPayback(UUID paybackId) {
+    return jdbcTemplate.queryForObject(
+        "select deleted_at from paybacks where id = ?", Instant.class, paybackId);
+  }
+
+  private long activeRepaymentCount(UUID paybackId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from payback_repayments where payback_id = ? and reversed_at is null",
+        Long.class,
+        paybackId);
+  }
+
+  private long activeRepaymentSum(UUID paybackId) {
+    return jdbcTemplate.queryForObject(
+        "select coalesce(sum(amount_minor), 0) from payback_repayments "
+            + "where payback_id = ? and reversed_at is null",
+        Long.class,
+        paybackId);
+  }
+
+  private long postedEntryCount(String paycheckId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from paycheck_entries where paycheck_id = ? and status = 'POSTED'",
+        Long.class,
+        UUID.fromString(paycheckId));
+  }
+
+  private void await(CountDownLatch latch) {
+    try {
+      assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue();
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError(ex);
+    }
   }
 
   private String registerAndGetAccessToken(String email) throws Exception {

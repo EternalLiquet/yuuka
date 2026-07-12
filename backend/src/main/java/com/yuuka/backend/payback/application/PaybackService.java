@@ -133,7 +133,7 @@ public class PaybackService {
 
   @Transactional
   public void delete(UUID ownerId, UUID paybackId, long version) {
-    Payback payback = requirePayback(ownerId, paybackId);
+    Payback payback = requirePaybackForUpdate(ownerId, paybackId);
     assertVersion(payback.getVersion(), version);
     if (repayments.countByPaybackIdAndOwnerId(paybackId, ownerId) > 0
         || entries.countByPaybackIdAndOwnerIdAndDeletedAtIsNull(paybackId, ownerId) > 0) {
@@ -158,6 +158,7 @@ public class PaybackService {
     return paginate(rows, page, size);
   }
 
+  @Transactional
   public void validateAssignment(UUID ownerId, PaycheckEntry entry, UUID paybackId) {
     if (paybackId == null) {
       return;
@@ -168,7 +169,7 @@ public class PaybackService {
           "Payback repayments must be greater than $0.00.",
           Map.of());
     }
-    Payback payback = requirePayback(ownerId, paybackId);
+    Payback payback = requirePaybackForUpdate(ownerId, paybackId);
     if (payback.getState() != PaybackState.ACTIVE) {
       throw new BusinessRuleException(
           "PAYBACK_NOT_ACTIVE",
@@ -181,6 +182,7 @@ public class PaybackService {
     }
   }
 
+  @Transactional
   public void syncAfterEntryUpdate(
       UUID ownerId,
       PaycheckEntry entry,
@@ -206,6 +208,7 @@ public class PaybackService {
     }
   }
 
+  @Transactional
   public void applyPostedEntryRepayment(UUID ownerId, PaycheckEntry entry, Instant appliedAt) {
     UUID paybackId = entry.getPaybackId();
     if (paybackId == null) {
@@ -215,15 +218,14 @@ public class PaybackService {
         paybacks
             .findByIdAndOwnerIdForUpdate(paybackId, ownerId)
             .orElseThrow(ResourceNotFoundException::new);
+    if (repayments.findByEntryIdAndOwnerIdAndReversedAtIsNull(entry.getId(), ownerId).isPresent()) {
+      return;
+    }
     if (payback.getState() != PaybackState.ACTIVE) {
       throw new BusinessRuleException(
           "PAYBACK_NOT_ACTIVE",
           "Choose an active Payback or remove the Payback assignment.",
           Map.of());
-    }
-    if (repayments.findByEntryIdAndOwnerIdAndReversedAtIsNull(entry.getId(), ownerId).isPresent()) {
-      syncState(payback, appliedAt);
-      return;
     }
     long remainingMinor = remainingMinor(payback);
     if (entry.getAmountMinor() > remainingMinor) {
@@ -235,6 +237,7 @@ public class PaybackService {
     syncState(payback, appliedAt);
   }
 
+  @Transactional
   public void reversePostedEntryRepayment(UUID ownerId, UUID entryId, Instant reversedAt) {
     repayments
         .findByEntryIdAndOwnerIdAndReversedAtIsNull(entryId, ownerId)
