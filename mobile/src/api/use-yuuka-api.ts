@@ -10,6 +10,9 @@ import {
   entrySchema,
   meSchema,
   pageSchema,
+  paybackListSchema,
+  paybackRepaymentSchema,
+  paybackSchema,
   paycheckSchema,
   statusEventSchema,
   templateEntrySchema,
@@ -24,6 +27,7 @@ export type EntryPayload = {
   name: string;
   notes?: string | null;
   payee?: string | null;
+  paybackId?: string | null;
   targetDate?: string | null;
   targetMinor?: number | null;
   version?: number;
@@ -71,6 +75,31 @@ export function useYuukaApi() {
       historyPaychecks: (query = '') =>
         get(`/paychecks/history?size=100${query}`, pageSchema(paycheckSchema)),
       paycheck: (id: string) => get(`/paychecks/${id}`, paycheckSchema),
+      paybacks: () => get('/paybacks', paybackListSchema),
+      payback: (id: string) => get(`/paybacks/${id}`, paybackSchema),
+      createPayback: (body: {
+        borrowedDate: string;
+        name: string;
+        notes?: string | null;
+        openingRemainingAmountMinor: number;
+        originalAmountMinor: number;
+        source?: string | null;
+      }) => send('/paybacks', 'POST', body, paybackSchema),
+      updatePayback: (
+        id: string,
+        body: {
+          borrowedDate: string;
+          name: string;
+          notes?: string | null;
+          openingRemainingAmountMinor: number;
+          originalAmountMinor: number;
+          source?: string | null;
+          version: number;
+        },
+      ) => send(`/paybacks/${id}`, 'PATCH', body, paybackSchema),
+      deletePayback: (id: string, version: number) => remove(`/paybacks/${id}?version=${version}`),
+      paybackRepayments: (id: string) =>
+        get(`/paybacks/${id}/repayments?size=100`, pageSchema(paybackRepaymentSchema)),
       createPaycheck: (body: {
         amountMinor: number;
         incomeDate: string;

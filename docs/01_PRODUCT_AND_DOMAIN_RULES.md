@@ -176,6 +176,42 @@ User-facing text must display formatted currency, not internal storage terminolo
 For example, show `$0.98`, not `98 minor units`, and show `Amount`, not API field
 names such as `amountMinor`.
 
+## Paybacks
+
+A Payback tracks money the owner borrowed from themself and intends to repay through paycheck
+entries. It is separate from allocation: assigning a paycheck entry to a Payback does not change
+the Payback balance until that entry reaches Posted status.
+
+Payback terminology:
+
+- original amount = the full amount initially owed,
+- opening remaining amount = the unpaid balance when tracking began in Yuuka,
+- repaid through Yuuka = active Posted paycheck-entry repayments recorded after creation,
+- current remaining amount = opening remaining amount minus active repayments.
+
+Payback states:
+
+- **Active** — current remaining amount is greater than zero.
+- **Paid Off** — current remaining amount is exactly zero.
+
+When a Payback is created with a zero opening remaining amount, Yuuka records it as Paid Off.
+Opening remaining amount cannot exceed original amount, and neither repayments nor edits may make
+the current remaining amount negative. Money remains integer minor units internally and must be
+formatted as currency in visible UI.
+
+Repayment lifecycle:
+
+- entries linked while Not Paid or Processing do not apply repayment,
+- changing a linked entry to Posted applies exactly one repayment for that entry amount,
+- changing a Posted entry back to Processing or Not Paid reverses the active repayment,
+- returning the entry to Posted creates a new active repayment while preserving reversed history,
+- deleting a Posted linked entry reverses the repayment in the same transaction,
+- Paybacks move automatically between Active and Paid Off as repayments apply or reverse.
+
+For the MVP, one paycheck entry may link to at most one Payback, and the repayment amount is the
+entry amount. Yuuka does not support interest, fees, schedules, recurring repayments, split
+repayments, multiple Paybacks per entry, currency conversion, or bank synchronization.
+
 ## Non-goals for v1
 
 Do not implement:

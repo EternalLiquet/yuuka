@@ -6,6 +6,7 @@ import com.yuuka.backend.auth.infrastructure.JpaUserAccountRepository;
 import com.yuuka.backend.common.config.OwnerProperties;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @Order(0)
+@ConditionalOnProperty(
+    name = "yuuka.owner.bootstrap-enabled",
+    havingValue = "true",
+    matchIfMissing = true)
 public class OwnerAccountBootstrap implements ApplicationRunner {
   private final OwnerProperties ownerProperties;
   private final JpaUserAccountRepository userAccounts;

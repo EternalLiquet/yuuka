@@ -22,10 +22,18 @@ export function displayError(
 }
 
 function moneyError(error: ApiError, currencyCode: string) {
-  if (error.code !== 'PAYCHECK_OVER_ALLOCATED') return null;
   const amountMinor = error.details.amountMinor;
   if (typeof amountMinor !== 'number' || !Number.isSafeInteger(amountMinor)) return null;
-  return `This would over-allocate the paycheck by ${formatMoney(amountMinor, currencyCode)}.`;
+  if (error.code === 'PAYCHECK_OVER_ALLOCATED') {
+    return `This would over-allocate the paycheck by ${formatMoney(amountMinor, currencyCode)}.`;
+  }
+  if (error.code === 'PAYBACK_REPAYMENT_OVERPAID') {
+    return `This repayment is ${formatMoney(amountMinor, currencyCode)} more than the amount left on this Payback.`;
+  }
+  if (error.code === 'PAYBACK_BASELINE_BELOW_REPAYMENTS') {
+    return `Amount currently left must cover the ${formatMoney(amountMinor, currencyCode)} already repaid in Yuuka.`;
+  }
+  return null;
 }
 
 function safeMessage(message: string, fallback: string) {

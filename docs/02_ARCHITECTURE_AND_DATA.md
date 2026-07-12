@@ -254,3 +254,13 @@ For bucket:
 
 - spent amount = sum(active bucket transactions),
 - remaining amount = budget minus spent.
+
+For Payback:
+
+- repaid amount = sum(payback repayments where `reversed_at` is null),
+- remaining amount = opening remaining amount minus repaid amount,
+- progress percentage = repaid amount divided by opening remaining amount for presentation only.
+
+Payback baseline amounts are mutable through optimistic-lock guarded updates, but opening remaining
+amount cannot be reduced below already active repayments. Repayment application and reversal are
+critical atomic operations tied to paycheck-entry status changes.

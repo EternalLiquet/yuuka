@@ -65,6 +65,7 @@ display. Example:
 ### Entries
 
 - `POST /paychecks/{paycheckId}/entries`
+- `paybackId` may be supplied on entry create/update to assign that entry to an Active Payback.
 - `POST /paychecks/{paycheckId}/leftover-entry` creates a normal `BILL` named `LEFTOVER` for the exact current unallocated amount when the supplied paycheck version is current.
 - `PATCH /entries/{id}`
 - `DELETE /entries/{id}`
@@ -88,6 +89,19 @@ Status-change request:
 - `POST /entries/{entryId}/bucket-transactions` with positive `amountMinor`, `effectiveDate`, optional `description`, and optional `notes`.
 - `PATCH /bucket-transactions/{id}` with positive `amountMinor`, `effectiveDate`, optional `description`, optional `notes`, and `version`.
 - `DELETE /bucket-transactions/{id}`
+
+### Paybacks
+
+- `GET /paybacks` returns active and paid-off Paybacks plus a summary total.
+- `POST /paybacks`
+- `GET /paybacks/{id}`
+- `PATCH /paybacks/{id}`
+- `DELETE /paybacks/{id}` soft-deletes only Paybacks without repayment history.
+- `GET /paybacks/{id}/repayments` returns active and reversed repayment history.
+
+Payback business-rule errors use structured money details for mobile formatting. For example,
+overpayment uses `PAYBACK_REPAYMENT_OVERPAID` with `details.amountMinor` and `details.currencyCode`
+instead of embedding raw storage values in the message.
 
 ### Templates
 

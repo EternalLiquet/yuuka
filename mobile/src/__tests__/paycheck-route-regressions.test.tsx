@@ -23,6 +23,7 @@ const mockApi = {
   closePaycheck: jest.fn(),
   deleteBucketTransaction: jest.fn(),
   deleteEntry: jest.fn(),
+  paybacks: jest.fn(),
   paycheck: jest.fn(),
   reopenPaycheck: jest.fn(),
   reorderEntries: jest.fn(),
@@ -163,6 +164,15 @@ describe('paycheck route regressions', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockParams = { id: paycheck.id };
+    mockApi.paybacks.mockResolvedValue({
+      items: [],
+      summary: {
+        activeCount: 0,
+        totalOriginalMinor: 0,
+        totalRemainingMinor: 0,
+        totalRepaidMinor: 0,
+      },
+    });
     mockApi.paycheck.mockResolvedValue(paycheck);
     mockApi.allocateLeftover.mockResolvedValue(
       entry({
@@ -277,6 +287,7 @@ function entry(overrides: Partial<Entry>): Entry {
     name: 'Entry',
     notes: null,
     overBudget: null,
+    paybackId: null,
     payee: null,
     paycheckId: paycheckId(),
     position: 0,

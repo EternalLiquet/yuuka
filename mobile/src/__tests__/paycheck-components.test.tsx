@@ -21,6 +21,7 @@ jest.mock('@/settings/settings-provider', () => ({
 const entry: Entry = {
   id: '00000000-0000-0000-0000-000000000001',
   paycheckId: '00000000-0000-0000-0000-000000000010',
+  paybackId: null,
   entryType: 'SPENDING_BUCKET',
   name: 'Work Food',
   amountMinor: 5000,

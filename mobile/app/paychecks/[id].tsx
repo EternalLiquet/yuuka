@@ -65,10 +65,16 @@ export default function PaycheckDetailScreen() {
   const [paycheckEditorVisible, setPaycheckEditorVisible] = useState(false);
   const leftoverInFlight = useRef(false);
   const query = useQuery({ queryKey: ['paycheck', id], queryFn: () => api.paycheck(id) });
+  const paybacksQuery = useQuery({
+    queryKey: ['paybacks', 'entry-editor'],
+    queryFn: api.paybacks,
+    enabled: entryEditorVisible,
+  });
   const invalidate = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['paycheck', id] }),
       queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
+      queryClient.invalidateQueries({ queryKey: ['paybacks'] }),
     ]);
   };
 
@@ -329,6 +335,7 @@ export default function PaycheckDetailScreen() {
             .mutateAsync({ type: editingEntry ? 'update' : 'add', entry: editingEntry, payload })
             .then(() => undefined)
         }
+        paybacks={paybacksQuery.data?.items ?? []}
         visible={entryEditorVisible}
       />
       <PaycheckEditor

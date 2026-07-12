@@ -22,6 +22,7 @@ const entry = {
   name: 'Work Food',
   notes: null,
   overBudget: false,
+  paybackId: null,
   payee: null,
   paycheckId: '11111111-1111-4111-8111-111111111110',
   position: 0,

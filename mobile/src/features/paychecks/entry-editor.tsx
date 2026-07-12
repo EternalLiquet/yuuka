@@ -5,7 +5,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
-import { Entry } from '@/api/contracts';
+import { Entry, Payback } from '@/api/contracts';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { SegmentedControl } from '@/components/segmented-control';
@@ -27,6 +27,7 @@ export function EntryEditor({
   onClose,
   onDelete,
   onSubmit,
+  paybacks = [],
   visible,
 }: {
   entry?: Entry | null;
@@ -40,9 +41,11 @@ export function EntryEditor({
     name: string;
     notes: string | null;
     payee: string | null;
+    paybackId: string | null;
     targetDate: string | null;
     targetMinor: number | null;
   }) => Promise<void>;
+  paybacks?: Payback[];
   visible: boolean;
 }) {
   const { colors } = useAppTheme();
@@ -76,6 +79,7 @@ export function EntryEditor({
             : null,
         payee: values.entryType === 'BILL' && values.payee.trim() ? values.payee.trim() : null,
         notes: values.notes.trim() || null,
+        paybackId: values.paybackId || null,
         targetMinor:
           values.entryType === 'SINKING_FUND' && values.target
             ? parseMoneyToMinor(values.target)
@@ -178,6 +182,37 @@ export function EntryEditor({
             </>
           ) : null}
           <ControlledField control={control} label="Notes (optional)" multiline name="notes" />
+          <Controller
+            control={control}
+            name="paybackId"
+            render={({ field }) => (
+              <View style={styles.fieldGroup}>
+                <AppText variant="label">Apply to Payback</AppText>
+                <AppText style={{ color: colors.muted }} variant="caption">
+                  Repayment applies when this entry reaches Posted.
+                </AppText>
+                <View style={styles.paybackOptions}>
+                  <PaybackOption
+                    label="None"
+                    onPress={() => field.onChange('')}
+                    selected={!field.value}
+                  />
+                  {paybacks
+                    .filter(
+                      (payback) => payback.state === 'ACTIVE' || payback.id === entry?.paybackId,
+                    )
+                    .map((payback) => (
+                      <PaybackOption
+                        key={payback.id}
+                        label={payback.name}
+                        onPress={() => field.onChange(payback.id)}
+                        selected={field.value === payback.id}
+                      />
+                    ))}
+                </View>
+              </View>
+            )}
+          />
           {errors.root?.message ? (
             <AppText style={{ color: colors.danger }} variant="error">
               {errors.root.message}
@@ -244,9 +279,40 @@ function defaults(entry?: Entry | null): EntryFormValues {
     accountName: entry?.accountName ?? '',
     payee: entry?.payee ?? '',
     notes: entry?.notes ?? '',
+    paybackId: entry?.paybackId ?? '',
     target: entry?.targetMinor == null ? '' : minorToInput(entry.targetMinor),
     targetDate: entry?.targetDate ?? '',
   };
+}
+
+function PaybackOption({
+  label,
+  onPress,
+  selected,
+}: {
+  label: string;
+  onPress: () => void;
+  selected: boolean;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Pressable
+      accessibilityLabel={`Apply to Payback ${label}`}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[
+        styles.paybackOption,
+        {
+          backgroundColor: selected ? colors.accentSoft : colors.surfaceElevated,
+          borderColor: selected ? colors.accent : colors.border,
+        },
+      ]}
+    >
+      <AppText style={{ color: selected ? colors.accent : colors.text }} variant="caption">
+        {label}
+      </AppText>
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -261,4 +327,6 @@ const styles = StyleSheet.create({
     padding: 18,
   },
   screen: { flex: 1 },
+  paybackOption: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8 },
+  paybackOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 });

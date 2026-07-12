@@ -24,6 +24,18 @@ Every status change appends an event with separate effective and recorded timest
 
 Mutable aggregates use optimistic versions and stale requests receive `409 Conflict`. Every lookup is scoped to the authenticated owner, and cross-owner IDs resolve as not found.
 
+## Payback repayments
+
+Paybacks are their own aggregate, but repayment application is integrated into the paycheck-entry
+status transaction. A paycheck entry has at most one Payback assignment. Posted status creates one
+active repayment row for the entry amount; moving backward reverses that row instead of deleting
+history. Returning to Posted creates a new active row, while the partial unique index on active
+repayments prevents duplicate application for the same entry.
+
+Current Payback balances are derived from opening remaining amount minus active repayments. A zero
+opening remaining amount is accepted and creates a Paid Off Payback, which lets already-settled
+borrowed money be recorded without fake repayments.
+
 ## Authentication boundary
 
 The mobile app uses short-lived signed access JWTs and one-time rotating opaque refresh tokens. Only refresh-token hashes are stored. Replaying a rotated token revokes its family. Production is single-owner, registration-disabled, password-plus-TOTP, and private-network-first.

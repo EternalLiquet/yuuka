@@ -332,7 +332,8 @@ public class TemplateService {
                   source.payee(),
                   source.notes(),
                   source.targetMinor(),
-                  source.targetDate()));
+                  source.targetDate(),
+                  null));
       copied.add(entry);
       statusEvents.save(
           new EntryStatusEvent(
