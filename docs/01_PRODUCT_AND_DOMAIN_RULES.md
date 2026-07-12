@@ -172,6 +172,10 @@ Examples:
 
 Never use floating-point arithmetic for balances.
 
+User-facing text must display formatted currency, not internal storage terminology.
+For example, show `$0.98`, not `98 minor units`, and show `Amount`, not API field
+names such as `amountMinor`.
+
 ## Non-goals for v1
 
 Do not implement:

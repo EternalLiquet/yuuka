@@ -7,6 +7,7 @@ import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-nativ
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import type { Entry, EntryStatus, EntryType, Paycheck } from '@/api/contracts';
+import { displayError } from '@/api/display-error';
 import { EntryPayload, useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
@@ -50,6 +51,7 @@ export default function PaycheckDetailScreen() {
   const api = useYuukaApi();
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
+  const { settings } = useSettings();
   const [statusFilter, setStatusFilter] = useState<'ALL' | EntryStatus>('ALL');
   const [typeFilter, setTypeFilter] = useState<'ALL' | EntryType>('ALL');
   const [sort, setSort] = useState<EntrySort>('custom');
@@ -118,7 +120,7 @@ export default function PaycheckDetailScreen() {
       await invalidate();
     },
     onError: async (error) => {
-      setDetailError(message(error));
+      setDetailError(displayError(error, settings.currencyCode));
       await query.refetch();
     },
     onSettled: () => {
@@ -183,7 +185,14 @@ export default function PaycheckDetailScreen() {
   if (query.isError && !query.data) {
     return (
       <Screen contentContainerStyle={styles.center}>
-        <ErrorState message={message(query.error)} retry={() => query.refetch()} />
+        <ErrorState
+          message={displayError(
+            query.error,
+            settings.currencyCode,
+            'The request could not be completed.',
+          )}
+          retry={() => query.refetch()}
+        />
       </Screen>
     );
   }
@@ -460,7 +469,7 @@ function DetailHeader({
       </View>
       {lifecycleMutation.error ? (
         <AppText style={{ color: colors.danger }} variant="error">
-          {message(lifecycleMutation.error)}
+          {displayError(lifecycleMutation.error, settings.currencyCode)}
         </AppText>
       ) : null}
       {detailError ? (
@@ -531,10 +540,6 @@ function formatDate(value: string) {
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(`${value}T12:00:00`));
-}
-
-function message(error: unknown) {
-  return error instanceof Error ? error.message : 'The request could not be completed.';
 }
 
 const styles = StyleSheet.create({

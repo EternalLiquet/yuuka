@@ -8,6 +8,10 @@ Yuuka treats each paycheck as the budgeting aggregate. Entries belong to a paych
 
 All persisted and API money uses signed 64-bit integer minor units. Mobile input parsing uses string and `BigInt` arithmetic before converting only safe integers. Decimal percentages are presentation metrics, never stored money.
 
+User-facing text must always render money as formatted currency, such as `$0.98`.
+Internal storage terminology such as "minor units" and API field names such as
+`amountMinor` must not appear in visible app errors or validation messages.
+
 ## Template snapshots
 
 Applying a template copies entries in one database transaction. Paychecks retain only a source template ID for provenance; later edits in either direction cannot mutate the other aggregate.

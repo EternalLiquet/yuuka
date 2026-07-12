@@ -69,7 +69,8 @@ public class GlobalExceptionHandler {
       BusinessRuleException exception, HttpServletRequest request) {
     return response(
         HttpStatus.UNPROCESSABLE_ENTITY,
-        ApiError.of("BUSINESS_RULE_VIOLATION", exception.getMessage(), traceId(request)));
+        ApiError.of(
+            exception.code(), exception.getMessage(), exception.details(), traceId(request)));
   }
 
   @ExceptionHandler({ObjectOptimisticLockingFailureException.class})

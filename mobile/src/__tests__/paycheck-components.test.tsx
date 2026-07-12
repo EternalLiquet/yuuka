@@ -1,9 +1,11 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import type { Entry, Paycheck } from '@/api/contracts';
+import { PaymentProgressBar } from '@/components/progress-bar';
 import { EntryRow } from '@/features/paychecks/entry-row';
 import { PaycheckCard } from '@/features/paychecks/paycheck-card';
 import { StatusSheet } from '@/features/paychecks/status-sheet';
+import { colors as themeColors } from '@/theme/colors';
 
 jest.mock('@/settings/settings-provider', () => ({
   useSettings: () => ({
@@ -83,8 +85,113 @@ describe('paycheck components', () => {
     );
 
     expect(view.getByLabelText('Status: Processing')).toBeTruthy();
-    expect(view.getByText(/\$21\.45 spent/)).toBeTruthy();
+    const spent = view.getByText('$21.45 spent');
+    const remaining = view.getByText('$28.55 left');
+    expect(spent.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: themeColors.dark.danger })]),
+    );
+    expect(remaining.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: themeColors.dark.posted })]),
+    );
+    expect(view.getByLabelText('$21.45 spent, $28.55 left')).toBeTruthy();
     expect(view.getByLabelText('Change status for Work Food')).toBeTruthy();
+  });
+
+  it('shows zero remaining as left and over-budget as a positive over amount', async () => {
+    const zeroView = await render(
+      <EntryRow
+        entry={{ ...entry, remainingMinor: 0, spentMinor: 5000 }}
+        onEdit={jest.fn()}
+        onStatusPress={jest.fn()}
+      />,
+    );
+    expect(zeroView.getByText('$0.00 left').props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: themeColors.dark.posted })]),
+    );
+
+    const overView = await render(
+      <EntryRow
+        entry={{ ...entry, overBudget: true, remainingMinor: -19, spentMinor: 7519 }}
+        onEdit={jest.fn()}
+        onStatusPress={jest.fn()}
+      />,
+    );
+    const over = overView.getByText('$0.19 over');
+    expect(over.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: themeColors.dark.danger })]),
+    );
+    expect(overView.getByLabelText('$75.19 spent, $0.19 over')).toBeTruthy();
+  });
+
+  it('renders mixed payment progress from money amounts instead of counts', async () => {
+    const view = await render(
+      <PaymentProgressBar
+        allocatedMinor={10000}
+        notPaidMinor={5900}
+        postedMinor={2900}
+        processingMinor={1200}
+      />,
+    );
+
+    expect(view.getByLabelText('29% posted, 12% processing, 59% not paid')).toBeTruthy();
+    expect(view.getByTestId('payment-progress-posted').props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ width: '29%' })]),
+    );
+    expect(view.getByTestId('payment-progress-processing').props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ width: '12%' })]),
+    );
+  });
+
+  it('handles posted-only, processing-only, not-paid-only, full, and zero payment progress', async () => {
+    const posted = await render(
+      <PaymentProgressBar
+        allocatedMinor={10000}
+        notPaidMinor={0}
+        postedMinor={10000}
+        processingMinor={0}
+      />,
+    );
+    expect(posted.getByLabelText('100% posted, 0% processing, 0% not paid')).toBeTruthy();
+    expect(posted.getByTestId('payment-progress-posted').props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ width: '100%' })]),
+    );
+    expect(posted.queryByTestId('payment-progress-processing')).toBeNull();
+
+    const processing = await render(
+      <PaymentProgressBar
+        allocatedMinor={10000}
+        notPaidMinor={0}
+        postedMinor={0}
+        processingMinor={10000}
+      />,
+    );
+    expect(processing.getByLabelText('0% posted, 100% processing, 0% not paid')).toBeTruthy();
+    expect(processing.queryByTestId('payment-progress-posted')).toBeNull();
+    expect(processing.getByTestId('payment-progress-processing').props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ width: '100%' })]),
+    );
+
+    const notPaid = await render(
+      <PaymentProgressBar
+        allocatedMinor={10000}
+        notPaidMinor={10000}
+        postedMinor={0}
+        processingMinor={0}
+      />,
+    );
+    expect(notPaid.getByLabelText('0% posted, 0% processing, 100% not paid')).toBeTruthy();
+    expect(notPaid.queryByTestId('payment-progress-posted')).toBeNull();
+    expect(notPaid.queryByTestId('payment-progress-processing')).toBeNull();
+
+    const zero = await render(
+      <PaymentProgressBar
+        allocatedMinor={0}
+        notPaidMinor={0}
+        postedMinor={0}
+        processingMinor={0}
+      />,
+    );
+    expect(zero.getByLabelText('0% posted, 0% processing, 0% not paid')).toBeTruthy();
   });
 
   it('preserves effective date and note when a status save fails', async () => {

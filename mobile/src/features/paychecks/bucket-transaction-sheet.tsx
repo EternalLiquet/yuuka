@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { BucketTransaction, Entry } from '@/api/contracts';
+import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
@@ -66,9 +67,7 @@ export function BucketTransactionSheet({
       await onChanged();
     },
     onError: (mutationError) =>
-      setError(
-        mutationError instanceof Error ? mutationError.message : 'The purchase was not saved.',
-      ),
+      setError(displayError(mutationError, settings.currencyCode, 'The purchase was not saved.')),
   });
 
   useEffect(() => {
@@ -214,9 +213,7 @@ export function BucketTransactionSheet({
             ) : null}
             {query.isError ? (
               <AppText style={{ color: colors.danger }} variant="error">
-                {query.error instanceof Error
-                  ? query.error.message
-                  : 'Purchases could not be loaded.'}
+                {displayError(query.error, settings.currencyCode, 'Purchases could not be loaded.')}
               </AppText>
             ) : null}
           </View>

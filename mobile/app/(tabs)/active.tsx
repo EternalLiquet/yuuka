@@ -3,18 +3,21 @@ import { useRouter } from 'expo-router';
 import { Plus } from 'lucide-react-native';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
+import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
 import { EmptyState, ErrorState, StaleBanner } from '@/components/states';
 import { PaycheckCard } from '@/features/paychecks/paycheck-card';
+import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 export default function ActiveScreen() {
   const api = useYuukaApi();
   const router = useRouter();
   const { colors } = useAppTheme();
+  const { settings } = useSettings();
   const query = useQuery({
     queryKey: ['paychecks', 'active'],
     queryFn: api.activePaychecks,
@@ -30,7 +33,14 @@ export default function ActiveScreen() {
           query.isPending ? (
             <ActivityIndicator color={colors.accent} size="large" style={styles.loader} />
           ) : query.isError && !query.data ? (
-            <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} />
+            <ErrorState
+              message={displayError(
+                query.error,
+                settings.currencyCode,
+                'Check the API connection and try again.',
+              )}
+              retry={() => query.refetch()}
+            />
           ) : (
             <EmptyState
               message="New and reopened paychecks will appear here."
@@ -70,10 +80,6 @@ export default function ActiveScreen() {
       />
     </Screen>
   );
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'Check the API connection and try again.';
 }
 
 const styles = StyleSheet.create({

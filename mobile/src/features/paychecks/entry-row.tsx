@@ -87,10 +87,7 @@ export function EntryRow({
             <StatusBadge status={entry.status} />
           </Pressable>
           {entry.entryType === 'SPENDING_BUCKET' ? (
-            <AppText style={{ color: colors.muted, flex: 1, textAlign: 'right' }} variant="caption">
-              {formatMoney(entry.spentMinor ?? 0, settings.currencyCode)} spent |{' '}
-              {formatMoney(entry.remainingMinor ?? entry.amountMinor, settings.currencyCode)} left
-            </AppText>
+            <BucketSummary entry={entry} />
           ) : (
             <AppText style={{ color: colors.muted, marginLeft: 'auto' }} variant="caption">
               Edited {formatDateTime(entry.updatedAt)}
@@ -142,6 +139,33 @@ export function EntryRow({
   );
 }
 
+function BucketSummary({ entry }: { entry: Entry }) {
+  const { colors } = useAppTheme();
+  const { settings } = useSettings();
+  const spent = formatMoney(entry.spentMinor ?? 0, settings.currencyCode);
+  const remainingMinor = entry.remainingMinor ?? entry.amountMinor;
+  const overBudget = Boolean(entry.overBudget) || remainingMinor < 0;
+  const balance = formatMoney(Math.abs(remainingMinor), settings.currencyCode);
+  const balanceLabel = overBudget ? `${balance} over` : `${balance} left`;
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${spent} spent, ${balanceLabel}`}
+      style={styles.bucketSummary}
+    >
+      <AppText style={{ color: colors.danger }} variant="caption">
+        {spent} spent
+      </AppText>
+      <AppText style={{ color: colors.muted }} variant="caption">
+        {' | '}
+      </AppText>
+      <AppText style={{ color: overBudget ? colors.danger : colors.posted }} variant="caption">
+        {balanceLabel}
+      </AppText>
+    </View>
+  );
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
     new Date(`${value}T12:00:00`),
@@ -156,6 +180,12 @@ function formatDateTime(value: string) {
 
 const styles = StyleSheet.create({
   actions: { alignItems: 'center', flexDirection: 'row', gap: 6, justifyContent: 'flex-end' },
+  bucketSummary: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
   detailRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
   main: { gap: 11 },
   pressed: { opacity: 0.74 },

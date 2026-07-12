@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 
+import { displayError } from '@/api/display-error';
 import { useAuth } from '@/auth/auth-provider';
 import { SignInFormValues, signInSchema } from '@/auth/schemas';
 import { AppText } from '@/components/app-text';
@@ -39,7 +40,7 @@ export default function SignInScreen() {
       await signIn(values);
     } catch (error) {
       setError('root', {
-        message: error instanceof Error ? error.message : 'Unable to sign in.',
+        message: displayError(error, settings.currencyCode, 'Unable to sign in.'),
       });
     }
   }

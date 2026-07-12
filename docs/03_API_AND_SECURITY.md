@@ -17,7 +17,25 @@ Example error:
   "code": "VALIDATION_ERROR",
   "message": "The request could not be completed.",
   "fieldErrors": {
-    "amountMinor": "Must be greater than or equal to zero."
+    "amountMinor": "Amount must be greater than or equal to $0.00."
+  },
+  "details": {},
+  "traceId": "..."
+}
+```
+
+Business-rule errors that involve money should keep the API's integer money fields in
+`details` and use user-readable messages. Mobile formats those details as currency before
+display. Example:
+
+```json
+{
+  "code": "PAYCHECK_OVER_ALLOCATED",
+  "message": "This would over-allocate the paycheck.",
+  "fieldErrors": {},
+  "details": {
+    "amountMinor": 98,
+    "currencyCode": "USD"
   },
   "traceId": "..."
 }

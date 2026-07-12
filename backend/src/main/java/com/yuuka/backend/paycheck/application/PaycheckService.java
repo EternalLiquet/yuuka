@@ -540,9 +540,9 @@ public class PaycheckService {
   private void assertNotOverAllocated(PaycheckMetrics metrics) {
     if (metrics.unallocatedMinor() < 0) {
       throw new BusinessRuleException(
-          "This change would over-allocate the paycheck by "
-              + Math.abs(metrics.unallocatedMinor())
-              + " minor units.");
+          "PAYCHECK_OVER_ALLOCATED",
+          "This would over-allocate the paycheck.",
+          Map.of("amountMinor", Math.abs(metrics.unallocatedMinor()), "currencyCode", "USD"));
     }
   }
 

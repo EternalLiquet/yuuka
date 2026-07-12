@@ -4,12 +4,14 @@ import { useEffect } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { displayError } from '@/api/display-error';
 import { Entry } from '@/api/contracts';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { SegmentedControl } from '@/components/segmented-control';
 import { TextField } from '@/components/text-field';
 import { minorToInput, parseMoneyToMinor } from '@/domain/money';
+import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 import { EntryFormValues, entryFormSchema } from './form-schemas';
@@ -44,6 +46,7 @@ export function EntryEditor({
   visible: boolean;
 }) {
   const { colors } = useAppTheme();
+  const { settings } = useSettings();
   const {
     control,
     formState: { errors, isSubmitting },
@@ -83,7 +86,7 @@ export function EntryEditor({
       onClose();
     } catch (error) {
       setError('root', {
-        message: error instanceof Error ? error.message : 'The entry was not saved.',
+        message: displayError(error, settings.currencyCode, 'The entry was not saved.'),
       });
     }
   }
@@ -95,7 +98,7 @@ export function EntryEditor({
       onClose();
     } catch (error) {
       setError('root', {
-        message: error instanceof Error ? error.message : 'The entry was not deleted.',
+        message: displayError(error, settings.currencyCode, 'The entry was not deleted.'),
       });
     }
   }

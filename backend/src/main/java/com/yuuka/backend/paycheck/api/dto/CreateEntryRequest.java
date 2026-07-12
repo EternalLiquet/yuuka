@@ -10,10 +10,13 @@ import java.time.LocalDate;
 public record CreateEntryRequest(
     @NotNull EntryType entryType,
     @NotBlank @Size(max = 160) String name,
-    @NotNull @PositiveOrZero Long amountMinor,
+    @NotNull(message = "Enter an amount.")
+        @PositiveOrZero(message = "Amount must be greater than or equal to $0.00.")
+        Long amountMinor,
     LocalDate dueDate,
     @Size(max = 160) String accountName,
     @Size(max = 160) String payee,
     @Size(max = 2000) String notes,
-    @PositiveOrZero Long targetMinor,
+    @PositiveOrZero(message = "Target amount must be greater than or equal to $0.00.")
+        Long targetMinor,
     LocalDate targetDate) {}

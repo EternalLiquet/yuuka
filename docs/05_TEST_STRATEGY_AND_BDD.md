@@ -216,7 +216,21 @@ Then remaining is 2855 cents.
 
 When a 5100 cent purchase is recorded against a 5000 cent bucket
 
-Then remaining is -100 cents and the bucket is shown as over budget.
+Then the bucket is shown as `$51.00 spent | $1.00 over`.
+
+When bucket spending is under budget
+
+Then the row distinguishes the red spent amount from the green amount left.
+
+### Active payment progress
+
+Given an Active paycheck has Posted, Processing, and Not Paid amounts
+
+When the Active paycheck card renders the payment progress bar
+
+Then the green segment represents Posted money, the yellow segment represents Processing money, and the unfilled remainder represents Not Paid money.
+
+And the status count row still counts entries, not dollars.
 
 ### Owner isolation
 
