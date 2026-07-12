@@ -47,6 +47,7 @@ Example error:
 ### Entries
 
 - `POST /paychecks/{paycheckId}/entries`
+- `POST /paychecks/{paycheckId}/leftover-entry` creates a normal `BILL` named `LEFTOVER` for the exact current unallocated amount when the supplied paycheck version is current.
 - `PATCH /entries/{id}`
 - `DELETE /entries/{id}`
 - `POST /entries/{id}/status`
@@ -66,8 +67,8 @@ Status-change request:
 ### Bucket transactions
 
 - `GET /entries/{entryId}/bucket-transactions`
-- `POST /entries/{entryId}/bucket-transactions`
-- `PATCH /bucket-transactions/{id}`
+- `POST /entries/{entryId}/bucket-transactions` with positive `amountMinor`, `effectiveDate`, optional `description`, and optional `notes`.
+- `PATCH /bucket-transactions/{id}` with positive `amountMinor`, `effectiveDate`, optional `description`, optional `notes`, and `version`.
 - `DELETE /bucket-transactions/{id}`
 
 ### Templates

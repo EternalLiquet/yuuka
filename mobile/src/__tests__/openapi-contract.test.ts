@@ -13,6 +13,7 @@ describe('committed backend contract', () => {
     ['/api/v1/paychecks/active', 'get'],
     ['/api/v1/paychecks/history', 'get'],
     ['/api/v1/paychecks/from-template', 'post'],
+    ['/api/v1/paychecks/{paycheckId}/leftover-entry', 'post'],
     ['/api/v1/paychecks/{paycheckId}/entries', 'post'],
     ['/api/v1/entries/{entryId}/status', 'post'],
     ['/api/v1/entries/{entryId}/status-history', 'get'],

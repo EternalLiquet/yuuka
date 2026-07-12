@@ -214,9 +214,9 @@ When transactions of 1235 and 910 cents are added
 
 Then remaining is 2855 cents.
 
-When a correction of -500 cents is added
+When a 5100 cent purchase is recorded against a 5000 cent bucket
 
-Then remaining is 3355 cents.
+Then remaining is -100 cents and the bucket is shown as over budget.
 
 ### Owner isolation
 

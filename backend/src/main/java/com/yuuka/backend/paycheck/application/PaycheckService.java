@@ -197,6 +197,56 @@ public class PaycheckService {
   }
 
   @Transactional
+  public EntryResponse allocateLeftover(UUID ownerId, UUID paycheckId, long paycheckVersion) {
+    Paycheck paycheck = requirePaycheckForUpdate(ownerId, paycheckId);
+    requireActive(paycheck);
+    assertVersion(paycheck.getVersion(), paycheckVersion);
+    List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
+    PaycheckMetrics metrics = calculate(paycheck, liveEntries);
+    if (metrics.unallocatedMinor() <= 0) {
+      throw new BusinessRuleException("There is no leftover money to allocate.");
+    }
+
+    PaycheckEntry entry =
+        entries.saveAndFlush(
+            new PaycheckEntry(
+                ownerId,
+                paycheckId,
+                EntryType.BILL,
+                "LEFTOVER",
+                metrics.unallocatedMinor(),
+                entries.findMaxLivePosition(paycheckId) + 1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null));
+    Instant recordedAt = clock.instant();
+    statusEvents.save(
+        new EntryStatusEvent(
+            ownerId,
+            entry.getId(),
+            null,
+            EntryStatus.NOT_PAID,
+            recordedAt,
+            recordedAt,
+            "Leftover allocated"));
+    paycheck.touch(recordedAt);
+    EntryResponse response = toEntryResponse(entry);
+    auditService.append(
+        ownerId,
+        "PAYCHECK_ENTRY",
+        entry.getId(),
+        "LEFTOVER_ALLOCATED",
+        null,
+        null,
+        response,
+        Map.of("paycheckId", paycheckId));
+    return response;
+  }
+
+  @Transactional
   public EntryResponse addEntry(UUID ownerId, UUID paycheckId, CreateEntryRequest request) {
     Paycheck paycheck = requirePaycheck(ownerId, paycheckId);
     requireActive(paycheck);
@@ -434,6 +484,12 @@ public class PaycheckService {
   public Paycheck requirePaycheck(UUID ownerId, UUID paycheckId) {
     return paychecks
         .findByIdAndOwnerId(paycheckId, ownerId)
+        .orElseThrow(ResourceNotFoundException::new);
+  }
+
+  private Paycheck requirePaycheckForUpdate(UUID ownerId, UUID paycheckId) {
+    return paychecks
+        .findByIdAndOwnerIdForUpdate(paycheckId, ownerId)
         .orElseThrow(ResourceNotFoundException::new);
   }
 

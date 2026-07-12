@@ -4,10 +4,6 @@ import type { ReactNode } from 'react';
 
 import RootLayout from '../../app/_layout';
 
-jest.mock('expo-screen-capture', () => ({
-  usePreventScreenCapture: jest.fn(),
-}));
-
 jest.mock('expo-router', () => {
   const React = require('react');
   const { View } = require('react-native');

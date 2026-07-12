@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Archive, CheckCircle2, Pencil, Plus, RotateCcw } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
@@ -15,6 +15,7 @@ import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
 import { EmptyState, ErrorState, StaleBanner } from '@/components/states';
 import { formatMoney } from '@/domain/money';
+import { BucketTransactionSheet } from '@/features/paychecks/bucket-transaction-sheet';
 import { EntryEditor } from '@/features/paychecks/entry-editor';
 import { filterAndSortEntries, EntrySort } from '@/features/paychecks/entry-list';
 import { EntryRow } from '@/features/paychecks/entry-row';
@@ -57,7 +58,10 @@ export default function PaycheckDetailScreen() {
   const [entryEditorVisible, setEntryEditorVisible] = useState(false);
   const [statusEntry, setStatusEntry] = useState<Entry | null>(null);
   const [historyEntry, setHistoryEntry] = useState<Entry | null>(null);
+  const [bucketEntryId, setBucketEntryId] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState('');
   const [paycheckEditorVisible, setPaycheckEditorVisible] = useState(false);
+  const leftoverInFlight = useRef(false);
   const query = useQuery({ queryKey: ['paycheck', id], queryFn: () => api.paycheck(id) });
   const invalidate = async () => {
     await Promise.all([
@@ -96,7 +100,30 @@ export default function PaycheckDetailScreen() {
       if (action.payload) return api.addEntry(id, action.payload);
       throw new Error('Entry action is incomplete.');
     },
-    onSuccess: invalidate,
+    onSuccess: async () => {
+      setDetailError('');
+      await invalidate();
+    },
+  });
+  const leftoverMutation = useMutation({
+    mutationFn: () => {
+      if (!query.data) throw new Error('Refresh the paycheck before allocating leftover.');
+      if (query.data.unallocatedMinor <= 0) {
+        throw new Error('There is no leftover money to allocate.');
+      }
+      return api.allocateLeftover(id, query.data.version);
+    },
+    onSuccess: async () => {
+      setDetailError('');
+      await invalidate();
+    },
+    onError: async (error) => {
+      setDetailError(message(error));
+      await query.refetch();
+    },
+    onSettled: () => {
+      leftoverInFlight.current = false;
+    },
   });
   const reorderMutation = useMutation({
     mutationFn: (entryIds: string[]) => {
@@ -136,6 +163,10 @@ export default function PaycheckDetailScreen() {
       }),
     [direction, query.data?.entries, sort, statusFilter, typeFilter],
   );
+  const selectedBucketEntry = useMemo(
+    () => query.data?.entries.find((entry) => entry.id === bucketEntryId) ?? null,
+    [bucketEntryId, query.data?.entries],
+  );
   const canReorder =
     sort === 'custom' &&
     statusFilter === 'ALL' &&
@@ -158,6 +189,12 @@ export default function PaycheckDetailScreen() {
   }
   const paycheck = query.data;
   if (!paycheck) return null;
+
+  function allocateLeftover() {
+    if (leftoverInFlight.current || leftoverMutation.isPending) return;
+    leftoverInFlight.current = true;
+    leftoverMutation.mutate();
+  }
 
   function reorder(entryIds: string[]) {
     reorderMutation.mutate(entryIds);
@@ -209,7 +246,10 @@ export default function PaycheckDetailScreen() {
               setSort={setSort}
               direction={direction}
               setDirection={setDirection}
+              detailError={detailError}
               lifecycleMutation={lifecycleMutation}
+              leftoverMutation={leftoverMutation}
+              onAllocateLeftover={allocateLeftover}
             />
           }
           onDragEnd={({ data }) => reorder(data.map((entry) => entry.id))}
@@ -236,6 +276,11 @@ export default function PaycheckDetailScreen() {
                 onMoveDown={() => moveEntry(index, 1)}
                 onMoveUp={() => moveEntry(index, -1)}
                 onHistory={() => setHistoryEntry(params.item)}
+                onBucketActivity={
+                  params.item.entryType === 'SPENDING_BUCKET'
+                    ? () => setBucketEntryId(params.item.id)
+                    : undefined
+                }
                 onStatusPress={() => setStatusEntry(params.item)}
                 reorderEnabled={canReorder}
               />
@@ -244,6 +289,11 @@ export default function PaycheckDetailScreen() {
         />
       </Screen>
 
+      <BucketTransactionSheet
+        entry={selectedBucketEntry}
+        onChanged={invalidate}
+        onClose={() => setBucketEntryId(null)}
+      />
       <StatusSheet
         entry={statusEntry}
         onClose={() => setStatusEntry(null)}
@@ -284,8 +334,11 @@ export default function PaycheckDetailScreen() {
 
 function DetailHeader({
   direction,
+  detailError,
   lifecycleMutation,
+  leftoverMutation,
   onAdd,
+  onAllocateLeftover,
   onEdit,
   paycheck,
   setDirection,
@@ -297,9 +350,12 @@ function DetailHeader({
   statusFilter,
   typeFilter,
 }: {
+  detailError: string;
   direction: 'asc' | 'desc';
   lifecycleMutation: UseMutationResult<Paycheck, Error, 'archive' | 'close' | 'reopen'>;
+  leftoverMutation: UseMutationResult<Entry, Error, void>;
   onAdd: () => void;
+  onAllocateLeftover: () => void;
   onEdit: () => void;
   paycheck: Paycheck;
   setDirection: (value: 'asc' | 'desc') => void;
@@ -367,6 +423,16 @@ function DetailHeader({
           <>
             <Button icon={Pencil} label="Edit paycheck" onPress={onEdit} variant="secondary" />
             <Button icon={Plus} label="Add entry" onPress={onAdd} />
+            {paycheck.unallocatedMinor > 0 ? (
+              <Button
+                disabled={leftoverMutation.isPending}
+                icon={Plus}
+                label="Add LEFTOVER"
+                loading={leftoverMutation.isPending}
+                onPress={onAllocateLeftover}
+                variant="secondary"
+              />
+            ) : null}
             {complete ? (
               <Button
                 icon={CheckCircle2}
@@ -395,6 +461,11 @@ function DetailHeader({
       {lifecycleMutation.error ? (
         <AppText style={{ color: colors.danger }} variant="error">
           {message(lifecycleMutation.error)}
+        </AppText>
+      ) : null}
+      {detailError ? (
+        <AppText style={{ color: colors.danger }} variant="error">
+          {detailError}
         </AppText>
       ) : null}
       <View style={[styles.controls, { borderTopColor: colors.border }]}>

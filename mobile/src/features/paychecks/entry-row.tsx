@@ -51,8 +51,19 @@ export function EntryRow({
 }: EntryRowProps) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const opensBucket = entry.entryType === 'SPENDING_BUCKET' && Boolean(onBucketActivity);
   return (
-    <View style={[styles.row, { borderBottomColor: colors.border }]}>
+    <Pressable
+      accessibilityLabel={opensBucket ? `Open bucket ledger for ${entry.name}` : undefined}
+      accessibilityRole={opensBucket ? 'button' : undefined}
+      disabled={!opensBucket}
+      onPress={onBucketActivity}
+      style={({ pressed }) => [
+        styles.row,
+        { borderBottomColor: colors.border },
+        pressed && styles.pressed,
+      ]}
+    >
       <View style={styles.main}>
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
@@ -127,7 +138,7 @@ export function EntryRow({
         ) : null}
         <IconButton icon={Pencil} label={`Edit ${entry.name}`} onPress={onEdit} />
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -147,6 +158,7 @@ const styles = StyleSheet.create({
   actions: { alignItems: 'center', flexDirection: 'row', gap: 6, justifyContent: 'flex-end' },
   detailRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
   main: { gap: 11 },
+  pressed: { opacity: 0.74 },
   row: { borderBottomWidth: 1, gap: 12, paddingVertical: 15 },
   titleBlock: { flex: 1, gap: 3 },
   titleRow: {

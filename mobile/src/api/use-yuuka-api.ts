@@ -95,6 +95,8 @@ export function useYuukaApi() {
         send(`/paychecks/${id}/reopen`, 'POST', { version }, paycheckSchema),
       archivePaycheck: (id: string, version: number) =>
         send(`/paychecks/${id}?version=${version}`, 'DELETE', undefined, paycheckSchema),
+      allocateLeftover: (paycheckId: string, paycheckVersion: number) =>
+        send(`/paychecks/${paycheckId}/leftover-entry`, 'POST', { paycheckVersion }, entrySchema),
       addEntry: (paycheckId: string, body: EntryPayload) =>
         send(`/paychecks/${paycheckId}/entries`, 'POST', body, entrySchema),
       updateEntry: (entryId: string, body: EntryPayload & { version: number }) =>
@@ -149,13 +151,14 @@ export function useYuukaApi() {
         get(`/entries/${entryId}/bucket-transactions`, pageSchema(bucketTransactionSchema)),
       addBucketTransaction: (
         entryId: string,
-        body: { amountMinor: number; description?: string; effectiveDate: string },
+        body: { amountMinor: number; description?: string; notes?: string; effectiveDate: string },
       ) => send(`/entries/${entryId}/bucket-transactions`, 'POST', body, bucketTransactionSchema),
       updateBucketTransaction: (
         transactionId: string,
         body: {
           amountMinor: number;
           description?: string;
+          notes?: string;
           effectiveDate: string;
           version: number;
         },

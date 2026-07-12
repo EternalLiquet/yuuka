@@ -315,6 +315,43 @@
         }
       }
     },
+    "/api/v1/paychecks/{paycheckId}/leftover-entry" : {
+      "post" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "allocateLeftover",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AllocateLeftoverRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/paychecks/{paycheckId}/entries" : {
       "post" : {
         "tags" : [ "paycheck-controller" ],
@@ -1768,6 +1805,16 @@
           }
         }
       },
+      "AllocateLeftoverRequest" : {
+        "type" : "object",
+        "properties" : {
+          "paycheckVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "paycheckVersion" ]
+      },
       "CreateEntryRequest" : {
         "type" : "object",
         "properties" : {
@@ -1952,6 +1999,11 @@
             "maxLength" : 500,
             "minLength" : 0
           },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
+          },
           "effectiveDate" : {
             "type" : "string",
             "format" : "date"
@@ -1975,6 +2027,9 @@
             "format" : "int64"
           },
           "description" : {
+            "type" : "string"
+          },
+          "notes" : {
             "type" : "string"
           },
           "effectiveDate" : {
@@ -2194,6 +2249,11 @@
           "description" : {
             "type" : "string",
             "maxLength" : 500,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 1000,
             "minLength" : 0
           },
           "effectiveDate" : {

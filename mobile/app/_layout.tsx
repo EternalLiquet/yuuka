@@ -1,6 +1,5 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, ThemeProvider } from 'expo-router';
-import { usePreventScreenCapture } from 'expo-screen-capture';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { StyleSheet } from 'react-native';
@@ -20,8 +19,6 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
-  usePreventScreenCapture();
-
   return (
     <GestureHandlerRootView style={styles.root} testID="gesture-handler-root">
       <SafeAreaProvider>

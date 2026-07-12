@@ -100,8 +100,9 @@ export type BudgetTemplate = z.infer<typeof templateSchema>;
 export const bucketTransactionSchema = z.object({
   id: uuid,
   entryId: uuid,
-  amountMinor: minor,
+  amountMinor: minor.positive(),
   description: z.string().nullable(),
+  notes: z.string().nullable(),
   effectiveDate: date,
   createdAt: instant,
   updatedAt: instant,
