@@ -189,6 +189,20 @@ For full-screen React Native modals, prefer `back` when the next assertion only 
     timeout: 10000
 ```
 
+When a flow creates nested detail screens and then switches tabs, first navigate back to a stable list landmark. Generic labels such as `Active` can also appear as status text, so do not tap the tab until the current screen is known:
+
+```yaml
+- back
+- back
+- extendedWaitUntil:
+    visible: "New Payback"
+    timeout: 10000
+- tapOn: "Active"
+- extendedWaitUntil:
+    visible: "New paycheck"
+    timeout: 10000
+```
+
 ## Debugging Failures Fast
 
 Use this order:

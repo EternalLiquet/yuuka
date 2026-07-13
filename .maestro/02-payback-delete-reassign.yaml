@@ -31,9 +31,16 @@ name: Payback delete unassigns entry
 - extendedWaitUntil:
     visible: "E2E Delete Target"
     timeout: 10000
-- tapOn: "Back"
+- back
+- back
+- extendedWaitUntil:
+    visible: "New Payback"
+    timeout: 10000
 
 - tapOn: "Active"
+- extendedWaitUntil:
+    visible: "New paycheck"
+    timeout: 10000
 - tapOn: "New paycheck"
 - tapOn: "Name"
 - inputText: "E2E Payback Assign"
@@ -70,6 +77,9 @@ name: Payback delete unassigns entry
 - assertNotVisible: "E2E Delete Source"
 
 - tapOn: "Active"
+- extendedWaitUntil:
+    visible: "E2E Payback Assign"
+    timeout: 10000
 - tapOn: 'E2E Payback Assign, \$40\.00, \$30\.00 unallocated'
 - tapOn: "Edit Repay Payback"
 - assertVisible: "No Payback"
