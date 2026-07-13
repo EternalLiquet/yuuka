@@ -9,9 +9,16 @@ import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
-import { EmptyState, ErrorState, StaleBanner, YuukaLoadingState } from '@/components/states';
+import {
+  EmptyState,
+  ErrorState,
+  StaleBanner,
+  YuukaLoadingState,
+  YuukaRefreshIndicator,
+} from '@/components/states';
 import { TextField } from '@/components/text-field';
 import { PaycheckCard } from '@/features/paychecks/paycheck-card';
+import { useMinimumVisibleDuration } from '@/hooks/use-minimum-visible-duration';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
@@ -41,6 +48,15 @@ export default function HistoryScreen() {
     queryKey: ['paychecks', 'history', queryString],
     queryFn: () => api.historyPaychecks(queryString),
   });
+  const showColdLoader = useMinimumVisibleDuration(query.isPending && !query.data, 1000);
+
+  if (showColdLoader) {
+    return (
+      <Screen contentContainerStyle={styles.center}>
+        <YuukaLoadingState message="Loading history..." />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -49,9 +65,7 @@ export default function HistoryScreen() {
         data={query.data?.items ?? []}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
-          query.isPending ? (
-            <YuukaLoadingState message="Loading history..." />
-          ) : query.isError && !query.data ? (
+          query.isError && !query.data ? (
             <ErrorState
               message={displayError(
                 query.error,
@@ -62,6 +76,7 @@ export default function HistoryScreen() {
             />
           ) : (
             <EmptyState
+              mascot="clipboard"
               message="Closed and completed paychecks will appear here."
               title="No history found"
             />
@@ -108,15 +123,17 @@ export default function HistoryScreen() {
               options={sortOptions}
               value={sort}
             />
+            <YuukaRefreshIndicator visible={query.isFetching && Boolean(query.data)} />
             {query.isError && query.data ? <StaleBanner /> : null}
           </View>
         }
         refreshControl={
           <RefreshControl
-            colors={[colors.accent]}
-            onRefresh={() => query.refetch()}
+            colors={['transparent']}
+            onRefresh={() => void query.refetch()}
+            progressBackgroundColor="transparent"
             refreshing={query.isRefetching}
-            tintColor={colors.accent}
+            tintColor="transparent"
           />
         }
         renderItem={({ item }) => (
@@ -128,6 +145,7 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
+  center: { alignItems: 'center', justifyContent: 'center' },
   content: { flexGrow: 1, gap: 12, padding: 16, paddingBottom: 28 },
   dateField: { flex: 1 },
   dateRow: { flexDirection: 'row', gap: 10 },

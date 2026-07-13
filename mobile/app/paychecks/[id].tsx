@@ -14,7 +14,13 @@ import { Button } from '@/components/button';
 import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
-import { EmptyState, ErrorState, StaleBanner, YuukaLoadingState } from '@/components/states';
+import {
+  EmptyState,
+  ErrorState,
+  StaleBanner,
+  YuukaLoadingState,
+  YuukaRefreshIndicator,
+} from '@/components/states';
 import { formatMoney } from '@/domain/money';
 import { BucketTransactionSheet } from '@/features/paychecks/bucket-transaction-sheet';
 import { EntryEditor } from '@/features/paychecks/entry-editor';
@@ -23,6 +29,7 @@ import { EntryRow } from '@/features/paychecks/entry-row';
 import { PaycheckEditor } from '@/features/paychecks/paycheck-editor';
 import { StatusSheet } from '@/features/paychecks/status-sheet';
 import { StatusHistorySheet } from '@/features/paychecks/status-history-sheet';
+import { useMinimumVisibleDuration } from '@/hooks/use-minimum-visible-duration';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
@@ -70,6 +77,7 @@ export default function PaycheckDetailScreen() {
     queryFn: api.paybacks,
     enabled: entryEditorVisible,
   });
+  const showColdLoader = useMinimumVisibleDuration(query.isPending && !query.data, 1000);
   const invalidate = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['paycheck', id] }),
@@ -182,7 +190,7 @@ export default function PaycheckDetailScreen() {
     typeFilter === 'ALL' &&
     query.data?.state === 'ACTIVE';
 
-  if (query.isPending && !query.data) {
+  if (showColdLoader) {
     return (
       <Screen contentContainerStyle={styles.center}>
         <YuukaLoadingState message="Loading paycheck..." />
@@ -241,6 +249,7 @@ export default function PaycheckDetailScreen() {
           keyExtractor={(entry) => entry.id}
           ListEmptyComponent={
             <EmptyState
+              mascot="clipboard"
               message="Adjust the active filters or add an entry."
               title="No entries shown"
             />
@@ -248,6 +257,7 @@ export default function PaycheckDetailScreen() {
           ListHeaderComponent={
             <DetailHeader
               paycheck={paycheck}
+              refreshing={query.isFetching && Boolean(query.data)}
               stale={query.isError}
               onAdd={() => {
                 setEditingEntry(null);
@@ -271,10 +281,11 @@ export default function PaycheckDetailScreen() {
           onDragEnd={({ data }) => reorder(data.map((entry) => entry.id))}
           refreshControl={
             <RefreshControl
-              colors={[colors.accent]}
-              onRefresh={() => query.refetch()}
+              colors={['transparent']}
+              onRefresh={() => void query.refetch()}
+              progressBackgroundColor="transparent"
               refreshing={query.isRefetching}
-              tintColor={colors.accent}
+              tintColor="transparent"
             />
           }
           renderItem={(params: RenderItemParams<Entry>) => {
@@ -369,6 +380,7 @@ function DetailHeader({
   onAllocateLeftover,
   onEdit,
   paycheck,
+  refreshing,
   setDirection,
   setSort,
   setStatusFilter,
@@ -386,6 +398,7 @@ function DetailHeader({
   onAllocateLeftover: () => void;
   onEdit: () => void;
   paycheck: Paycheck;
+  refreshing: boolean;
   setDirection: (value: 'asc' | 'desc') => void;
   setSort: (value: EntrySort) => void;
   setStatusFilter: (value: 'ALL' | EntryStatus) => void;
@@ -407,6 +420,7 @@ function DetailHeader({
   const nonDefault = statusFilter !== 'ALL' || typeFilter !== 'ALL' || sort !== 'custom';
   return (
     <View style={styles.header}>
+      <YuukaRefreshIndicator visible={refreshing} />
       {stale ? <StaleBanner /> : null}
       <View style={styles.paycheckHeading}>
         <View style={styles.paycheckTitle}>

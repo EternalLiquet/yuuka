@@ -1,21 +1,41 @@
 import { AlertCircle, Inbox, RefreshCw, WifiOff } from 'lucide-react-native';
+import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { useMinimumVisibleDuration } from '@/hooks/use-minimum-visible-duration';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 import { AppText } from './app-text';
 import { Button } from './button';
 import { YuukaMascot } from './yuuka-mascot';
+import type { YuukaMascotVariant } from './yuuka-mascot';
 
-export function EmptyState({ message, title }: { message: string; title: string }) {
+type EmptyStateProps = {
+  action?: ReactNode;
+  mascot?: Extract<YuukaMascotVariant, 'clipboard' | 'idle' | 'wave'>;
+  message: string;
+  title: string;
+};
+
+export function EmptyState({ action, mascot, message, title }: EmptyStateProps) {
   const { colors } = useAppTheme();
   return (
     <View style={styles.state}>
-      <Inbox color={colors.muted} size={28} />
+      {mascot ? (
+        <YuukaMascot
+          playback="static"
+          size={88}
+          testID={`empty-state-mascot-${mascot}`}
+          variant={mascot}
+        />
+      ) : (
+        <Inbox color={colors.muted} size={28} />
+      )}
       <AppText variant="label">{title}</AppText>
       <AppText style={{ color: colors.muted, textAlign: 'center' }} variant="caption">
         {message}
       </AppText>
+      {action}
     </View>
   );
 }
@@ -60,6 +80,35 @@ export function YuukaLoadingState({
   );
 }
 
+export function YuukaRefreshIndicator({
+  minimumMs = 800,
+  visible,
+}: {
+  minimumMs?: number;
+  visible: boolean;
+}) {
+  const { colors } = useAppTheme();
+  const shouldShow = useMinimumVisibleDuration(visible, minimumMs);
+  if (!shouldShow) return null;
+
+  return (
+    <View
+      accessibilityLabel="Refreshing data"
+      accessibilityLiveRegion="polite"
+      accessibilityRole="progressbar"
+      accessibilityState={{ busy: true }}
+      pointerEvents="none"
+      style={[styles.refresh, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      testID="yuuka-refresh-indicator"
+    >
+      <YuukaMascot size={40} testID="yuuka-refresh-mascot" />
+      <AppText style={{ color: colors.muted }} variant="caption">
+        Refreshing...
+      </AppText>
+    </View>
+  );
+}
+
 export function StaleBanner() {
   const { colors } = useAppTheme();
   return (
@@ -80,6 +129,17 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 11,
     paddingVertical: 9,
+  },
+  refresh: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 7,
+    minHeight: 44,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
   },
   state: {
     alignItems: 'center',

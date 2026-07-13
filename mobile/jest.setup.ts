@@ -91,3 +91,7 @@ jest.mock('lucide-react-native', () => {
     },
   );
 });
+
+// Cold mascot loads intentionally remain visible for 1,000 ms. Give route queries enough room to
+// observe the post-load UI; exact timing stays covered by the dedicated fake-timer tests.
+require('@testing-library/react-native').configure({ asyncUtilTimeout: 2500 });

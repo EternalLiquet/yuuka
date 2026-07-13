@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, LogOut, Save, Server, WifiOff } from 'lucide-react-native';
-import { useState } from 'react';
+import { CheckCircle2, Heart, LogOut, Save, Server, WifiOff } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
 import type { PropsWithChildren } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { apiRequest, parseApiResponse } from '@/api/api-client';
 import { versionResponseSchema } from '@/api/contracts';
@@ -13,6 +13,7 @@ import { Button } from '@/components/button';
 import { ScrollScreen } from '@/components/scroll-screen';
 import { SegmentedControl } from '@/components/segmented-control';
 import { TextField } from '@/components/text-field';
+import { YuukaMascot } from '@/components/yuuka-mascot';
 import { normalizeApiBaseUrl } from '@/config/env';
 import { ThemePreference } from '@/settings/settings-storage';
 import { useSettings } from '@/settings/settings-provider';
@@ -154,12 +155,73 @@ function SettingsDraft() {
       ) : null}
       <Button icon={Save} label="Save settings" loading={saving} onPress={save} />
       <Button icon={LogOut} label="Sign out" onPress={signOut} variant="danger" />
-      <AppText style={[styles.version, { color: colors.muted }]} variant="caption">
-        {version.isPending
-          ? 'Yuuka · Checking version'
-          : formatYuukaVersionFooter(version.data?.version)}
-      </AppText>
+      <YuukaVersionFooter
+        label={
+          version.isPending
+            ? 'Yuuka · Checking version'
+            : formatYuukaVersionFooter(version.data?.version)
+        }
+      />
     </ScrollScreen>
+  );
+}
+
+type MascotInteractionState = 'heart' | 'idle';
+
+function YuukaVersionFooter({ label }: { label: string }) {
+  const { colors } = useAppTheme();
+  const [interaction, setInteraction] = useState<MascotInteractionState>('idle');
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+    },
+    [],
+  );
+
+  function animateMascot() {
+    if (interaction !== 'idle') return;
+    setInteraction('heart');
+    resetTimer.current = setTimeout(() => {
+      resetTimer.current = null;
+      setInteraction('idle');
+    }, 1100);
+  }
+
+  return (
+    <View style={styles.versionFooter}>
+      <Pressable
+        accessibilityLabel="Animate Yuuka mascot"
+        accessibilityRole="button"
+        accessibilityState={{ disabled: interaction !== 'idle' }}
+        disabled={interaction !== 'idle'}
+        hitSlop={4}
+        onPress={animateMascot}
+        style={styles.mascotButton}
+        testID="settings-mascot-button"
+      >
+        <YuukaMascot
+          playback={interaction === 'heart' ? 'once' : 'static'}
+          size={52}
+          testID={`settings-mascot-${interaction}`}
+          variant={interaction}
+        />
+        {interaction === 'heart' ? (
+          <Heart
+            accessibilityElementsHidden
+            color={colors.danger}
+            fill={colors.danger}
+            importantForAccessibility="no-hide-descendants"
+            size={16}
+            style={styles.heart}
+          />
+        ) : null}
+      </Pressable>
+      <AppText style={{ color: colors.muted }} variant="caption">
+        {label}
+      </AppText>
+    </View>
   );
 }
 
@@ -180,7 +242,9 @@ function apiOrigin(apiBaseUrl: string) {
 const styles = StyleSheet.create({
   connection: { alignItems: 'center', flexDirection: 'row', gap: 7 },
   content: { gap: 20, paddingBottom: 32 },
+  heart: { position: 'absolute', right: 0, top: 0 },
+  mascotButton: { alignItems: 'center', height: 52, justifyContent: 'center', width: 52 },
   section: { borderTopWidth: 1, gap: 14, paddingTop: 18 },
   titleBlock: { gap: 7 },
-  version: { alignSelf: 'center', marginTop: 2 },
+  versionFooter: { alignItems: 'center', flexDirection: 'row', gap: 8, justifyContent: 'center' },
 });

@@ -8,8 +8,15 @@ import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
-import { EmptyState, ErrorState, StaleBanner, YuukaLoadingState } from '@/components/states';
+import {
+  EmptyState,
+  ErrorState,
+  StaleBanner,
+  YuukaLoadingState,
+  YuukaRefreshIndicator,
+} from '@/components/states';
 import { PaycheckCard } from '@/features/paychecks/paycheck-card';
+import { useMinimumVisibleDuration } from '@/hooks/use-minimum-visible-duration';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
@@ -22,6 +29,15 @@ export default function ActiveScreen() {
     queryKey: ['paychecks', 'active'],
     queryFn: api.activePaychecks,
   });
+  const showColdLoader = useMinimumVisibleDuration(query.isPending && !query.data, 1000);
+
+  if (showColdLoader) {
+    return (
+      <Screen contentContainerStyle={styles.center}>
+        <YuukaLoadingState message="Loading paychecks..." />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -30,9 +46,7 @@ export default function ActiveScreen() {
         data={query.data?.items ?? []}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
-          query.isPending ? (
-            <YuukaLoadingState message="Loading paychecks..." />
-          ) : query.isError && !query.data ? (
+          query.isError && !query.data ? (
             <ErrorState
               message={displayError(
                 query.error,
@@ -43,6 +57,7 @@ export default function ActiveScreen() {
             />
           ) : (
             <EmptyState
+              mascot="wave"
               message="New and reopened paychecks will appear here."
               title="Nothing needs attention"
             />
@@ -63,15 +78,17 @@ export default function ActiveScreen() {
                 onPress={() => router.push('/paychecks/new')}
               />
             </View>
+            <YuukaRefreshIndicator visible={query.isFetching && Boolean(query.data)} />
             {query.isError && query.data ? <StaleBanner /> : null}
           </View>
         }
         refreshControl={
           <RefreshControl
-            colors={[colors.accent]}
-            onRefresh={() => query.refetch()}
+            colors={['transparent']}
+            onRefresh={() => void query.refetch()}
+            progressBackgroundColor="transparent"
             refreshing={query.isRefetching}
-            tintColor={colors.accent}
+            tintColor="transparent"
           />
         }
         renderItem={({ item }) => (
@@ -83,6 +100,7 @@ export default function ActiveScreen() {
 }
 
 const styles = StyleSheet.create({
+  center: { alignItems: 'center', justifyContent: 'center' },
   content: { flexGrow: 1, gap: 12, padding: 16, paddingBottom: 28 },
   header: { gap: 13, marginBottom: 3 },
   titleBlock: { gap: 3 },

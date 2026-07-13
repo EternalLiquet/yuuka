@@ -10,9 +10,16 @@ import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { IconButton } from '@/components/icon-button';
 import { Screen } from '@/components/screen';
-import { EmptyState, ErrorState, StaleBanner, YuukaLoadingState } from '@/components/states';
+import {
+  EmptyState,
+  ErrorState,
+  StaleBanner,
+  YuukaLoadingState,
+  YuukaRefreshIndicator,
+} from '@/components/states';
 import { formatMoney } from '@/domain/money';
 import { PaybackCard } from '@/features/paybacks/payback-card';
+import { useMinimumVisibleDuration } from '@/hooks/use-minimum-visible-duration';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
@@ -33,6 +40,7 @@ export default function PaybacksScreen() {
       await queryClient.invalidateQueries({ queryKey: ['paybacks'] });
     },
   });
+  const showColdLoader = useMinimumVisibleDuration(query.isPending && !query.data, 1000);
   const rows: Row[] = [
     ...(active.length
       ? [{ kind: 'section' as const, id: 'active', title: 'Active Paybacks' }]
@@ -41,6 +49,14 @@ export default function PaybacksScreen() {
     ...(paidOff.length ? [{ kind: 'section' as const, id: 'paid-off', title: 'Paid Off' }] : []),
     ...paidOff.map((payback) => ({ kind: 'payback' as const, payback })),
   ];
+
+  if (showColdLoader) {
+    return (
+      <Screen contentContainerStyle={styles.center}>
+        <YuukaLoadingState message="Loading Paybacks..." />
+      </Screen>
+    );
+  }
 
   function movePayback(payback: Payback, offset: number) {
     const group = payback.state === 'ACTIVE' ? [...active] : [...paidOff];
@@ -62,9 +78,7 @@ export default function PaybacksScreen() {
         data={rows}
         keyExtractor={(item) => (item.kind === 'section' ? item.id : item.payback.id)}
         ListEmptyComponent={
-          query.isPending ? (
-            <YuukaLoadingState message="Loading Paybacks..." />
-          ) : query.isError && !query.data ? (
+          query.isError && !query.data ? (
             <ErrorState
               message={displayError(
                 query.error,
@@ -75,6 +89,7 @@ export default function PaybacksScreen() {
             />
           ) : (
             <EmptyState
+              mascot="idle"
               message="Track money you borrowed from yourself and repay it through paycheck entries."
               title="No Paybacks yet"
             />
@@ -124,6 +139,7 @@ export default function PaybacksScreen() {
                 />
               </View>
             </View>
+            <YuukaRefreshIndicator visible={query.isFetching && Boolean(query.data)} />
             {query.isError && query.data ? <StaleBanner /> : null}
             {reorderMutation.error ? (
               <AppText style={{ color: colors.danger }} variant="error">
@@ -138,10 +154,13 @@ export default function PaybacksScreen() {
         }
         refreshControl={
           <RefreshControl
-            colors={[colors.accent]}
-            onRefresh={() => query.refetch()}
+            accessibilityLabel="Refresh Paybacks"
+            colors={['transparent']}
+            onRefresh={() => void query.refetch()}
+            progressBackgroundColor="transparent"
             refreshing={query.isRefetching}
-            tintColor={colors.accent}
+            testID="paybacks-refresh-control"
+            tintColor="transparent"
           />
         }
         renderItem={({ item }) =>
@@ -204,6 +223,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  center: { alignItems: 'center', justifyContent: 'center' },
   content: { flexGrow: 1, gap: 12, padding: 16, paddingBottom: 28 },
   header: { gap: 13, marginBottom: 3 },
   metric: { flex: 1, gap: 3 },
