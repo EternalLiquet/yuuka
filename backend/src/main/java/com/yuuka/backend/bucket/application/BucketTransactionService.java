@@ -58,7 +58,7 @@ public class BucketTransactionService {
   public BucketTransactionResponse create(
       UUID ownerId, UUID entryId, CreateBucketTransactionRequest request) {
     PaycheckEntry entry = requireMutableBucket(ownerId, entryId);
-    rejectZero(request.amountMinor());
+    rejectNonPositive(request.amountMinor());
     BucketTransaction transaction =
         transactions.saveAndFlush(
             new BucketTransaction(
@@ -66,6 +66,7 @@ public class BucketTransactionService {
                 entryId,
                 request.amountMinor(),
                 normalizeOptional(request.description()),
+                normalizeOptional(request.notes()),
                 request.effectiveDate()));
     touchPaycheck(ownerId, entry.getPaycheckId());
     BucketTransactionResponse response = BucketTransactionResponse.from(transaction);
@@ -87,10 +88,13 @@ public class BucketTransactionService {
     BucketTransaction transaction = requireTransaction(ownerId, transactionId);
     PaycheckEntry entry = requireMutableBucket(ownerId, transaction.getEntryId());
     assertVersion(transaction.getVersion(), request.version());
-    rejectZero(request.amountMinor());
+    rejectNonPositive(request.amountMinor());
     BucketTransactionResponse before = BucketTransactionResponse.from(transaction);
     transaction.update(
-        request.amountMinor(), normalizeOptional(request.description()), request.effectiveDate());
+        request.amountMinor(),
+        normalizeOptional(request.description()),
+        normalizeOptional(request.notes()),
+        request.effectiveDate());
     transactions.flush();
     touchPaycheck(ownerId, entry.getPaycheckId());
     BucketTransactionResponse after = BucketTransactionResponse.from(transaction);
@@ -162,9 +166,9 @@ public class BucketTransactionService {
     }
   }
 
-  private void rejectZero(long amountMinor) {
-    if (amountMinor == 0) {
-      throw new BusinessRuleException("A bucket transaction cannot be zero.");
+  private void rejectNonPositive(long amountMinor) {
+    if (amountMinor <= 0) {
+      throw new BusinessRuleException("A bucket transaction must be a positive purchase amount.");
     }
   }
 

@@ -22,6 +22,7 @@ const entry = {
   name: 'Work Food',
   notes: null,
   overBudget: false,
+  paybackId: null,
   payee: null,
   paycheckId: '11111111-1111-4111-8111-111111111110',
   position: 0,
@@ -107,16 +108,17 @@ describe('API response contracts', () => {
   it('parses secondary API resources and pages', () => {
     expect(
       bucketTransactionSchema.parse({
-        amountMinor: -500,
+        amountMinor: 500,
         createdAt: '2026-07-10T12:00:00Z',
-        description: 'Correction',
+        description: 'Lunch',
+        notes: 'Receipt saved',
         effectiveDate: '2026-07-10',
         entryId: entry.id,
         id: '11111111-1111-4111-8111-111111111120',
         updatedAt: '2026-07-10T12:30:00Z',
         version: 0,
       }),
-    ).toMatchObject({ amountMinor: -500 });
+    ).toMatchObject({ amountMinor: 500, notes: 'Receipt saved' });
     expect(
       statusEventSchema.parse({
         effectiveAt: '2026-07-10T12:00:00Z',

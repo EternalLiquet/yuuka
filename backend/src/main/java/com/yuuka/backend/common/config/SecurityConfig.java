@@ -67,7 +67,7 @@ public class SecurityConfig {
                         "/api/v1/auth/refresh",
                         "/api/v1/auth/logout")
                     .permitAll()
-                    .requestMatchers("/health", "/health/ready", "/actuator/health")
+                    .requestMatchers("/health", "/health/live", "/health/ready", "/actuator/health")
                     .permitAll()
                     .anyRequest()
                     .authenticated())

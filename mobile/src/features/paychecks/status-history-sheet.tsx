@@ -3,9 +3,11 @@ import { X } from 'lucide-react-native';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Entry } from '@/api/contracts';
+import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { StatusBadge } from '@/components/status-badge';
+import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 export function StatusHistorySheet({
@@ -17,6 +19,7 @@ export function StatusHistorySheet({
 }) {
   const api = useYuukaApi();
   const { colors } = useAppTheme();
+  const { settings } = useSettings();
   const query = useQuery({
     queryKey: ['entry', entry?.id, 'status-history'],
     queryFn: () => api.statusHistory(entry!.id),
@@ -69,7 +72,7 @@ export function StatusHistorySheet({
           ))}
           {query.isError ? (
             <AppText style={{ color: colors.danger }} variant="error">
-              {query.error instanceof Error ? query.error.message : 'History could not be loaded.'}
+              {displayError(query.error, settings.currencyCode, 'History could not be loaded.')}
             </AppText>
           ) : null}
         </ScrollView>

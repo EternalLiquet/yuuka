@@ -11,7 +11,7 @@ import java.util.UUID;
 public record CreatePaycheckFromTemplateRequest(
     @NotNull UUID templateId,
     @Size(max = 120) String name,
-    @PositiveOrZero long amountMinor,
+    @PositiveOrZero(message = "Amount must be greater than or equal to $0.00.") long amountMinor,
     @NotNull LocalDate incomeDate,
     @Size(max = 160) String source,
     @Size(max = 2000) String notes,

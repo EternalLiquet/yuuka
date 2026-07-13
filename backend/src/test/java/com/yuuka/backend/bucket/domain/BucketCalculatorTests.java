@@ -10,11 +10,11 @@ class BucketCalculatorTests {
   private final BucketCalculator calculator = new BucketCalculator();
 
   @Test
-  void includesSpendingAndNegativeCorrectionsWithoutFloatingPointMath() {
-    BucketMetrics metrics = calculator.calculate(5000, List.of(1235L, 910L, -500L));
+  void includesPurchaseSpendingWithoutFloatingPointMath() {
+    BucketMetrics metrics = calculator.calculate(5000, List.of(1235L, 910L));
 
-    assertThat(metrics.spentMinor()).isEqualTo(1645);
-    assertThat(metrics.remainingMinor()).isEqualTo(3355);
+    assertThat(metrics.spentMinor()).isEqualTo(2145);
+    assertThat(metrics.remainingMinor()).isEqualTo(2855);
     assertThat(metrics.overBudget()).isFalse();
   }
 

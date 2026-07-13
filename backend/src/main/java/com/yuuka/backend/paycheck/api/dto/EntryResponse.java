@@ -10,6 +10,7 @@ import java.util.UUID;
 public record EntryResponse(
     UUID id,
     UUID paycheckId,
+    UUID paybackId,
     EntryType entryType,
     String name,
     long amountMinor,
@@ -32,6 +33,7 @@ public record EntryResponse(
     return new EntryResponse(
         entry.getId(),
         entry.getPaycheckId(),
+        entry.getPaybackId(),
         entry.getEntryType(),
         entry.getName(),
         entry.getAmountMinor(),

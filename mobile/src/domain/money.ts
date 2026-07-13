@@ -45,6 +45,6 @@ export function formatMoney(minor: number, currencyCode = 'USD', locale?: string
 
 function assertMinor(minor: number) {
   if (!Number.isSafeInteger(minor)) {
-    throw new Error('Money must be an integer number of minor units.');
+    throw new Error('Money must be an integer value.');
   }
 }

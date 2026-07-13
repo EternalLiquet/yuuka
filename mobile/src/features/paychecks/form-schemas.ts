@@ -32,6 +32,7 @@ export const entryFormSchema = z
     accountName: z.string().max(160),
     payee: z.string().max(160),
     notes: z.string().max(2000),
+    paybackId: z.string(),
     target: z.string(),
     targetDate: z.string(),
   })

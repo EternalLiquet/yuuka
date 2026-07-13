@@ -35,8 +35,8 @@ This document tracks foundation-level security controls. It does not define budg
 - Web sessions use `sessionStorage` instead of persistent `localStorage`.
 - Production mobile builds require an HTTPS API base URL.
 - API requests omit browser credentials, reject redirects, disable request caching, and time out.
-- Mobile screen capture prevention is enabled at the app root.
-- OpenAPI requires authentication; health endpoints expose no details.
+- Mobile screenshots and screen recording are intentionally allowed; sensitive controls remain focused on authentication, encrypted token storage, HTTPS production URLs, request hardening, and not exposing secrets in logs or UI.
+- OpenAPI requires authentication; health endpoints expose only safe status and backend version metadata.
 - PostgreSQL rejects updates and deletes on status-event and audit-event tables.
 - Docker Compose keeps PostgreSQL on an internal network and binds the API to loopback by default.
 

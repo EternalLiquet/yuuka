@@ -51,8 +51,19 @@ export function EntryRow({
 }: EntryRowProps) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const opensBucket = entry.entryType === 'SPENDING_BUCKET' && Boolean(onBucketActivity);
   return (
-    <View style={[styles.row, { borderBottomColor: colors.border }]}>
+    <Pressable
+      accessibilityLabel={opensBucket ? `Open bucket ledger for ${entry.name}` : undefined}
+      accessibilityRole={opensBucket ? 'button' : undefined}
+      disabled={!opensBucket}
+      onPress={onBucketActivity}
+      style={({ pressed }) => [
+        styles.row,
+        { borderBottomColor: colors.border },
+        pressed && styles.pressed,
+      ]}
+    >
       <View style={styles.main}>
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
@@ -76,10 +87,7 @@ export function EntryRow({
             <StatusBadge status={entry.status} />
           </Pressable>
           {entry.entryType === 'SPENDING_BUCKET' ? (
-            <AppText style={{ color: colors.muted, flex: 1, textAlign: 'right' }} variant="caption">
-              {formatMoney(entry.spentMinor ?? 0, settings.currencyCode)} spent |{' '}
-              {formatMoney(entry.remainingMinor ?? entry.amountMinor, settings.currencyCode)} left
-            </AppText>
+            <BucketSummary entry={entry} />
           ) : (
             <AppText style={{ color: colors.muted, marginLeft: 'auto' }} variant="caption">
               Edited {formatDateTime(entry.updatedAt)}
@@ -127,6 +135,33 @@ export function EntryRow({
         ) : null}
         <IconButton icon={Pencil} label={`Edit ${entry.name}`} onPress={onEdit} />
       </View>
+    </Pressable>
+  );
+}
+
+function BucketSummary({ entry }: { entry: Entry }) {
+  const { colors } = useAppTheme();
+  const { settings } = useSettings();
+  const spent = formatMoney(entry.spentMinor ?? 0, settings.currencyCode);
+  const remainingMinor = entry.remainingMinor ?? entry.amountMinor;
+  const overBudget = Boolean(entry.overBudget) || remainingMinor < 0;
+  const balance = formatMoney(Math.abs(remainingMinor), settings.currencyCode);
+  const balanceLabel = overBudget ? `${balance} over` : `${balance} left`;
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${spent} spent, ${balanceLabel}`}
+      style={styles.bucketSummary}
+    >
+      <AppText style={{ color: colors.danger }} variant="caption">
+        {spent} spent
+      </AppText>
+      <AppText style={{ color: colors.muted }} variant="caption">
+        {' | '}
+      </AppText>
+      <AppText style={{ color: overBudget ? colors.danger : colors.posted }} variant="caption">
+        {balanceLabel}
+      </AppText>
     </View>
   );
 }
@@ -145,8 +180,15 @@ function formatDateTime(value: string) {
 
 const styles = StyleSheet.create({
   actions: { alignItems: 'center', flexDirection: 'row', gap: 6, justifyContent: 'flex-end' },
+  bucketSummary: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
   detailRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
   main: { gap: 11 },
+  pressed: { opacity: 0.74 },
   row: { borderBottomWidth: 1, gap: 12, paddingVertical: 15 },
   titleBlock: { flex: 1, gap: 3 },
   titleRow: {

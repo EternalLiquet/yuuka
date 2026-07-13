@@ -32,6 +32,9 @@ public class BucketTransaction {
   @Column(length = 500)
   private String description;
 
+  @Column(length = 1000)
+  private String notes;
+
   @Column(name = "effective_date", nullable = false)
   private LocalDate effectiveDate;
 
@@ -51,11 +54,17 @@ public class BucketTransaction {
   protected BucketTransaction() {}
 
   public BucketTransaction(
-      UUID ownerId, UUID entryId, long amountMinor, String description, LocalDate effectiveDate) {
+      UUID ownerId,
+      UUID entryId,
+      long amountMinor,
+      String description,
+      String notes,
+      LocalDate effectiveDate) {
     this.ownerId = ownerId;
     this.entryId = entryId;
     this.amountMinor = amountMinor;
     this.description = description;
+    this.notes = notes;
     this.effectiveDate = effectiveDate;
   }
 
@@ -71,9 +80,10 @@ public class BucketTransaction {
     updatedAt = Instant.now();
   }
 
-  public void update(long amountMinor, String description, LocalDate effectiveDate) {
+  public void update(long amountMinor, String description, String notes, LocalDate effectiveDate) {
     this.amountMinor = amountMinor;
     this.description = description;
+    this.notes = notes;
     this.effectiveDate = effectiveDate;
   }
 
@@ -99,6 +109,10 @@ public class BucketTransaction {
 
   public String getDescription() {
     return description;
+  }
+
+  public String getNotes() {
+    return notes;
   }
 
   public LocalDate getEffectiveDate() {
