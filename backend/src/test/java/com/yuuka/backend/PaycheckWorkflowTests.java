@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuuka.backend.support.AbstractIntegrationTest;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -225,6 +226,84 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
             .andExpect(jsonPath("$.status").value("NOT_PAID"))
             .andReturn();
     JsonNode manual = objectMapper.readTree(manualBill.getResponse().getContentAsString());
+
+    MvcResult paybackResult =
+        mockMvc
+            .perform(
+                post("/api/v1/paybacks")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "name":"Loan",
+                          "originalAmountMinor":20000,
+                          "openingRemainingAmountMinor":20000,
+                          "borrowedDate":"2026-07-12"
+                        }
+                        """))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String paybackId =
+        objectMapper.readTree(paybackResult.getResponse().getContentAsString()).path("id").asText();
+
+    MvcResult unrelatedUpdate =
+        mockMvc
+            .perform(
+                patch("/api/v1/entries/{id}", manual.path("id").asText())
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "entryType":"BILL",
+                          "name":"Manual Bill Updated",
+                          "amountMinor":11000,
+                          "dueDate":"2026-07-20",
+                          "accountName":"Checking",
+                          "payee":"Utility Co",
+                          "notes":"Pay this directly",
+                          "paybackId":"%s",
+                          "version":%d
+                        }
+                        """
+                            .formatted(paybackId, manual.path("version").asLong())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.paymentMethod").value("MANUAL"))
+            .andExpect(jsonPath("$.name").value("Manual Bill Updated"))
+            .andExpect(jsonPath("$.paybackId").value(paybackId))
+            .andReturn();
+    manual = objectMapper.readTree(unrelatedUpdate.getResponse().getContentAsString());
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select payment_method from paycheck_entries where id = ?",
+                String.class,
+                UUID.fromString(manual.path("id").asText())))
+        .isEqualTo("MANUAL");
+
+    mockMvc
+        .perform(
+            patch("/api/v1/entries/{id}", manual.path("id").asText())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "entryType":"BILL",
+                      "name":"Manual Bill Updated",
+                      "amountMinor":11000,
+                      "paymentMethod":"AUTOPAY",
+                      "dueDate":"2026-07-20",
+                      "accountName":"Checking",
+                      "payee":"Utility Co",
+                      "notes":"Pay automatically",
+                      "paybackId":"%s",
+                      "version":%d
+                    }
+                    """
+                        .formatted(paybackId, manual.path("version").asLong())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.paymentMethod").value("AUTOPAY"));
 
     mockMvc
         .perform(

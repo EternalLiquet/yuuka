@@ -215,6 +215,7 @@ export default function PaycheckDetailScreen() {
     sort === 'custom' &&
     statusFilter === 'ALL' &&
     typeFilter === 'ALL' &&
+    paymentMethodFilter === 'ALL' &&
     query.data?.state === 'ACTIVE';
 
   const markListInteracted = useCallback(() => {
@@ -332,6 +333,7 @@ export default function PaycheckDetailScreen() {
   }
 
   function reorder(entryIds: string[]) {
+    if (!canReorder) return;
     reorderMutation.mutate(entryIds);
   }
 

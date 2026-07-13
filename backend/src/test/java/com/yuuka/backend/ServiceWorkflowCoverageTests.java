@@ -246,6 +246,149 @@ class ServiceWorkflowCoverageTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void preservesTemplateBillPaymentMethodWhenOlderEntryUpdateOmitsField() throws Exception {
+    String token = register("template-payment-method@yuuka.local");
+    JsonNode template =
+        json(
+            post("/api/v1/templates")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"Payment Methods",
+                      "entries":[
+                        {
+                          "entryType":"BILL",
+                          "name":"Manual Utility",
+                          "defaultAmountMinor":13050,
+                          "paymentMethod":"MANUAL",
+                          "defaultDueOffsetDays":2,
+                          "accountName":"Checking",
+                          "payee":"Utility Co",
+                          "notes":"Pay by hand"
+                        },
+                        {"entryType":"SPENDING_BUCKET","name":"Food","defaultAmountMinor":5000}
+                      ]
+                    }
+                    """),
+            201);
+    String templateId = template.path("id").asText();
+    JsonNode manual = template.path("entries").get(0);
+    JsonNode bucket = template.path("entries").get(1);
+
+    JsonNode updated =
+        json(
+            patch("/api/v1/template-entries/{id}", manual.path("id").asText())
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "entryType":"BILL",
+                      "name":"Manual Utility Updated",
+                      "defaultAmountMinor":14050,
+                      "defaultDueOffsetDays":3,
+                      "accountName":"Checking 2",
+                      "payee":"Utility Co",
+                      "notes":"Still pay by hand",
+                      "version":%d
+                    }
+                    """
+                        .formatted(manual.path("version").asLong())),
+            200);
+    assertThat(updated.path("paymentMethod").asText()).isEqualTo("MANUAL");
+
+    JsonNode copied =
+        json(
+            post("/api/v1/templates/{id}/duplicate", templateId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Payment Methods Copy\"}"),
+            201);
+    assertThat(copied.path("entries").get(0).path("paymentMethod").asText()).isEqualTo("MANUAL");
+
+    JsonNode paycheck =
+        json(
+            post("/api/v1/paychecks/from-template")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"templateId":"%s","amountMinor":25000,"incomeDate":"2026-07-17"}
+                    """
+                        .formatted(templateId)),
+            201);
+    assertThat(paycheck.path("entries").get(0).path("paymentMethod").asText()).isEqualTo("MANUAL");
+
+    JsonNode explicit =
+        json(
+            patch("/api/v1/template-entries/{id}", manual.path("id").asText())
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "entryType":"BILL",
+                      "name":"Manual Utility Updated",
+                      "defaultAmountMinor":14050,
+                      "paymentMethod":"AUTOPAY",
+                      "defaultDueOffsetDays":3,
+                      "accountName":"Checking 2",
+                      "payee":"Utility Co",
+                      "notes":"Now automatic",
+                      "version":%d
+                    }
+                    """
+                        .formatted(updated.path("version").asLong())),
+            200);
+    assertThat(explicit.path("paymentMethod").asText()).isEqualTo("AUTOPAY");
+
+    mockMvc
+        .perform(
+            patch("/api/v1/template-entries/{id}", bucket.path("id").asText())
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "entryType":"SPENDING_BUCKET",
+                      "name":"Food",
+                      "defaultAmountMinor":5000,
+                      "paymentMethod":"MANUAL",
+                      "version":%d
+                    }
+                    """
+                        .formatted(bucket.path("version").asLong())))
+        .andExpect(status().isUnprocessableEntity());
+
+    JsonNode override =
+        json(
+            post("/api/v1/paychecks/from-template")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "templateId":"%s",
+                      "amountMinor":25000,
+                      "incomeDate":"2026-07-31",
+                      "entries":[
+                        {
+                          "entryType":"BILL",
+                          "name":"Manual Override",
+                          "amountMinor":10000,
+                          "paymentMethod":"MANUAL"
+                        }
+                      ]
+                    }
+                    """
+                        .formatted(templateId)),
+            201);
+    assertThat(override.path("entries").get(0).path("paymentMethod").asText()).isEqualTo("MANUAL");
+  }
+
+  @Test
   void supportsEntryBucketAuditHistoryReorderingAndArchiveWorkflows() throws Exception {
     String token = register("workflow-crud@yuuka.local");
     JsonNode paycheck =

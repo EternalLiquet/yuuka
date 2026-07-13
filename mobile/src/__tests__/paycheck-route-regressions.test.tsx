@@ -21,6 +21,7 @@ let mockOnScrollToIndexFailed:
       index: number;
     }) => void)
   | null = null;
+let mockOnDragEnd: ((params: { data: Entry[] }) => void) | null = null;
 
 const mockApi = {
   addBucketTransaction: jest.fn(),
@@ -73,6 +74,7 @@ jest.mock('react-native-draggable-flatlist', () => {
         highestMeasuredFrameIndex: number;
         index: number;
       }) => void;
+      onDragEnd?: (params: { data: Entry[] }) => void;
       renderItem: (params: { drag: () => void; index: number; item: Entry }) => ReactNode;
     },
     ref: unknown,
@@ -82,6 +84,7 @@ jest.mock('react-native-draggable-flatlist', () => {
     }));
     mockOnScrollBeginDrag = props.onScrollBeginDrag ?? null;
     mockOnScrollToIndexFailed = props.onScrollToIndexFailed ?? null;
+    mockOnDragEnd = props.onDragEnd ?? null;
     return React.createElement(FlatList, {
       ...props,
       renderItem: (params: { index: number; item: Entry }) =>
@@ -195,6 +198,7 @@ describe('paycheck route regressions', () => {
     mockParams = { id: paycheck.id };
     mockOnScrollBeginDrag = null;
     mockOnScrollToIndexFailed = null;
+    mockOnDragEnd = null;
     mockApi.paybacks.mockResolvedValue({
       items: [],
       summary: {
@@ -341,6 +345,66 @@ describe('paycheck route regressions', () => {
     expect(view.getAllByText(/Manual Pay/).length).toBeGreaterThanOrEqual(1);
     expect(view.queryByText('Work Food')).toBeNull();
     expect(view.queryByText('Tires')).toBeNull();
+  });
+
+  it('disables custom reordering while payment method filters are active', async () => {
+    const view = await renderRoute(<PaycheckDetailScreen />);
+
+    expect(await view.findByText('Electricity')).toBeTruthy();
+    expect(view.getByLabelText('Move Electricity down')).toBeTruthy();
+    expect(view.getByLabelText('Drag Electricity')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('segmented-Payment method filter-MANUAL'));
+    });
+
+    expect(view.getByText('Electricity')).toBeTruthy();
+    expect(view.queryByText('Work Food')).toBeNull();
+    expect(view.queryByText('Tires')).toBeNull();
+    expect(view.queryByLabelText('Move Electricity up')).toBeNull();
+    expect(view.queryByLabelText('Move Electricity down')).toBeNull();
+    expect(view.queryByLabelText('Drag Electricity')).toBeNull();
+
+    await act(async () => {
+      mockOnDragEnd?.({ data: [entries[0]] });
+    });
+    expect(mockApi.reorderEntries).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('segmented-Payment method filter-AUTOPAY'));
+    });
+
+    expect(view.queryByText('Electricity')).toBeNull();
+    expect(view.queryByLabelText('Move Entry up')).toBeNull();
+    expect(view.queryByLabelText('Move Entry down')).toBeNull();
+    expect(view.queryByLabelText('Drag Entry')).toBeNull();
+
+    await act(async () => {
+      mockOnDragEnd?.({ data: [entries[0]] });
+    });
+    expect(mockApi.reorderEntries).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('segmented-Payment method filter-ALL'));
+    });
+
+    expect(view.getByText('Electricity')).toBeTruthy();
+    expect(view.getByText('Work Food')).toBeTruthy();
+    expect(view.getByText('Tires')).toBeTruthy();
+    expect(view.getByLabelText('Move Electricity down')).toBeTruthy();
+    expect(view.getByLabelText('Drag Electricity')).toBeTruthy();
+    expect(view.getByLabelText('Move Work Food up')).toBeTruthy();
+    expect(view.getByLabelText('Move Tires up')).toBeTruthy();
+    expect(mockApi.reorderEntries).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Move Work Food up'));
+    });
+    expect(mockApi.reorderEntries).toHaveBeenCalledWith(
+      paycheck.id,
+      [entries[1].id, entries[0].id, entries[2].id],
+      paycheck.version,
+    );
   });
 
   it('allocates leftover as an exact bill entry', async () => {
