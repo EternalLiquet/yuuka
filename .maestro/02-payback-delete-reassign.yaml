@@ -63,6 +63,10 @@ name: Payback delete unassigns entry
     visible: "Repay Payback"
     timeout: 10000
 
+- back
+- extendedWaitUntil:
+    visible: "New paycheck"
+    timeout: 10000
 - tapOn: "Paybacks"
 - tapOn: 'E2E Delete Source, \$40\.00 left, 0 percent repaid since tracking began'
 - tapOn: "Delete"
