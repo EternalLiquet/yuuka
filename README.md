@@ -14,7 +14,7 @@
 [![Private self-hosted](https://img.shields.io/badge/private-self--hosted-7C3AED)](docs/deployment.md)
 
 <p align="center">
-  <img src="https://media1.tenor.com/m/wpMrxKRhitUAAAAC/yuuka.gif" alt="Yuuka at a desk" width="360">
+  <img src="docs/assets/yuuka.gif" alt="Yuuka at a desk" width="360">
 </p>
 
 Yuuka is a paycheck-first budgeting app for bills, spending buckets, and sinking funds. It is a self-hosted, single-owner system with an Expo React Native client and a Spring Boot/PostgreSQL API.
