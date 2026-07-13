@@ -2,7 +2,7 @@ package com.yuuka.backend.search.application;
 
 import com.yuuka.backend.common.api.BusinessRuleException;
 import com.yuuka.backend.common.api.PageResponse;
-import com.yuuka.backend.paycheck.domain.PaycheckState;
+import com.yuuka.backend.paycheck.domain.PaycheckVisibilityPolicy;
 import com.yuuka.backend.search.api.dto.EntrySearchResultResponse;
 import com.yuuka.backend.search.domain.PaycheckContext;
 import com.yuuka.backend.search.domain.SearchResultKind;
@@ -22,9 +22,12 @@ public class EntrySearchService {
   private static final int MAX_PAGE_SIZE = 100;
 
   private final JpaEntrySearchRepository searches;
+  private final PaycheckVisibilityPolicy visibilityPolicy;
 
-  public EntrySearchService(JpaEntrySearchRepository searches) {
+  public EntrySearchService(
+      JpaEntrySearchRepository searches, PaycheckVisibilityPolicy visibilityPolicy) {
     this.searches = searches;
+    this.visibilityPolicy = visibilityPolicy;
   }
 
   @Transactional(readOnly = true)
@@ -51,6 +54,11 @@ public class EntrySearchService {
   }
 
   private EntrySearchResultResponse toResponse(EntrySearchProjection result) {
+    PaycheckContext paycheckContext =
+        visibilityPolicy.belongsInActive(
+                result.getPaycheckState(), result.getRequiresAttention(), result.getReopenedAt())
+            ? PaycheckContext.ACTIVE
+            : PaycheckContext.HISTORY;
     return new EntrySearchResultResponse(
         SearchResultKind.PAYCHECK_ENTRY,
         result.getEntryId(),
@@ -61,9 +69,7 @@ public class EntrySearchService {
         result.getStatus(),
         result.getPaycheckName(),
         result.getPaycheckIncomeDate(),
-        result.getPaycheckState() == PaycheckState.ACTIVE
-            ? PaycheckContext.ACTIVE
-            : PaycheckContext.HISTORY);
+        paycheckContext);
   }
 
   private String normalizeQuery(String query) {

@@ -73,47 +73,105 @@ class EntrySearchWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
-  void appliesActiveHistoryAllScopeAndPagination() throws Exception {
+  void appliesVisibilityPolicyForScopesContextAndPagination() throws Exception {
     String token = registerAndGetAccessToken("entry-search-scope@yuuka.local");
-    String activePaycheck = createPaycheck(token, "Active Paycheck", 100000, "2026-07-12");
-    String archivedPaycheck = createPaycheck(token, "Archived Paycheck", 100000, "2026-06-12");
-    addEntry(token, activePaycheck, "Internet", "BILL", 7000);
-    addEntry(token, archivedPaycheck, "Internet", "BILL", 7000);
+    String activeUnallocated =
+        createPaycheck(token, "Active Unallocated Paycheck", 100000, "2026-07-18");
+    String activeOpenEntry =
+        createPaycheck(token, "Active Open Entry Paycheck", 100000, "2026-07-17");
+    String completedActive =
+        createPaycheck(token, "Completed Active Paycheck", 100000, "2026-07-16");
+    String reopenedCompleted =
+        createPaycheck(token, "Reopened Completed Paycheck", 100000, "2026-07-15");
+    String closedPaycheck = createPaycheck(token, "Closed Paycheck", 100000, "2026-07-14");
+    String archivedPaycheck = createPaycheck(token, "Archived Paycheck", 100000, "2026-07-13");
+
+    addEntry(token, activeUnallocated, "Internet Policy Match", "BILL", 70000);
+    EntryFixture openEntry =
+        addEntry(token, activeOpenEntry, "Internet Policy Match", "BILL", 100000);
+    changeStatus(token, openEntry, "PROCESSING");
+
+    EntryFixture completedEntry =
+        addEntry(token, completedActive, "Internet Policy Match", "BILL", 100000);
+    changeStatus(token, completedEntry, "POSTED");
+
+    EntryFixture reopenedEntry =
+        addEntry(token, reopenedCompleted, "Internet Policy Match", "BILL", 100000);
+    changeStatus(token, reopenedEntry, "POSTED");
+    closePaycheck(token, reopenedCompleted);
+    reopenPaycheck(token, reopenedCompleted);
+
+    EntryFixture closedEntry =
+        addEntry(token, closedPaycheck, "Internet Policy Match", "BILL", 100000);
+    changeStatus(token, closedEntry, "POSTED");
+    closePaycheck(token, closedPaycheck);
+
+    EntryFixture archivedEntry =
+        addEntry(token, archivedPaycheck, "Internet Policy Match", "BILL", 100000);
+    changeStatus(token, archivedEntry, "POSTED");
     archivePaycheck(token, archivedPaycheck);
 
     mockMvc
         .perform(
             get("/api/v1/search/entries")
-                .param("query", "internet")
+                .param("query", "internet policy")
                 .param("scope", "ACTIVE")
                 .header("Authorization", "Bearer " + token))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalItems").value(1))
-        .andExpect(jsonPath("$.items[0].paycheckContext").value("ACTIVE"));
+        .andExpect(jsonPath("$.totalItems").value(3))
+        .andExpect(jsonPath("$.items[0].paycheckName").value("Active Unallocated Paycheck"))
+        .andExpect(jsonPath("$.items[0].paycheckContext").value("ACTIVE"))
+        .andExpect(jsonPath("$.items[1].paycheckName").value("Active Open Entry Paycheck"))
+        .andExpect(jsonPath("$.items[1].paycheckContext").value("ACTIVE"))
+        .andExpect(jsonPath("$.items[2].paycheckName").value("Reopened Completed Paycheck"))
+        .andExpect(jsonPath("$.items[2].paycheckContext").value("ACTIVE"));
 
     mockMvc
         .perform(
             get("/api/v1/search/entries")
-                .param("query", "internet")
+                .param("query", "internet policy")
                 .param("scope", "HISTORY")
                 .header("Authorization", "Bearer " + token))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalItems").value(1))
-        .andExpect(jsonPath("$.items[0].paycheckContext").value("HISTORY"));
+        .andExpect(jsonPath("$.totalItems").value(3))
+        .andExpect(jsonPath("$.items[0].paycheckName").value("Completed Active Paycheck"))
+        .andExpect(jsonPath("$.items[0].paycheckContext").value("HISTORY"))
+        .andExpect(jsonPath("$.items[1].paycheckName").value("Closed Paycheck"))
+        .andExpect(jsonPath("$.items[1].paycheckContext").value("HISTORY"))
+        .andExpect(jsonPath("$.items[2].paycheckName").value("Archived Paycheck"))
+        .andExpect(jsonPath("$.items[2].paycheckContext").value("HISTORY"));
 
     mockMvc
         .perform(
             get("/api/v1/search/entries")
-                .param("query", "internet")
+                .param("query", "internet policy")
                 .param("scope", "ALL")
                 .param("page", "0")
-                .param("size", "1")
+                .param("size", "4")
                 .header("Authorization", "Bearer " + token))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items.length()").value(1))
-        .andExpect(jsonPath("$.totalItems").value(2))
+        .andExpect(jsonPath("$.items.length()").value(4))
+        .andExpect(jsonPath("$.totalItems").value(6))
         .andExpect(jsonPath("$.totalPages").value(2))
-        .andExpect(jsonPath("$.hasNext").value(true));
+        .andExpect(jsonPath("$.hasNext").value(true))
+        .andExpect(jsonPath("$.items[0].paycheckContext").value("ACTIVE"))
+        .andExpect(jsonPath("$.items[1].paycheckContext").value("ACTIVE"))
+        .andExpect(jsonPath("$.items[2].paycheckContext").value("HISTORY"))
+        .andExpect(jsonPath("$.items[3].paycheckContext").value("ACTIVE"));
+
+    mockMvc
+        .perform(
+            get("/api/v1/search/entries")
+                .param("query", "internet policy")
+                .param("scope", "ALL")
+                .param("page", "1")
+                .param("size", "4")
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items.length()").value(2))
+        .andExpect(jsonPath("$.totalItems").value(6))
+        .andExpect(jsonPath("$.totalPages").value(2))
+        .andExpect(jsonPath("$.hasNext").value(false));
   }
 
   @Test
@@ -286,6 +344,65 @@ class EntrySearchWorkflowTests extends AbstractIntegrationTest {
   }
 
   private void archivePaycheck(String token, String paycheckId) throws Exception {
+    JsonNode paycheck = getPaycheck(token, paycheckId);
+    mockMvc
+        .perform(
+            delete("/api/v1/paychecks/{id}", paycheckId)
+                .param("version", paycheck.path("version").asText())
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk());
+  }
+
+  private void closePaycheck(String token, String paycheckId) throws Exception {
+    JsonNode paycheck = getPaycheck(token, paycheckId);
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/{id}/close", paycheckId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"version":%d}
+                    """
+                        .formatted(paycheck.path("version").asLong())))
+        .andExpect(status().isOk());
+  }
+
+  private void reopenPaycheck(String token, String paycheckId) throws Exception {
+    JsonNode paycheck = getPaycheck(token, paycheckId);
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/{id}/reopen", paycheckId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"version":%d}
+                    """
+                        .formatted(paycheck.path("version").asLong())))
+        .andExpect(status().isOk());
+  }
+
+  private EntryFixture changeStatus(String token, EntryFixture entry, String nextStatus)
+      throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/api/v1/entries/{id}/status", entry.id())
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"toStatus":"%s","effectiveAt":"2026-07-17T12:00:00Z","version":%d}
+                        """
+                            .formatted(nextStatus, entry.version())))
+            .andExpect(status().isOk())
+            .andReturn();
+    JsonNode changed = objectMapper.readTree(result.getResponse().getContentAsString());
+    return new EntryFixture(changed.path("id").asText(), changed.path("version").asLong());
+  }
+
+  private JsonNode getPaycheck(String token, String paycheckId) throws Exception {
     JsonNode paycheck =
         objectMapper.readTree(
             mockMvc
@@ -296,12 +413,7 @@ class EntrySearchWorkflowTests extends AbstractIntegrationTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString());
-    mockMvc
-        .perform(
-            delete("/api/v1/paychecks/{id}", paycheckId)
-                .param("version", paycheck.path("version").asText())
-                .header("Authorization", "Bearer " + token))
-        .andExpect(status().isOk());
+    return paycheck;
   }
 
   private void deleteEntry(String token, EntryFixture entry) throws Exception {

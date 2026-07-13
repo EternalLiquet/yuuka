@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Archive, CheckCircle2, Pencil, Plus, RotateCcw } from 'lucide-react-native';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
@@ -53,8 +53,15 @@ const sortOptions = [
   { label: 'Last edited', value: 'last-edited' },
 ] as const;
 
+type EntryListHandle = {
+  scrollToIndex: (params: { animated?: boolean; index: number; viewPosition?: number }) => void;
+};
+
 export default function PaycheckDetailScreen() {
-  const { highlightEntryId, id } = useLocalSearchParams<{ highlightEntryId?: string; id: string }>();
+  const { highlightEntryId, id } = useLocalSearchParams<{
+    highlightEntryId?: string;
+    id: string;
+  }>();
   const api = useYuukaApi();
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
@@ -71,6 +78,9 @@ export default function PaycheckDetailScreen() {
   const [detailError, setDetailError] = useState('');
   const [paycheckEditorVisible, setPaycheckEditorVisible] = useState(false);
   const leftoverInFlight = useRef(false);
+  const listRef = useRef<EntryListHandle | null>(null);
+  const highlightScrolledRef = useRef(false);
+  const userInteractedWithListRef = useRef(false);
   const query = useQuery({ queryKey: ['paycheck', id], queryFn: () => api.paycheck(id) });
   const paybacksQuery = useQuery({
     queryKey: ['paybacks', 'entry-editor'],
@@ -190,6 +200,30 @@ export default function PaycheckDetailScreen() {
     typeFilter === 'ALL' &&
     query.data?.state === 'ACTIVE';
 
+  useEffect(() => {
+    if (
+      showColdLoader ||
+      !highlightEntryId ||
+      highlightScrolledRef.current ||
+      userInteractedWithListRef.current
+    ) {
+      return;
+    }
+    if (!listRef.current) {
+      return;
+    }
+    const index = displayedEntries.findIndex((entry) => entry.id === highlightEntryId);
+    if (index < 0) {
+      return;
+    }
+    try {
+      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.35 });
+      highlightScrolledRef.current = true;
+    } catch {
+      highlightScrolledRef.current = true;
+    }
+  }, [displayedEntries, highlightEntryId, showColdLoader]);
+
   if (showColdLoader) {
     return (
       <Screen contentContainerStyle={styles.center}>
@@ -247,6 +281,9 @@ export default function PaycheckDetailScreen() {
           contentContainerStyle={styles.list}
           data={displayedEntries}
           keyExtractor={(entry) => entry.id}
+          onDragBegin={() => {
+            userInteractedWithListRef.current = true;
+          }}
           ListEmptyComponent={
             <EmptyState
               mascot="clipboard"
@@ -279,6 +316,12 @@ export default function PaycheckDetailScreen() {
             />
           }
           onDragEnd={({ data }) => reorder(data.map((entry) => entry.id))}
+          onScrollBeginDrag={() => {
+            userInteractedWithListRef.current = true;
+          }}
+          ref={(instance) => {
+            listRef.current = instance;
+          }}
           refreshControl={
             <RefreshControl
               colors={['transparent']}

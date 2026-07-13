@@ -11,6 +11,7 @@ import PaycheckDetailScreen from '../../app/paychecks/[id]';
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+const mockScrollToIndex = jest.fn();
 let mockParams: Record<string, string> = {};
 
 const mockApi = {
@@ -53,18 +54,24 @@ jest.mock('expo-router', () => {
 jest.mock('react-native-draggable-flatlist', () => {
   const React = require('react');
   const { FlatList } = require('react-native');
-  function DraggableFlatList({
-    renderItem,
-    ...props
-  }: {
-    renderItem: (params: { drag: () => void; index: number; item: Entry }) => ReactNode;
-  }) {
+  const DraggableFlatList = React.forwardRef(function DraggableFlatList(
+    {
+      renderItem,
+      ...props
+    }: {
+      renderItem: (params: { drag: () => void; index: number; item: Entry }) => ReactNode;
+    },
+    ref: unknown,
+  ) {
+    React.useImperativeHandle(ref, () => ({
+      scrollToIndex: mockScrollToIndex,
+    }));
     return React.createElement(FlatList, {
       ...props,
       renderItem: (params: { index: number; item: Entry }) =>
         renderItem({ ...params, drag: jest.fn() }),
     });
-  }
+  });
   return { __esModule: true, default: DraggableFlatList };
 });
 
@@ -205,6 +212,21 @@ describe('paycheck route regressions', () => {
     });
   });
 
+  it('scrolls to a highlighted entry after loading the paycheck', async () => {
+    mockParams = { highlightEntryId: entries[2].id, id: paycheck.id };
+
+    const view = await renderRoute(<PaycheckDetailScreen />);
+
+    expect(await view.findByText('Tires', {}, { timeout: 5000 })).toBeTruthy();
+    await waitFor(() =>
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        animated: true,
+        index: 2,
+        viewPosition: 0.35,
+      }),
+    );
+  }, 10000);
+
   it('opens an existing paycheck detail with draggable entries without crashing', async () => {
     const view = await renderRoute(<PaycheckDetailScreen />);
 
@@ -264,8 +286,8 @@ describe('paycheck route regressions', () => {
     expect(view.getByText('Budgeted')).toBeTruthy();
     expect(view.getByText('Spent')).toBeTruthy();
     expect(view.getByText('Remaining')).toBeTruthy();
-    expect(view.getByText(/Cafe/)).toBeTruthy();
-    expect(view.getByText('Lunch receipt')).toBeTruthy();
+    expect(await view.findByText(/Cafe/)).toBeTruthy();
+    expect(await view.findByText('Lunch receipt')).toBeTruthy();
 
     fireEvent.changeText(view.getAllByLabelText('Amount').at(-1)!, '-1.00');
     fireEvent.press(view.getByLabelText('Add purchase'));

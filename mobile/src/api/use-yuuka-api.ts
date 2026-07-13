@@ -19,6 +19,7 @@ import {
   templateEntrySchema,
   templateSchema,
 } from './contracts';
+import type { EntrySearchResult, Page, SearchScope } from './contracts';
 
 export type EntryPayload = {
   accountName?: string | null;
@@ -85,9 +86,9 @@ export function useYuukaApi() {
         amountMinor?: number;
         page?: number;
         query?: string;
-        scope?: 'ALL' | 'ACTIVE' | 'HISTORY';
+        scope?: SearchScope;
         size?: number;
-      }) => {
+      }): Promise<Page<EntrySearchResult>> => {
         const params = new URLSearchParams({ page: String(page), scope, size: String(size) });
         if (query?.trim()) params.set('query', query.trim());
         if (amountMinor != null) params.set('amountMinor', String(amountMinor));

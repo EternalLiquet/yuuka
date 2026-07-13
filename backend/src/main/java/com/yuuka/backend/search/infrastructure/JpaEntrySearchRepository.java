@@ -20,14 +20,99 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
                  entry.status as status,
                  paycheck.name as paycheckName,
                  paycheck.incomeDate as paycheckIncomeDate,
-                 paycheck.state as paycheckState
+                 paycheck.state as paycheckState,
+                 case
+                   when paycheck.amountMinor <> (
+                     select coalesce(sum(metricEntry.amountMinor), 0)
+                     from PaycheckEntry metricEntry
+                     where metricEntry.ownerId = paycheck.ownerId
+                       and metricEntry.paycheckId = paycheck.id
+                       and metricEntry.deletedAt is null
+                   )
+                   or (
+                     select count(metricEntry)
+                     from PaycheckEntry metricEntry
+                     where metricEntry.ownerId = paycheck.ownerId
+                       and metricEntry.paycheckId = paycheck.id
+                       and metricEntry.deletedAt is null
+                   ) = 0
+                   or exists (
+                     select 1
+                     from PaycheckEntry metricEntry
+                     where metricEntry.ownerId = paycheck.ownerId
+                       and metricEntry.paycheckId = paycheck.id
+                       and metricEntry.deletedAt is null
+                       and metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED
+                   )
+                   then true
+                   else false
+                 end as requiresAttention,
+                 paycheck.reopenedAt as reopenedAt
           from PaycheckEntry entry
           join Paycheck paycheck
             on paycheck.id = entry.paycheckId and paycheck.ownerId = entry.ownerId
           where entry.ownerId = :ownerId
             and entry.deletedAt is null
-            and (:activeOnly = false or paycheck.state = com.yuuka.backend.paycheck.domain.PaycheckState.ACTIVE)
-            and (:historyOnly = false or paycheck.state <> com.yuuka.backend.paycheck.domain.PaycheckState.ACTIVE)
+            and (
+              :activeOnly = false
+              or (
+                paycheck.state = com.yuuka.backend.paycheck.domain.PaycheckState.ACTIVE
+                and (
+                  paycheck.reopenedAt is not null
+                  or paycheck.amountMinor <> (
+                    select coalesce(sum(metricEntry.amountMinor), 0)
+                    from PaycheckEntry metricEntry
+                    where metricEntry.ownerId = paycheck.ownerId
+                      and metricEntry.paycheckId = paycheck.id
+                      and metricEntry.deletedAt is null
+                  )
+                  or (
+                    select count(metricEntry)
+                    from PaycheckEntry metricEntry
+                    where metricEntry.ownerId = paycheck.ownerId
+                      and metricEntry.paycheckId = paycheck.id
+                      and metricEntry.deletedAt is null
+                  ) = 0
+                  or exists (
+                    select 1
+                    from PaycheckEntry metricEntry
+                    where metricEntry.ownerId = paycheck.ownerId
+                      and metricEntry.paycheckId = paycheck.id
+                      and metricEntry.deletedAt is null
+                      and metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED
+                  )
+                )
+              )
+            )
+            and (
+              :historyOnly = false
+              or paycheck.state <> com.yuuka.backend.paycheck.domain.PaycheckState.ACTIVE
+              or (
+                paycheck.reopenedAt is null
+                and paycheck.amountMinor = (
+                  select coalesce(sum(metricEntry.amountMinor), 0)
+                  from PaycheckEntry metricEntry
+                  where metricEntry.ownerId = paycheck.ownerId
+                    and metricEntry.paycheckId = paycheck.id
+                    and metricEntry.deletedAt is null
+                )
+                and (
+                  select count(metricEntry)
+                  from PaycheckEntry metricEntry
+                  where metricEntry.ownerId = paycheck.ownerId
+                    and metricEntry.paycheckId = paycheck.id
+                    and metricEntry.deletedAt is null
+                ) > 0
+                and not exists (
+                  select 1
+                  from PaycheckEntry metricEntry
+                  where metricEntry.ownerId = paycheck.ownerId
+                    and metricEntry.paycheckId = paycheck.id
+                    and metricEntry.deletedAt is null
+                    and metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED
+                )
+              )
+            )
             and (
               (:query is not null and (
                 lower(entry.name) like concat('%', :query, '%')
@@ -54,8 +139,66 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
             on paycheck.id = entry.paycheckId and paycheck.ownerId = entry.ownerId
           where entry.ownerId = :ownerId
             and entry.deletedAt is null
-            and (:activeOnly = false or paycheck.state = com.yuuka.backend.paycheck.domain.PaycheckState.ACTIVE)
-            and (:historyOnly = false or paycheck.state <> com.yuuka.backend.paycheck.domain.PaycheckState.ACTIVE)
+            and (
+              :activeOnly = false
+              or (
+                paycheck.state = com.yuuka.backend.paycheck.domain.PaycheckState.ACTIVE
+                and (
+                  paycheck.reopenedAt is not null
+                  or paycheck.amountMinor <> (
+                    select coalesce(sum(metricEntry.amountMinor), 0)
+                    from PaycheckEntry metricEntry
+                    where metricEntry.ownerId = paycheck.ownerId
+                      and metricEntry.paycheckId = paycheck.id
+                      and metricEntry.deletedAt is null
+                  )
+                  or (
+                    select count(metricEntry)
+                    from PaycheckEntry metricEntry
+                    where metricEntry.ownerId = paycheck.ownerId
+                      and metricEntry.paycheckId = paycheck.id
+                      and metricEntry.deletedAt is null
+                  ) = 0
+                  or exists (
+                    select 1
+                    from PaycheckEntry metricEntry
+                    where metricEntry.ownerId = paycheck.ownerId
+                      and metricEntry.paycheckId = paycheck.id
+                      and metricEntry.deletedAt is null
+                      and metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED
+                  )
+                )
+              )
+            )
+            and (
+              :historyOnly = false
+              or paycheck.state <> com.yuuka.backend.paycheck.domain.PaycheckState.ACTIVE
+              or (
+                paycheck.reopenedAt is null
+                and paycheck.amountMinor = (
+                  select coalesce(sum(metricEntry.amountMinor), 0)
+                  from PaycheckEntry metricEntry
+                  where metricEntry.ownerId = paycheck.ownerId
+                    and metricEntry.paycheckId = paycheck.id
+                    and metricEntry.deletedAt is null
+                )
+                and (
+                  select count(metricEntry)
+                  from PaycheckEntry metricEntry
+                  where metricEntry.ownerId = paycheck.ownerId
+                    and metricEntry.paycheckId = paycheck.id
+                    and metricEntry.deletedAt is null
+                ) > 0
+                and not exists (
+                  select 1
+                  from PaycheckEntry metricEntry
+                  where metricEntry.ownerId = paycheck.ownerId
+                    and metricEntry.paycheckId = paycheck.id
+                    and metricEntry.deletedAt is null
+                    and metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED
+                )
+              )
+            )
             and (
               (:query is not null and (
                 lower(entry.name) like concat('%', :query, '%')

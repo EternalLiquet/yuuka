@@ -1,19 +1,28 @@
 import { PropsWithChildren } from 'react';
-import { StyleProp, StyleSheet, Text, TextStyle } from 'react-native';
+import { StyleProp, StyleSheet, Text, TextProps, TextStyle } from 'react-native';
 
 import { useAppTheme } from '@/theme/use-app-theme';
 
-type AppTextProps = PropsWithChildren<{
-  numberOfLines?: number;
-  style?: StyleProp<TextStyle>;
-  variant?: 'body' | 'caption' | 'eyebrow' | 'error' | 'headline' | 'label' | 'money' | 'title';
-}>;
+type AppTextProps = PropsWithChildren<
+  Omit<TextProps, 'style'> & {
+    numberOfLines?: number;
+    style?: StyleProp<TextStyle>;
+    variant?: 'body' | 'caption' | 'eyebrow' | 'error' | 'headline' | 'label' | 'money' | 'title';
+  }
+>;
 
-export function AppText({ children, numberOfLines, style, variant = 'body' }: AppTextProps) {
+export function AppText({
+  children,
+  numberOfLines,
+  style,
+  variant = 'body',
+  ...props
+}: AppTextProps) {
   const { colors } = useAppTheme();
 
   return (
     <Text
+      {...props}
       numberOfLines={numberOfLines}
       style={[styles.base, { color: colors.text }, styles[variant], style]}
     >

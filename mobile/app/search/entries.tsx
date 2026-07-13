@@ -1,10 +1,11 @@
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
+import type { InfiniteData } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 
-import type { EntrySearchResult, SearchScope } from '@/api/contracts';
+import type { EntrySearchResult, Page, SearchScope } from '@/api/contracts';
 import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
@@ -31,6 +32,8 @@ const scopeOptions = [
   { label: 'History', value: 'HISTORY' },
 ] as const;
 
+type EntrySearchPage = Page<EntrySearchResult>;
+
 export default function EntrySearchScreen() {
   const api = useYuukaApi();
   const router = useRouter();
@@ -53,16 +56,23 @@ export default function EntrySearchScreen() {
   );
   const criteriaError = criteria && 'error' in criteria ? (criteria.error ?? '') : '';
   const activeCriteria = criteria && !criteriaError ? criteria : null;
-  const query = useInfiniteQuery({
+  const query = useInfiniteQuery<
+    EntrySearchPage,
+    Error,
+    InfiniteData<EntrySearchPage>,
+    readonly unknown[],
+    number
+  >({
     enabled: Boolean(activeCriteria),
-    getNextPageParam: (lastPage) => (lastPage.hasNext ? lastPage.page + 1 : undefined),
+    getNextPageParam: (lastPage: EntrySearchPage) =>
+      lastPage.hasNext ? lastPage.page + 1 : undefined,
     initialPageParam: 0,
     placeholderData: keepPreviousData,
-    queryFn: ({ pageParam }) => {
+    queryFn: ({ pageParam }): Promise<EntrySearchPage> => {
       if (!activeCriteria) throw new Error('Search criteria are required.');
       return api.searchEntries({
         amountMinor: activeCriteria.amountMinor,
-        page: Number(pageParam),
+        page: pageParam,
         query: activeCriteria.query,
         scope,
       });

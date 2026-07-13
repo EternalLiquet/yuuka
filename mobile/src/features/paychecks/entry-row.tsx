@@ -194,7 +194,13 @@ const styles = StyleSheet.create({
   detailRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
   main: { gap: 11 },
   pressed: { opacity: 0.74 },
-  row: { borderBottomWidth: 1, borderRadius: 8, gap: 12, paddingHorizontal: 8, paddingVertical: 15 },
+  row: {
+    borderBottomWidth: 1,
+    borderRadius: 8,
+    gap: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 15,
+  },
   titleBlock: { flex: 1, gap: 3 },
   titleRow: {
     alignItems: 'flex-start',
