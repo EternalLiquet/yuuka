@@ -107,9 +107,9 @@ Clearly indicate active filters or non-default sorting.
 ## Entry search
 
 The global entry search screen supports name search, exact amount search, and an automatic mode
-that treats valid money text as an amount and other text as a name. Search can be scoped to all
-paychecks, Active only, or History only. Results open the owning paycheck with the matching entry
-highlighted.
+that treats valid money text as an exact amount, reports validation for numeric-looking invalid
+money, and treats other text as a name. Search can be scoped to all paychecks, Active only, or
+History only. Results open the owning paycheck with the matching entry highlighted.
 
 ## Reordering
 
