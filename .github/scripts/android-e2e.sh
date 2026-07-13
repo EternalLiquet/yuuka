@@ -36,6 +36,7 @@ adb logcat -c
 adb reverse tcp:8080 tcp:8080
 adb reverse tcp:8081 tcp:8081
 adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+adb shell am force-stop com.android.launcher3 || true
 sleep 5
 
 set +e

@@ -3,7 +3,7 @@ appId: com.yuuka.mobile
 - launchApp:
     clearState: true
 - tapOn:
-    text: "Wait"
+    text: "Close app"
     optional: true
 - extendedWaitUntil:
     visible: "Yuuka"
