@@ -20,7 +20,7 @@ jobs:
       group: yuuka-ci-${{ github.workflow }}-${{ github.ref }}-backend
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.0
       - uses: actions/setup-java@v5.5.0
         with:
           distribution: temurin
@@ -64,7 +64,7 @@ jobs:
       group: yuuka-ci-${{ github.workflow }}-${{ github.ref }}-mobile
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.0
       - uses: actions/setup-node@v6.4.0
         with:
           node-version: "22.13.0"
@@ -112,7 +112,7 @@ jobs:
       group: yuuka-ci-${{ github.workflow }}-${{ github.ref }}-infrastructure
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.0
       - name: Validate Compose configuration
         run: docker compose config --quiet
       - name: Build hardened backend image
@@ -134,7 +134,7 @@ jobs:
       group: yuuka-release-master
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.0
         with:
           fetch-depth: 0
       - uses: actions/setup-java@v5.5.0
