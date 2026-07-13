@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Plus } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, Plus } from 'lucide-react-native';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
@@ -8,6 +8,7 @@ import { Payback } from '@/api/contracts';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
+import { IconButton } from '@/components/icon-button';
 import { Screen } from '@/components/screen';
 import { EmptyState, ErrorState, StaleBanner } from '@/components/states';
 import { formatMoney } from '@/domain/money';
@@ -20,11 +21,18 @@ type Row = { kind: 'section'; id: string; title: string } | { kind: 'payback'; p
 export default function PaybacksScreen() {
   const api = useYuukaApi();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const query = useQuery({ queryKey: ['paybacks'], queryFn: api.paybacks });
   const active = query.data?.items.filter((payback) => payback.state === 'ACTIVE') ?? [];
   const paidOff = query.data?.items.filter((payback) => payback.state === 'PAID_OFF') ?? [];
+  const reorderMutation = useMutation({
+    mutationFn: (paybackIds: string[]) => api.reorderPaybacks(paybackIds),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['paybacks'] });
+    },
+  });
   const rows: Row[] = [
     ...(active.length
       ? [{ kind: 'section' as const, id: 'active', title: 'Active Paybacks' }]
@@ -33,6 +41,19 @@ export default function PaybacksScreen() {
     ...(paidOff.length ? [{ kind: 'section' as const, id: 'paid-off', title: 'Paid Off' }] : []),
     ...paidOff.map((payback) => ({ kind: 'payback' as const, payback })),
   ];
+
+  function movePayback(payback: Payback, offset: number) {
+    const group = payback.state === 'ACTIVE' ? [...active] : [...paidOff];
+    const index = group.findIndex((candidate) => candidate.id === payback.id);
+    const target = index + offset;
+    if (index < 0 || target < 0 || target >= group.length) return;
+    [group[index], group[target]] = [group[target], group[index]];
+    const orderedIds =
+      payback.state === 'ACTIVE'
+        ? [...group, ...paidOff].map((candidate) => candidate.id)
+        : [...active, ...group].map((candidate) => candidate.id);
+    reorderMutation.mutate(orderedIds);
+  }
 
   return (
     <Screen>
@@ -104,6 +125,15 @@ export default function PaybacksScreen() {
               </View>
             </View>
             {query.isError && query.data ? <StaleBanner /> : null}
+            {reorderMutation.error ? (
+              <AppText style={{ color: colors.danger }} variant="error">
+                {displayError(
+                  reorderMutation.error,
+                  settings.currencyCode,
+                  'Payback order was not saved.',
+                )}
+              </AppText>
+            ) : null}
           </View>
         }
         refreshControl={
@@ -120,10 +150,40 @@ export default function PaybacksScreen() {
               {item.title}
             </AppText>
           ) : (
-            <PaybackCard
-              onPress={() => router.push(`/paybacks/${item.payback.id}`)}
-              payback={item.payback}
-            />
+            <View style={styles.paybackRow}>
+              <View style={styles.paybackCard}>
+                <PaybackCard
+                  onPress={() => router.push(`/paybacks/${item.payback.id}`)}
+                  payback={item.payback}
+                />
+              </View>
+              <View style={styles.reorderActions}>
+                <IconButton
+                  disabled={
+                    reorderMutation.isPending ||
+                    (item.payback.state === 'ACTIVE'
+                      ? active.findIndex((payback) => payback.id === item.payback.id) === 0
+                      : paidOff.findIndex((payback) => payback.id === item.payback.id) === 0)
+                  }
+                  icon={ArrowUp}
+                  label={`Move ${item.payback.name} up`}
+                  onPress={() => movePayback(item.payback, -1)}
+                />
+                <IconButton
+                  disabled={
+                    reorderMutation.isPending ||
+                    (item.payback.state === 'ACTIVE'
+                      ? active.findIndex((payback) => payback.id === item.payback.id) ===
+                        active.length - 1
+                      : paidOff.findIndex((payback) => payback.id === item.payback.id) ===
+                        paidOff.length - 1)
+                  }
+                  icon={ArrowDown}
+                  label={`Move ${item.payback.name} down`}
+                  onPress={() => movePayback(item.payback, 1)}
+                />
+              </View>
+            </View>
           )
         }
       />
@@ -149,6 +209,9 @@ const styles = StyleSheet.create({
   loader: { marginTop: 80 },
   metric: { flex: 1, gap: 3 },
   metrics: { flexDirection: 'row', gap: 12 },
+  paybackCard: { flex: 1 },
+  paybackRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
+  reorderActions: { gap: 6 },
   summary: { borderRadius: 8, borderWidth: 1, gap: 9, padding: 15 },
   titleBlock: { gap: 3 },
   titleRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },

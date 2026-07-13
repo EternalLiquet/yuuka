@@ -2,6 +2,7 @@ package com.yuuka.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -23,6 +24,7 @@ import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
 import com.yuuka.backend.support.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -63,7 +65,161 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.summary.totalOriginalMinor").value(250000))
         .andExpect(jsonPath("$.summary.activeCount").value(1))
         .andExpect(jsonPath("$.items[0].state").value("ACTIVE"))
-        .andExpect(jsonPath("$.items[1].state").value("PAID_OFF"));
+        .andExpect(jsonPath("$.items[0].position").value(0))
+        .andExpect(jsonPath("$.items[1].state").value("PAID_OFF"))
+        .andExpect(jsonPath("$.items[1].position").value(1));
+  }
+
+  @Test
+  void deletesUnusedPaybackAndRemovesItFromNormalReads() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-delete-unused@yuuka.local");
+    JsonNode payback = createPayback(token, "Unused", 10000, 10000);
+    UUID paybackId = UUID.fromString(payback.path("id").asText());
+
+    deletePayback(token, payback.path("id").asText(), payback.path("version").asLong(), 204);
+
+    mockMvc
+        .perform(
+            get("/api/v1/paybacks/{id}", payback.path("id").asText())
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isNotFound());
+    mockMvc
+        .perform(get("/api/v1/paybacks").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items").isEmpty());
+    assertThat(deletedAtForPayback(paybackId)).isNotNull();
+    assertThat(auditCount("PAYBACK", paybackId, "DELETED")).isEqualTo(1);
+  }
+
+  @Test
+  void deletingPaybackUnassignsLiveEntriesAndPreservesEntryFields() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-delete-unassign@yuuka.local");
+    JsonNode payback = createPayback(token, "Assigned", 10000, 10000);
+    JsonNode nextPayback = createPayback(token, "Next", 10000, 10000);
+    JsonNode paycheck = createPaycheck(token, 10000);
+    JsonNode entry =
+        createEntry(
+            token,
+            paycheck.path("id").asText(),
+            "Unposted repayment",
+            3000,
+            payback.path("id").asText());
+    UUID entryId = UUID.fromString(entry.path("id").asText());
+    Instant paycheckUpdatedAt = updatedAtForPaycheck(UUID.fromString(paycheck.path("id").asText()));
+
+    deletePayback(token, payback.path("id").asText(), payback.path("version").asLong(), 204);
+
+    JsonNode refreshedEntry =
+        getEntryFromPaycheck(token, paycheck.path("id").asText(), entry.path("id").asText());
+    assertThat(refreshedEntry.path("paybackId").isNull()).isTrue();
+    assertThat(refreshedEntry.path("status").asText()).isEqualTo("NOT_PAID");
+    assertThat(refreshedEntry.path("amountMinor").asLong()).isEqualTo(3000);
+    assertThat(refreshedEntry.path("entryType").asText()).isEqualTo("BILL");
+    assertThat(refreshedEntry.path("name").asText()).isEqualTo("Unposted repayment");
+    assertThat(refreshedEntry.path("position").asInt()).isEqualTo(0);
+    assertThat(refreshedEntry.path("version").asLong())
+        .isGreaterThan(entry.path("version").asLong());
+    assertThat(updatedAtForPaycheck(UUID.fromString(paycheck.path("id").asText())))
+        .isAfter(paycheckUpdatedAt);
+    assertThat(auditCount("PAYCHECK_ENTRY", entryId, "PAYBACK_UNASSIGNED_DUE_TO_DELETION"))
+        .isEqualTo(1);
+
+    JsonNode reassigned =
+        updateEntryPayback(
+            token,
+            entry.path("id").asText(),
+            refreshedEntry.path("version").asLong(),
+            nextPayback.path("id").asText(),
+            200);
+    assertThat(reassigned.path("paybackId").asText()).isEqualTo(nextPayback.path("id").asText());
+  }
+
+  @Test
+  void deletingPaybackWithPostedEntryReversesRepaymentButLeavesEntryPosted() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-delete-posted@yuuka.local");
+    JsonNode payback = createPayback(token, "Posted", 10000, 10000);
+    JsonNode paycheck = createPaycheck(token, 10000);
+    JsonNode entry =
+        createEntry(
+            token,
+            paycheck.path("id").asText(),
+            "Posted repayment",
+            4000,
+            payback.path("id").asText());
+    JsonNode posted =
+        changeStatus(token, entry.path("id").asText(), "POSTED", entry.path("version").asLong());
+    changeStatus(token, entry.path("id").asText(), "PROCESSING", posted.path("version").asLong());
+    JsonNode processing =
+        getEntryFromPaycheck(token, paycheck.path("id").asText(), entry.path("id").asText());
+    JsonNode postedAgain =
+        changeStatus(
+            token, entry.path("id").asText(), "POSTED", processing.path("version").asLong());
+
+    deletePayback(
+        token,
+        payback.path("id").asText(),
+        getPayback(token, payback.path("id").asText()).path("version").asLong(),
+        204);
+
+    JsonNode refreshedEntry =
+        getEntryFromPaycheck(token, paycheck.path("id").asText(), entry.path("id").asText());
+    assertThat(refreshedEntry.path("status").asText()).isEqualTo("POSTED");
+    assertThat(refreshedEntry.path("paybackId").isNull()).isTrue();
+    UUID paybackId = UUID.fromString(payback.path("id").asText());
+    assertThat(activeRepaymentCount(paybackId)).isZero();
+    assertThat(totalRepaymentCount(paybackId)).isEqualTo(2);
+    assertThat(reversedRepaymentCount(paybackId)).isEqualTo(2);
+    assertThat(postedAgain.path("status").asText()).isEqualTo("POSTED");
+  }
+
+  @Test
+  void staleAndCrossOwnerPaybackDeletesAreRejected() throws Exception {
+    String ownerToken = registerAndGetAccessToken("paybacks-delete-owner@yuuka.local");
+    String otherToken = registerAndGetAccessToken("paybacks-delete-other@yuuka.local");
+    JsonNode payback = createPayback(ownerToken, "Private delete", 10000, 10000);
+
+    deletePayback(otherToken, payback.path("id").asText(), payback.path("version").asLong(), 404);
+    deletePayback(
+        ownerToken, payback.path("id").asText(), payback.path("version").asLong() + 1, 409);
+    assertThat(deletedAtForPayback(UUID.fromString(payback.path("id").asText()))).isNull();
+  }
+
+  @Test
+  void reordersPaybacksAndRejectsInvalidOrders() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-reorder@yuuka.local");
+    JsonNode first = createPayback(token, "First", 10000, 10000);
+    JsonNode second = createPayback(token, "Second", 10000, 10000);
+    JsonNode third = createPayback(token, "Third", 10000, 0);
+
+    JsonNode reordered =
+        reorderPaybacks(
+            token,
+            List.of(
+                third.path("id").asText(), first.path("id").asText(), second.path("id").asText()),
+            200);
+    assertThat(reordered.path("items").get(0).path("id").asText())
+        .isEqualTo(first.path("id").asText());
+    assertThat(reordered.path("items").get(1).path("id").asText())
+        .isEqualTo(second.path("id").asText());
+    assertThat(reordered.path("items").get(2).path("id").asText())
+        .isEqualTo(third.path("id").asText());
+    assertThat(positionForPayback(UUID.fromString(third.path("id").asText()))).isZero();
+    assertThat(positionForPayback(UUID.fromString(first.path("id").asText()))).isEqualTo(1);
+
+    reorderPaybacks(
+        token,
+        List.of(first.path("id").asText(), first.path("id").asText(), second.path("id").asText()),
+        422);
+    reorderPaybacks(token, List.of(first.path("id").asText(), second.path("id").asText()), 422);
+    deletePayback(
+        token,
+        second.path("id").asText(),
+        getPayback(token, second.path("id").asText()).path("version").asLong(),
+        204);
+    reorderPaybacks(
+        token,
+        List.of(first.path("id").asText(), second.path("id").asText(), third.path("id").asText()),
+        422);
   }
 
   @Test
@@ -264,9 +420,10 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
 
       assignment.get(5, TimeUnit.SECONDS);
 
-      assertThat(deletion.get(5, TimeUnit.SECONDS)).isEqualTo("PAYBACK_HAS_HISTORY");
-      assertThat(deletedAtForPayback(paybackId)).isNull();
-      assertThat(paybackIdForEntry(entryId)).isEqualTo(paybackId);
+      assertThat(deletion.get(5, TimeUnit.SECONDS)).isEqualTo("DELETED");
+      assertThat(deletedAtForPayback(paybackId)).isNotNull();
+      assertThat(paybackIdForEntry(entryId)).isNull();
+      assertThat(activeRepaymentCount(paybackId)).isZero();
     } finally {
       executor.shutdownNow();
     }
@@ -657,6 +814,76 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
     return objectMapper.readTree(result.getResponse().getContentAsString());
   }
 
+  private JsonNode getPaycheck(String token, String paycheckId) throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                get("/api/v1/paychecks/{id}", paycheckId)
+                    .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andReturn();
+    return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private JsonNode getEntryFromPaycheck(String token, String paycheckId, String entryId)
+      throws Exception {
+    for (JsonNode entry : getPaycheck(token, paycheckId).path("entries")) {
+      if (entry.path("id").asText().equals(entryId)) {
+        return entry;
+      }
+    }
+    throw new AssertionError("Entry not found in paycheck response: " + entryId);
+  }
+
+  private void deletePayback(String token, String paybackId, long version, int expectedStatus)
+      throws Exception {
+    mockMvc
+        .perform(
+            delete("/api/v1/paybacks/{id}?version={version}", paybackId, version)
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().is(expectedStatus));
+  }
+
+  private JsonNode reorderPaybacks(String token, List<String> paybackIds, int expectedStatus)
+      throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/api/v1/paybacks/reorder")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(Map.of("paybackIds", paybackIds))))
+            .andExpect(status().is(expectedStatus))
+            .andReturn();
+    return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private JsonNode updateEntryPayback(
+      String token, String entryId, long version, String paybackId, int expectedStatus)
+      throws Exception {
+    String paybackJson = paybackId == null ? "null" : "\"%s\"".formatted(paybackId);
+    MvcResult result =
+        mockMvc
+            .perform(
+                patch("/api/v1/entries/{id}", entryId)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "entryType": "BILL",
+                          "name": "Unposted repayment",
+                          "amountMinor": 3000,
+                          "paybackId": %s,
+                          "version": %d
+                        }
+                        """
+                            .formatted(paybackJson, version)))
+            .andExpect(status().is(expectedStatus))
+            .andReturn();
+    return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
   private JsonNode updatePayback(
       String token,
       String paybackId,
@@ -757,9 +984,40 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
         "select deleted_at from paybacks where id = ?", Instant.class, paybackId);
   }
 
+  private Instant updatedAtForPaycheck(UUID paycheckId) {
+    return jdbcTemplate.queryForObject(
+        "select updated_at from paychecks where id = ?", Instant.class, paycheckId);
+  }
+
+  private int positionForPayback(UUID paybackId) {
+    return jdbcTemplate.queryForObject(
+        "select position from paybacks where id = ?", Integer.class, paybackId);
+  }
+
+  private long auditCount(String entityType, UUID entityId, String action) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from audit_events where entity_type = ? and entity_id = ? and action = ?",
+        Long.class,
+        entityType,
+        entityId,
+        action);
+  }
+
   private long activeRepaymentCount(UUID paybackId) {
     return jdbcTemplate.queryForObject(
         "select count(*) from payback_repayments where payback_id = ? and reversed_at is null",
+        Long.class,
+        paybackId);
+  }
+
+  private long totalRepaymentCount(UUID paybackId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from payback_repayments where payback_id = ?", Long.class, paybackId);
+  }
+
+  private long reversedRepaymentCount(UUID paybackId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from payback_repayments where payback_id = ? and reversed_at is not null",
         Long.class,
         paybackId);
   }

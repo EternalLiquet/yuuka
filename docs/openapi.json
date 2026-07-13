@@ -535,6 +535,34 @@
         }
       }
     },
+    "/api/v1/paybacks/reorder" : {
+      "post" : {
+        "tags" : [ "payback-controller" ],
+        "operationId" : "reorder_2",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReorderPaybacksRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaybackListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/entries/{entryId}/status" : {
       "post" : {
         "tags" : [ "paycheck-controller" ],
@@ -2238,6 +2266,10 @@
             "type" : "string",
             "enum" : [ "ACTIVE", "PAID_OFF" ]
           },
+          "position" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "repaymentCount" : {
             "type" : "integer",
             "format" : "int64"
@@ -2253,6 +2285,55 @@
           "version" : {
             "type" : "integer",
             "format" : "int64"
+          }
+        }
+      },
+      "ReorderPaybacksRequest" : {
+        "type" : "object",
+        "properties" : {
+          "paybackIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "minItems" : 1
+          }
+        },
+        "required" : [ "paybackIds" ]
+      },
+      "PaybackListResponse" : {
+        "type" : "object",
+        "properties" : {
+          "summary" : {
+            "$ref" : "#/components/schemas/PaybackSummaryResponse"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PaybackResponse"
+            }
+          }
+        }
+      },
+      "PaybackSummaryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "totalRemainingMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalOriginalMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalRepaidMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "activeCount" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -2743,41 +2824,6 @@
           },
           "hasNext" : {
             "type" : "boolean"
-          }
-        }
-      },
-      "PaybackListResponse" : {
-        "type" : "object",
-        "properties" : {
-          "summary" : {
-            "$ref" : "#/components/schemas/PaybackSummaryResponse"
-          },
-          "items" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/PaybackResponse"
-            }
-          }
-        }
-      },
-      "PaybackSummaryResponse" : {
-        "type" : "object",
-        "properties" : {
-          "totalRemainingMinor" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "totalOriginalMinor" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "totalRepaidMinor" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "activeCount" : {
-            "type" : "integer",
-            "format" : "int32"
           }
         }
       },

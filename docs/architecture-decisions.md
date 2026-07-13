@@ -36,6 +36,16 @@ Current Payback balances are derived from opening remaining amount minus active 
 opening remaining amount is accepted and creates a Paid Off Payback, which lets already-settled
 borrowed money be recorded without fake repayments.
 
+Deleting a Payback is a cleanup transaction, not a history erase. The service locks the Payback,
+validates the supplied version, reverses any active repayment rows with the deletion timestamp,
+clears live paycheck-entry assignments, touches affected paychecks, and soft-deletes the Payback.
+Previously reversed repayments remain as audit history. Normal Payback reads and selectors exclude
+deleted Paybacks.
+
+Paybacks store an integer `position` scoped to the owner. New Paybacks append to the live order, and
+reorder requests must include every live Payback ID exactly once. Active and Paid Off sections may
+be shown separately, but each section preserves the persisted order.
+
 ## Runtime version reporting
 
 Yuuka release tags are the version source of truth. CI converts a successful `master` release tag

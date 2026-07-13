@@ -6,6 +6,7 @@ import com.yuuka.backend.payback.api.dto.CreatePaybackRequest;
 import com.yuuka.backend.payback.api.dto.PaybackListResponse;
 import com.yuuka.backend.payback.api.dto.PaybackRepaymentResponse;
 import com.yuuka.backend.payback.api.dto.PaybackResponse;
+import com.yuuka.backend.payback.api.dto.ReorderPaybacksRequest;
 import com.yuuka.backend.payback.api.dto.UpdatePaybackRequest;
 import com.yuuka.backend.payback.application.PaybackService;
 import jakarta.validation.Valid;
@@ -63,6 +64,12 @@ public class PaybackController {
   public void delete(
       @AuthenticationPrincipal Jwt jwt, @PathVariable UUID paybackId, @RequestParam long version) {
     paybackService.delete(AuthenticatedOwner.id(jwt), paybackId, version);
+  }
+
+  @PostMapping("/reorder")
+  public PaybackListResponse reorder(
+      @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ReorderPaybacksRequest request) {
+    return paybackService.reorder(AuthenticatedOwner.id(jwt), request);
   }
 
   @GetMapping("/{paybackId}/repayments")

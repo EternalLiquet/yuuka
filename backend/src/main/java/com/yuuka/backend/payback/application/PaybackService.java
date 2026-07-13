@@ -10,6 +10,7 @@ import com.yuuka.backend.payback.api.dto.PaybackListResponse;
 import com.yuuka.backend.payback.api.dto.PaybackRepaymentResponse;
 import com.yuuka.backend.payback.api.dto.PaybackResponse;
 import com.yuuka.backend.payback.api.dto.PaybackSummaryResponse;
+import com.yuuka.backend.payback.api.dto.ReorderPaybacksRequest;
 import com.yuuka.backend.payback.api.dto.UpdatePaybackRequest;
 import com.yuuka.backend.payback.domain.Payback;
 import com.yuuka.backend.payback.domain.PaybackRepayment;
@@ -24,9 +25,12 @@ import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,7 +66,9 @@ public class PaybackService {
             .sorted(
                 Comparator.comparing(
                         (PaybackResponse response) -> response.state() != PaybackState.ACTIVE)
-                    .thenComparing(PaybackResponse::updatedAt, Comparator.reverseOrder()))
+                    .thenComparingInt(PaybackResponse::position)
+                    .thenComparing(PaybackResponse::createdAt)
+                    .thenComparing(PaybackResponse::id))
             .toList();
     long totalRemaining =
         items.stream()
@@ -94,7 +100,8 @@ public class PaybackService {
                 request.openingRemainingAmountMinor(),
                 request.borrowedDate(),
                 normalizeOptional(request.source()),
-                normalizeOptional(request.notes())));
+                normalizeOptional(request.notes()),
+                paybacks.findMaxLivePosition(ownerId) + 1));
     PaybackResponse response = toResponse(payback);
     auditService.append(ownerId, "PAYBACK", payback.getId(), "CREATED", null, null, response, null);
     return response;
@@ -135,16 +142,98 @@ public class PaybackService {
   public void delete(UUID ownerId, UUID paybackId, long version) {
     Payback payback = requirePaybackForUpdate(ownerId, paybackId);
     assertVersion(payback.getVersion(), version);
-    if (repayments.countByPaybackIdAndOwnerId(paybackId, ownerId) > 0
-        || entries.countByPaybackIdAndOwnerIdAndDeletedAtIsNull(paybackId, ownerId) > 0) {
+    PaybackResponse before = toResponse(payback);
+    Instant now = clock.instant();
+
+    List<PaybackRepayment> activeRepayments =
+        repayments.findActiveByPaybackIdAndOwnerIdForUpdate(paybackId, ownerId);
+    activeRepayments.forEach(repayment -> repayment.reverse(now));
+    repayments.flush();
+    syncState(payback, now);
+
+    List<PaycheckEntry> assignedEntries =
+        entries.findLiveAssignedToPaybackForUpdate(paybackId, ownerId);
+    Map<UUID, UUID> unassignedEntries =
+        assignedEntries.stream()
+            .collect(Collectors.toMap(PaycheckEntry::getId, PaycheckEntry::getPaycheckId));
+    assignedEntries.forEach(entry -> entry.assignPayback(null));
+    entries.flush();
+
+    unassignedEntries.values().stream()
+        .distinct()
+        .sorted()
+        .map(paycheckId -> paychecks.findByIdAndOwnerIdForUpdate(paycheckId, ownerId))
+        .forEach(
+            optionalPaycheck ->
+                optionalPaycheck.orElseThrow(ResourceNotFoundException::new).touch(now));
+    paychecks.flush();
+
+    payback.delete(now);
+    paybacks.flush();
+
+    auditService.append(
+        ownerId,
+        "PAYBACK",
+        paybackId,
+        "DELETED",
+        null,
+        before,
+        null,
+        Map.of(
+            "unassignedEntryIds",
+            unassignedEntries.keySet(),
+            "reversedRepaymentIds",
+            activeRepayments.stream().map(PaybackRepayment::getId).toList()));
+    unassignedEntries.forEach(
+        (entryId, paycheckId) ->
+            auditService.append(
+                ownerId,
+                "PAYCHECK_ENTRY",
+                entryId,
+                "PAYBACK_UNASSIGNED_DUE_TO_DELETION",
+                now,
+                Map.of("paybackId", paybackId),
+                Map.of("paybackId", ""),
+                Map.of("paybackId", paybackId, "paycheckId", paycheckId)));
+  }
+
+  @Transactional
+  public PaybackListResponse reorder(UUID ownerId, ReorderPaybacksRequest request) {
+    List<Payback> livePaybacks = paybacks.findAllByOwnerIdForUpdate(ownerId);
+    Set<UUID> expected =
+        livePaybacks.stream().map(Payback::getId).collect(HashSet::new, Set::add, Set::addAll);
+    Set<UUID> supplied = new HashSet<>(request.paybackIds());
+    if (supplied.size() != request.paybackIds().size() || !supplied.equals(expected)) {
       throw new BusinessRuleException(
-          "PAYBACK_HAS_HISTORY",
-          "Paybacks with assignments or repayment history cannot be deleted.",
+          "PAYBACK_REORDER_INVALID",
+          "Reorder must include every live Payback exactly once.",
           Map.of());
     }
-    PaybackResponse before = toResponse(payback);
-    payback.delete(clock.instant());
-    auditService.append(ownerId, "PAYBACK", paybackId, "DELETED", null, before, null, null);
+
+    Map<UUID, Integer> before =
+        livePaybacks.stream().collect(Collectors.toMap(Payback::getId, Payback::getPosition));
+    int temporaryStart = livePaybacks.size();
+    for (int index = 0; index < livePaybacks.size(); index++) {
+      livePaybacks.get(index).moveTo(temporaryStart + index);
+    }
+    paybacks.saveAllAndFlush(livePaybacks);
+
+    Map<UUID, Payback> byId =
+        livePaybacks.stream().collect(Collectors.toMap(Payback::getId, payback -> payback));
+    for (int index = 0; index < request.paybackIds().size(); index++) {
+      byId.get(request.paybackIds().get(index)).moveTo(index);
+    }
+    paybacks.saveAllAndFlush(livePaybacks);
+    auditService.append(
+        ownerId,
+        "PAYBACK",
+        ownerId,
+        "PAYBACKS_REORDERED",
+        null,
+        before,
+        request.paybackIds(),
+        null);
+    return list(ownerId);
   }
 
   @Transactional(readOnly = true)

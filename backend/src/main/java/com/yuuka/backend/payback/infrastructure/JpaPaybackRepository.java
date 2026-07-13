@@ -21,4 +21,18 @@ public interface JpaPaybackRepository extends JpaRepository<Payback, UUID> {
       @Param("id") UUID id, @Param("ownerId") UUID ownerId);
 
   List<Payback> findAllByOwnerIdAndDeletedAtIsNull(UUID ownerId);
+
+  List<Payback> findAllByOwnerIdAndDeletedAtIsNullOrderByPositionAscCreatedAtAscIdAsc(UUID ownerId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select payback from Payback payback "
+          + "where payback.ownerId = :ownerId and payback.deletedAt is null "
+          + "order by payback.position, payback.createdAt, payback.id")
+  List<Payback> findAllByOwnerIdForUpdate(@Param("ownerId") UUID ownerId);
+
+  @Query(
+      "select coalesce(max(payback.position), -1) from Payback payback "
+          + "where payback.ownerId = :ownerId and payback.deletedAt is null")
+  int findMaxLivePosition(@Param("ownerId") UUID ownerId);
 }

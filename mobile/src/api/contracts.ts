@@ -80,6 +80,7 @@ export const paybackSchema = z.object({
   source: z.string().nullable(),
   notes: z.string().nullable(),
   state: paybackStateSchema,
+  position: z.number().int().nonnegative(),
   repaymentCount: z.number().int().nonnegative(),
   createdAt: instant,
   updatedAt: instant,

@@ -106,3 +106,7 @@ jobs:
               -e YUUKA_EMAIL=e2e@yuuka.local \
               -e YUUKA_PASSWORD=E2ePassword123 \
               .maestro/01-scratch-lifecycle.yaml
+            maestro test \
+              -e YUUKA_EMAIL=e2e@yuuka.local \
+              -e YUUKA_PASSWORD=E2ePassword123 \
+              .maestro/02-payback-delete-reassign.yaml

@@ -38,10 +38,16 @@ The mobile OpenAPI test reads `docs/openapi.json`; the backend test regenerates 
 
 ## Android end to end
 
-The current first-slice Maestro flow is `.maestro/01-scratch-lifecycle.yaml`. Run it against a disposable demo backend and installed preview APK:
+The current critical Maestro flows are:
+
+- `.maestro/01-scratch-lifecycle.yaml`
+- `.maestro/02-payback-delete-reassign.yaml`
+
+Run them against a disposable demo backend and installed preview APK:
 
 ```sh
 maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/01-scratch-lifecycle.yaml
+maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/02-payback-delete-reassign.yaml
 ```
 
 Never run destructive E2E flows against production data. Flaky tests are failures and must be fixed, not disabled.

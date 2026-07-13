@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Pencil } from 'lucide-react-native';
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -56,6 +56,23 @@ export default function PaybackDetailScreen() {
       setEditing(false);
     },
   });
+  const deleteMutation = useMutation({
+    mutationFn: () => {
+      if (!paybackQuery.data) throw new Error('Refresh the Payback before deleting.');
+      return api.deletePayback(id, paybackQuery.data.version);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['paybacks'] }),
+        queryClient.invalidateQueries({ queryKey: ['paybacks', 'entry-editor'] }),
+        queryClient.invalidateQueries({ queryKey: ['payback', id] }),
+        queryClient.invalidateQueries({ queryKey: ['paycheck'] }),
+        queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
+      ]);
+      queryClient.removeQueries({ queryKey: ['payback', id] });
+      router.replace('/paybacks');
+    },
+  });
 
   if (editing && paybackQuery.data) {
     return (
@@ -73,14 +90,28 @@ export default function PaybackDetailScreen() {
         <View style={styles.header}>
           <IconButton icon={ArrowLeft} label="Back" onPress={() => router.back()} />
           {paybackQuery.data ? (
-            <Button
-              icon={Pencil}
-              label="Edit Payback"
-              onPress={() => setEditing(true)}
-              variant="secondary"
-            />
+            <View style={styles.headerActions}>
+              <Button
+                icon={Pencil}
+                label="Edit Payback"
+                onPress={() => setEditing(true)}
+                variant="secondary"
+              />
+              <Button
+                icon={Trash2}
+                label="Delete"
+                loading={deleteMutation.isPending}
+                onPress={() => deleteMutation.mutate()}
+                variant="danger"
+              />
+            </View>
           ) : null}
         </View>
+        {deleteMutation.error ? (
+          <AppText style={{ color: colors.danger }} variant="error">
+            {displayError(deleteMutation.error, settings.currencyCode, 'Payback was not deleted.')}
+          </AppText>
+        ) : null}
         {paybackQuery.isPending ? (
           <ActivityIndicator color={colors.accent} size="large" style={styles.loader} />
         ) : paybackQuery.isError || !paybackQuery.data ? (
@@ -231,6 +262,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: 8, borderWidth: 1, gap: 15, padding: 16 },
   content: { gap: 16, padding: 16, paddingBottom: 32 },
   header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  headerActions: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   historyHeader: {
     alignItems: 'center',
     flexDirection: 'row',

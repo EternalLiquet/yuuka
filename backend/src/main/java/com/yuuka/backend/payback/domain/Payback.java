@@ -47,6 +47,9 @@ public class Payback {
   @Column(nullable = false, length = 20)
   private PaybackState state;
 
+  @Column(nullable = false)
+  private int position;
+
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
 
@@ -69,7 +72,8 @@ public class Payback {
       long openingRemainingAmountMinor,
       LocalDate borrowedDate,
       String source,
-      String notes) {
+      String notes,
+      int position) {
     this.ownerId = ownerId;
     this.name = name;
     this.originalAmountMinor = originalAmountMinor;
@@ -77,6 +81,7 @@ public class Payback {
     this.borrowedDate = borrowedDate;
     this.source = source;
     this.notes = notes;
+    this.position = position;
     syncState(openingRemainingAmountMinor);
   }
 
@@ -121,6 +126,10 @@ public class Payback {
     updatedAt = now;
   }
 
+  public void moveTo(int nextPosition) {
+    position = nextPosition;
+  }
+
   public void delete(Instant now) {
     deletedAt = now;
   }
@@ -159,6 +168,10 @@ public class Payback {
 
   public PaybackState getState() {
     return state;
+  }
+
+  public int getPosition() {
+    return position;
   }
 
   public Instant getCreatedAt() {

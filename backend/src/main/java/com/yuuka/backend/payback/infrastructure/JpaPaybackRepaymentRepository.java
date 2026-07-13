@@ -1,10 +1,12 @@
 package com.yuuka.backend.payback.infrastructure;
 
 import com.yuuka.backend.payback.domain.PaybackRepayment;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -17,6 +19,15 @@ public interface JpaPaybackRepaymentRepository extends JpaRepository<PaybackRepa
       @Param("paybackId") UUID paybackId, @Param("ownerId") UUID ownerId);
 
   Optional<PaybackRepayment> findByEntryIdAndOwnerIdAndReversedAtIsNull(UUID entryId, UUID ownerId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select repayment from PaybackRepayment repayment "
+          + "where repayment.paybackId = :paybackId and repayment.ownerId = :ownerId "
+          + "and repayment.reversedAt is null "
+          + "order by repayment.entryId, repayment.id")
+  List<PaybackRepayment> findActiveByPaybackIdAndOwnerIdForUpdate(
+      @Param("paybackId") UUID paybackId, @Param("ownerId") UUID ownerId);
 
   List<PaybackRepayment> findAllByPaybackIdAndOwnerIdOrderByAppliedAtDesc(
       UUID paybackId, UUID ownerId);

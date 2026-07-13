@@ -27,6 +27,7 @@ const payback: Payback = {
   source: 'Savings',
   notes: null,
   state: 'ACTIVE',
+  position: 0,
   repaymentCount: 3,
   createdAt: '2026-07-12T12:00:00Z',
   updatedAt: '2026-07-12T12:30:00Z',

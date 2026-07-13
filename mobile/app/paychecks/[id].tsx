@@ -331,12 +331,23 @@ export default function PaycheckDetailScreen() {
                   .then(() => undefined)
             : undefined
         }
+        onRetryPaybacks={() => paybacksQuery.refetch()}
         onSubmit={(payload) =>
           entryMutation
             .mutateAsync({ type: editingEntry ? 'update' : 'add', entry: editingEntry, payload })
             .then(() => undefined)
         }
         paybacks={paybacksQuery.data?.items ?? []}
+        paybacksError={
+          paybacksQuery.isError
+            ? displayError(
+                paybacksQuery.error,
+                settings.currencyCode,
+                'Paybacks could not be loaded.',
+              )
+            : null
+        }
+        paybacksLoading={paybacksQuery.isPending}
         visible={entryEditorVisible}
       />
       <PaycheckEditor

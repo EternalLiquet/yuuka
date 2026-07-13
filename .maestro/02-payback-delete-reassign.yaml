@@ -1,0 +1,77 @@
+appId: com.yuuka.mobile
+name: Payback delete unassigns entry
+---
+- runFlow: shared/sign-in.yaml
+- tapOn: "Paybacks"
+- tapOn: "New Payback"
+- tapOn: "Name"
+- inputText: "E2E Delete Source"
+- tapOn: "Original amount owed"
+- inputText: "40.00"
+- tapOn: "Balance when tracking began"
+- eraseText
+- inputText: "40.00"
+- hideKeyboard
+- tapOn: "Create Payback"
+- extendedWaitUntil:
+    visible: "E2E Delete Source"
+    timeout: 10000
+- tapOn: "Back"
+
+- tapOn: "New Payback"
+- tapOn: "Name"
+- inputText: "E2E Delete Target"
+- tapOn: "Original amount owed"
+- inputText: "40.00"
+- tapOn: "Balance when tracking began"
+- eraseText
+- inputText: "40.00"
+- hideKeyboard
+- tapOn: "Create Payback"
+- extendedWaitUntil:
+    visible: "E2E Delete Target"
+    timeout: 10000
+- tapOn: "Back"
+
+- tapOn: "Active"
+- tapOn: "New paycheck"
+- tapOn: "Name"
+- inputText: "E2E Payback Assign"
+- tapOn: "Exact paycheck amount"
+- inputText: "40.00"
+- hideKeyboard
+- tapOn: "Create paycheck"
+- extendedWaitUntil:
+    visible: "E2E Payback Assign"
+    timeout: 10000
+- tapOn: "Add entry"
+- tapOn: "Name"
+- inputText: "Repay Payback"
+- tapOn: "Amount"
+- inputText: "10.00"
+- hideKeyboard
+- tapOn: "Apply to Payback, selected No Payback"
+- tapOn: "E2E Delete Source"
+- tapOn: "Save entry"
+- extendedWaitUntil:
+    visible: "Repay Payback"
+    timeout: 10000
+
+- tapOn: "Paybacks"
+- tapOn: 'E2E Delete Source, \$40\.00 left, 0 percent repaid since tracking began'
+- tapOn: "Delete"
+- extendedWaitUntil:
+    visible: "Paybacks"
+    timeout: 10000
+- assertNotVisible: "E2E Delete Source"
+
+- tapOn: "Active"
+- tapOn: 'E2E Payback Assign, \$40\.00, \$30\.00 unallocated'
+- tapOn: "Edit Repay Payback"
+- assertVisible: "No Payback"
+- tapOn: "Apply to Payback, selected No Payback"
+- tapOn: "E2E Delete Target"
+- tapOn: "Save entry"
+- extendedWaitUntil:
+    visible: "Repay Payback"
+    timeout: 10000

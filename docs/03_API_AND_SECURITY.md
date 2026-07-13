@@ -96,7 +96,8 @@ Status-change request:
 - `POST /paybacks`
 - `GET /paybacks/{id}`
 - `PATCH /paybacks/{id}`
-- `DELETE /paybacks/{id}` soft-deletes only Paybacks without repayment history.
+- `POST /paybacks/reorder` persists the owner-defined Payback order used by the Paybacks screen and selectors.
+- `DELETE /paybacks/{id}` soft-deletes the Payback, reverses any active repayments, and clears live entry assignments in one transaction.
 - `GET /paybacks/{id}/repayments` returns active and reversed repayment history.
 
 Payback business-rule errors use structured money details for mobile formatting. For example,

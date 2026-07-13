@@ -206,7 +206,12 @@ Repayment lifecycle:
 - changing a Posted entry back to Processing or Not Paid reverses the active repayment,
 - returning the entry to Posted creates a new active repayment while preserving reversed history,
 - deleting a Posted linked entry reverses the repayment in the same transaction,
+- deleting a Payback reverses active repayments and unassigns linked live entries without changing
+  entry status,
 - Paybacks move automatically between Active and Paid Off as repayments apply or reverse.
+
+Paybacks have a persistent owner-defined order. New Paybacks append to the end of the live order,
+and selectors use that order instead of update time or database order.
 
 For the MVP, one paycheck entry may link to at most one Payback, and the repayment amount is the
 entry amount. Yuuka does not support interest, fees, schedules, recurring repayments, split

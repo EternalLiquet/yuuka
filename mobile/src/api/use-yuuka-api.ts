@@ -98,6 +98,8 @@ export function useYuukaApi() {
         },
       ) => send(`/paybacks/${id}`, 'PATCH', body, paybackSchema),
       deletePayback: (id: string, version: number) => remove(`/paybacks/${id}?version=${version}`),
+      reorderPaybacks: (paybackIds: string[]) =>
+        send('/paybacks/reorder', 'POST', { paybackIds }, paybackListSchema),
       paybackRepayments: (id: string) =>
         get(`/paybacks/${id}/repayments?size=100`, pageSchema(paybackRepaymentSchema)),
       createPaycheck: (body: {
