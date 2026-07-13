@@ -13,18 +13,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
-bundle_ready=0
+metro_ready=0
 for attempt in {1..120}; do
-  if curl --fail --silent --show-error --connect-timeout 2 --max-time 120 \
-    "http://localhost:8081/index.bundle?platform=android&dev=true&minify=false" \
-    --output /tmp/yuuka-android-e2e.bundle; then
-    bundle_ready=1
+  if curl --fail --silent --show-error --connect-timeout 2 --max-time 30 \
+    "http://localhost:8081/status" | grep -q "packager-status:running"; then
+    metro_ready=1
     break
   fi
   sleep 2
 done
 
-if [ "$bundle_ready" -ne 1 ]; then
+if [ "$metro_ready" -ne 1 ]; then
   cat metro-e2e.log
   exit 1
 fi
