@@ -1,7 +1,9 @@
 package com.yuuka.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -9,10 +11,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuuka.backend.support.AbstractIntegrationTest;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -20,6 +24,7 @@ import org.springframework.test.web.servlet.MvcResult;
 class PaycheckWorkflowTests extends AbstractIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @Test
   void createsExactCentPaycheckAndKeepsAllocatedButIncompleteWorkActive() throws Exception {
@@ -171,6 +176,245 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
         .perform(get("/api/v1/paychecks/history").header("Authorization", "Bearer " + token))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items[0].id").value(paycheckId));
+  }
+
+  @Test
+  void classifiesBillPaymentMethodWithoutChangingStatusBehavior() throws Exception {
+    String token = registerAndGetAccessToken("payment-method@yuuka.local");
+    MvcResult created =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"name":"Payment Method","amountMinor":50000,"incomeDate":"2026-07-17"}
+                        """))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String paycheckId =
+        objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asText();
+
+    MvcResult defaultBill =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks/{id}/entries", paycheckId)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"entryType":"BILL","name":"Autopay Bill","amountMinor":10000}
+                        """))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.paymentMethod").value("AUTOPAY"))
+            .andExpect(jsonPath("$.status").value("NOT_PAID"))
+            .andReturn();
+
+    MvcResult manualBill =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks/{id}/entries", paycheckId)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"entryType":"BILL","name":"Manual Bill","amountMinor":10000,"paymentMethod":"MANUAL"}
+                        """))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.paymentMethod").value("MANUAL"))
+            .andExpect(jsonPath("$.status").value("NOT_PAID"))
+            .andReturn();
+    JsonNode manual = objectMapper.readTree(manualBill.getResponse().getContentAsString());
+
+    MvcResult paybackResult =
+        mockMvc
+            .perform(
+                post("/api/v1/paybacks")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "name":"Loan",
+                          "originalAmountMinor":20000,
+                          "openingRemainingAmountMinor":20000,
+                          "borrowedDate":"2026-07-12"
+                        }
+                        """))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String paybackId =
+        objectMapper.readTree(paybackResult.getResponse().getContentAsString()).path("id").asText();
+
+    MvcResult unrelatedUpdate =
+        mockMvc
+            .perform(
+                patch("/api/v1/entries/{id}", manual.path("id").asText())
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "entryType":"BILL",
+                          "name":"Manual Bill Updated",
+                          "amountMinor":11000,
+                          "dueDate":"2026-07-20",
+                          "accountName":"Checking",
+                          "payee":"Utility Co",
+                          "notes":"Pay this directly",
+                          "paybackId":"%s",
+                          "version":%d
+                        }
+                        """
+                            .formatted(paybackId, manual.path("version").asLong())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.paymentMethod").value("MANUAL"))
+            .andExpect(jsonPath("$.name").value("Manual Bill Updated"))
+            .andExpect(jsonPath("$.paybackId").value(paybackId))
+            .andReturn();
+    manual = objectMapper.readTree(unrelatedUpdate.getResponse().getContentAsString());
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select payment_method from paycheck_entries where id = ?",
+                String.class,
+                UUID.fromString(manual.path("id").asText())))
+        .isEqualTo("MANUAL");
+
+    MvcResult explicitAutopayUpdate =
+        mockMvc
+            .perform(
+                patch("/api/v1/entries/{id}", manual.path("id").asText())
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "entryType":"BILL",
+                          "name":"Manual Bill Updated",
+                          "amountMinor":11000,
+                          "paymentMethod":"AUTOPAY",
+                          "dueDate":"2026-07-20",
+                          "accountName":"Checking",
+                          "payee":"Utility Co",
+                          "notes":"Pay automatically",
+                          "paybackId":"%s",
+                          "version":%d
+                        }
+                        """
+                            .formatted(paybackId, manual.path("version").asLong())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.paymentMethod").value("AUTOPAY"))
+            .andReturn();
+
+    manual = objectMapper.readTree(explicitAutopayUpdate.getResponse().getContentAsString());
+
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/{id}/entries", paycheckId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"entryType":"SPENDING_BUCKET","name":"Invalid","amountMinor":1000,"paymentMethod":"MANUAL"}
+                    """))
+        .andExpect(status().isUnprocessableEntity());
+
+    MvcResult changedToBucket =
+        mockMvc
+            .perform(
+                patch("/api/v1/entries/{id}", manual.path("id").asText())
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"entryType":"SPENDING_BUCKET","name":"Bucket Now","amountMinor":10000,"version":%d}
+                        """
+                            .formatted(manual.path("version").asLong())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.paymentMethod").value(nullValue()))
+            .andReturn();
+    JsonNode bucket = objectMapper.readTree(changedToBucket.getResponse().getContentAsString());
+
+    mockMvc
+        .perform(
+            patch("/api/v1/entries/{id}", bucket.path("id").asText())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"entryType":"BILL","name":"Bill Again","amountMinor":10000,"version":%d}
+                    """
+                        .formatted(bucket.path("version").asLong())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.paymentMethod").value("AUTOPAY"))
+        .andExpect(jsonPath("$.status").value("NOT_PAID"));
+
+    JsonNode autopay = objectMapper.readTree(defaultBill.getResponse().getContentAsString());
+    mockMvc
+        .perform(
+            post("/api/v1/entries/{id}/status", autopay.path("id").asText())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"toStatus":"PROCESSING","effectiveAt":"2026-07-17T12:00:00Z","version":%d}
+                    """
+                        .formatted(autopay.path("version").asLong())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.paymentMethod").value("AUTOPAY"))
+        .andExpect(jsonPath("$.status").value("PROCESSING"));
+
+    JsonNode detail =
+        objectMapper.readTree(
+            mockMvc
+                .perform(
+                    get("/api/v1/paychecks/{id}", paycheckId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/{id}/leftover-entry", paycheckId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"paycheckVersion\":" + detail.path("version").asLong() + "}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.entryType").value("BILL"))
+        .andExpect(jsonPath("$.paymentMethod").value("AUTOPAY"));
+  }
+
+  @Test
+  void migrationAddsBillPaymentMethodColumnsAndConstraints() {
+    Integer columnCount =
+        jdbcTemplate.queryForObject(
+            """
+            select count(*)
+            from information_schema.columns
+            where table_schema = current_schema()
+              and table_name in ('paycheck_entries', 'template_entries')
+              and column_name = 'payment_method'
+            """,
+            Integer.class);
+    Integer constraintCount =
+        jdbcTemplate.queryForObject(
+            """
+            select count(*)
+            from information_schema.table_constraints
+            where table_schema = current_schema()
+              and constraint_name in (
+                'chk_paycheck_entry_payment_method_value',
+                'chk_paycheck_entry_payment_method_type',
+                'chk_template_entry_payment_method_value',
+                'chk_template_entry_payment_method_type'
+              )
+            """,
+            Integer.class);
+
+    assertThat(columnCount).isEqualTo(2);
+    assertThat(constraintCount).isEqualTo(4);
   }
 
   @Test

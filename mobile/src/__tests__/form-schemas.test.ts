@@ -5,6 +5,7 @@ const baseEntry = {
   amount: '100.00',
   dueDate: '',
   entryType: 'BILL' as const,
+  manualPay: false,
   name: 'Electricity',
   notes: '',
   paybackId: '',

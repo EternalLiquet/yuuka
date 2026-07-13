@@ -1,5 +1,6 @@
 package com.yuuka.backend.template.api.dto;
 
+import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryType;
 import com.yuuka.backend.template.domain.TemplateEntry;
 import java.time.Instant;
@@ -9,6 +10,7 @@ import java.util.UUID;
 public record TemplateEntryResponse(
     UUID id,
     EntryType entryType,
+    EntryPaymentMethod paymentMethod,
     String name,
     long defaultAmountMinor,
     int position,
@@ -25,6 +27,7 @@ public record TemplateEntryResponse(
     return new TemplateEntryResponse(
         entry.getId(),
         entry.getEntryType(),
+        entry.getPaymentMethod(),
         entry.getName(),
         entry.getDefaultAmountMinor(),
         entry.getPosition(),

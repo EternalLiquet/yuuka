@@ -9,6 +9,7 @@ import com.yuuka.backend.paycheck.api.dto.EntryResponse;
 import com.yuuka.backend.paycheck.api.dto.PaycheckResponse;
 import com.yuuka.backend.paycheck.api.dto.TemplateApplicationEntryRequest;
 import com.yuuka.backend.paycheck.domain.AllocationLine;
+import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryStatus;
 import com.yuuka.backend.paycheck.domain.EntryStatusEvent;
 import com.yuuka.backend.paycheck.domain.EntryType;
@@ -140,6 +141,7 @@ public class TemplateService {
                   entry.getName(),
                   entry.getDefaultAmountMinor(),
                   entry.getPosition(),
+                  entry.getPaymentMethod(),
                   entry.getDefaultDueOffsetDays(),
                   entry.getAccountName(),
                   entry.getPayee(),
@@ -216,6 +218,7 @@ public class TemplateService {
         request.entryType(),
         request.name().trim(),
         request.defaultAmountMinor(),
+        paymentMethodForUpdate(entry, request.entryType(), request.paymentMethod()),
         billValue(request.entryType(), request.defaultDueOffsetDays()),
         billValue(request.entryType(), normalizeOptional(request.accountName())),
         billValue(request.entryType(), normalizeOptional(request.payee())),
@@ -327,6 +330,7 @@ public class TemplateService {
                   source.name(),
                   source.amountMinor(),
                   index,
+                  source.paymentMethod(),
                   source.dueDate(),
                   source.accountName(),
                   source.payee(),
@@ -384,6 +388,7 @@ public class TemplateService {
                     entry.getEntryType(),
                     entry.getName(),
                     entry.getDefaultAmountMinor(),
+                    entry.getPaymentMethod(),
                     entry.getDefaultDueOffsetDays() == null
                         ? null
                         : request.incomeDate().plusDays(entry.getDefaultDueOffsetDays()),
@@ -400,6 +405,7 @@ public class TemplateService {
         request.entryType(),
         request.name().trim(),
         request.amountMinor(),
+        paymentMethodForCreate(request.entryType(), request.paymentMethod()),
         billValue(request.entryType(), request.dueDate()),
         billValue(request.entryType(), normalizeOptional(request.accountName())),
         billValue(request.entryType(), normalizeOptional(request.payee())),
@@ -417,6 +423,7 @@ public class TemplateService {
         request.name().trim(),
         request.defaultAmountMinor(),
         position,
+        paymentMethodForCreate(request.entryType(), request.paymentMethod()),
         billValue(request.entryType(), request.defaultDueOffsetDays()),
         billValue(request.entryType(), normalizeOptional(request.accountName())),
         billValue(request.entryType(), normalizeOptional(request.payee())),
@@ -466,6 +473,32 @@ public class TemplateService {
     return type == EntryType.BILL ? value : null;
   }
 
+  private EntryPaymentMethod paymentMethodForCreate(EntryType type, EntryPaymentMethod requested) {
+    if (type != EntryType.BILL) {
+      if (requested != null) {
+        throw new BusinessRuleException("Only Bills can have a payment method.");
+      }
+      return null;
+    }
+    return requested == null ? EntryPaymentMethod.AUTOPAY : requested;
+  }
+
+  private EntryPaymentMethod paymentMethodForUpdate(
+      TemplateEntry existing, EntryType requestedType, EntryPaymentMethod requested) {
+    if (requestedType != EntryType.BILL) {
+      if (requested != null) {
+        throw new BusinessRuleException("Only Bills can have a payment method.");
+      }
+      return null;
+    }
+    if (requested != null) {
+      return requested;
+    }
+    return existing.getEntryType() == EntryType.BILL && existing.getPaymentMethod() != null
+        ? existing.getPaymentMethod()
+        : EntryPaymentMethod.AUTOPAY;
+  }
+
   private <T> T sinkingValue(EntryType type, T value) {
     return type == EntryType.SINKING_FUND ? value : null;
   }
@@ -474,6 +507,7 @@ public class TemplateService {
       EntryType entryType,
       String name,
       long amountMinor,
+      EntryPaymentMethod paymentMethod,
       LocalDate dueDate,
       String accountName,
       String payee,

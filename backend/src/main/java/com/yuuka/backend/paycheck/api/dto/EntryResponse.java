@@ -1,5 +1,6 @@
 package com.yuuka.backend.paycheck.api.dto;
 
+import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryStatus;
 import com.yuuka.backend.paycheck.domain.EntryType;
 import com.yuuka.backend.paycheck.domain.PaycheckEntry;
@@ -12,6 +13,7 @@ public record EntryResponse(
     UUID paycheckId,
     UUID paybackId,
     EntryType entryType,
+    EntryPaymentMethod paymentMethod,
     String name,
     long amountMinor,
     EntryStatus status,
@@ -35,6 +37,7 @@ public record EntryResponse(
         entry.getPaycheckId(),
         entry.getPaybackId(),
         entry.getEntryType(),
+        entry.getPaymentMethod(),
         entry.getName(),
         entry.getAmountMinor(),
         entry.getStatus(),

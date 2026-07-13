@@ -1,10 +1,11 @@
-import type { Entry, EntryStatus, EntryType } from '@/api/contracts';
+import type { Entry, EntryPaymentMethod, EntryStatus, EntryType } from '@/api/contracts';
 
 export type EntrySort = 'amount' | 'custom' | 'due-date' | 'last-edited' | 'status';
 
 export type EntryListOptions = {
   direction: 'asc' | 'desc';
   sort: EntrySort;
+  paymentMethod?: EntryPaymentMethod;
   status?: EntryStatus;
   type?: EntryType;
 };
@@ -19,6 +20,8 @@ export function filterAndSortEntries(source: readonly Entry[], options: EntryLis
   const filtered = source.filter(
     (entry) =>
       (!options.status || entry.status === options.status) &&
+      (!options.paymentMethod ||
+        (entry.entryType === 'BILL' && entry.paymentMethod === options.paymentMethod)) &&
       (!options.type || entry.entryType === options.type),
   );
   const direction = options.direction === 'asc' ? 1 : -1;

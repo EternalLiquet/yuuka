@@ -12,6 +12,7 @@ const entries: Entry[] = [
     status: 'PROCESSING',
     position: 1,
     dueDate: '2026-07-12',
+    paymentMethod: 'MANUAL',
     accountName: null,
     payee: null,
     notes: null,
@@ -34,6 +35,7 @@ const entries: Entry[] = [
     status: 'NOT_PAID',
     position: 0,
     dueDate: null,
+    paymentMethod: null,
     accountName: null,
     payee: null,
     notes: null,
@@ -86,5 +88,35 @@ describe('filterAndSortEntries', () => {
     expect(filterAndSortEntries(entries, { sort: 'amount', direction: 'desc' })[0].name).toBe(
       'Electricity',
     );
+  });
+
+  it('filters Bill payment method with status without mutating custom order', () => {
+    const autopay = {
+      ...entries[0],
+      id: '00000000-0000-0000-0000-000000000003',
+      paymentMethod: 'AUTOPAY' as const,
+      position: 2,
+      status: 'NOT_PAID' as const,
+      name: 'Internet',
+    };
+    const source = [...entries, autopay];
+
+    expect(
+      filterAndSortEntries(source, {
+        sort: 'custom',
+        direction: 'asc',
+        paymentMethod: 'MANUAL',
+        status: 'PROCESSING',
+      }).map((entry) => entry.name),
+    ).toEqual(['Electricity']);
+    expect(
+      filterAndSortEntries(source, {
+        sort: 'custom',
+        direction: 'asc',
+        paymentMethod: 'AUTOPAY',
+        status: 'NOT_PAID',
+      }).map((entry) => entry.name),
+    ).toEqual(['Internet']);
+    expect(source.map((entry) => entry.name)).toEqual(['Electricity', 'Work Food', 'Internet']);
   });
 });

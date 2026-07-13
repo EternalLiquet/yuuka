@@ -69,6 +69,7 @@ public class EntrySearchService {
         result.getEntryName(),
         result.getAmountMinor(),
         result.getEntryType(),
+        result.getPaymentMethod(),
         result.getStatus(),
         result.getPaycheckName(),
         result.getPaycheckIncomeDate(),

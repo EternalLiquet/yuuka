@@ -472,6 +472,7 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
                           null,
                           null,
                           null,
+                          null,
                           paybackId));
                   return "ASSIGNED";
                 } catch (ResourceNotFoundException ex) {

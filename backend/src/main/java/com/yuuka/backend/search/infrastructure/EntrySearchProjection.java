@@ -1,5 +1,6 @@
 package com.yuuka.backend.search.infrastructure;
 
+import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryStatus;
 import com.yuuka.backend.paycheck.domain.EntryType;
 import com.yuuka.backend.paycheck.domain.PaycheckState;
@@ -17,6 +18,8 @@ public interface EntrySearchProjection {
   long getAmountMinor();
 
   EntryType getEntryType();
+
+  EntryPaymentMethod getPaymentMethod();
 
   EntryStatus getStatus();
 

@@ -19,7 +19,7 @@ import {
   templateEntrySchema,
   templateSchema,
 } from './contracts';
-import type { EntrySearchResult, Page, SearchScope } from './contracts';
+import type { EntryPaymentMethod, EntrySearchResult, Page, SearchScope } from './contracts';
 
 export type EntryPayload = {
   accountName?: string | null;
@@ -28,6 +28,7 @@ export type EntryPayload = {
   entryType: 'BILL' | 'SPENDING_BUCKET' | 'SINKING_FUND';
   name: string;
   notes?: string | null;
+  paymentMethod?: EntryPaymentMethod | null;
   payee?: string | null;
   paybackId?: string | null;
   targetDate?: string | null;
@@ -42,6 +43,7 @@ export type TemplateEntryPayload = {
   entryType: EntryPayload['entryType'];
   name: string;
   notes?: string | null;
+  paymentMethod?: EntryPaymentMethod | null;
   payee?: string | null;
   targetDate?: string | null;
   targetMinor?: number | null;

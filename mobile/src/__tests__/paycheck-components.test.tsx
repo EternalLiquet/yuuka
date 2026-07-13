@@ -23,6 +23,7 @@ const entry: Entry = {
   paycheckId: '00000000-0000-0000-0000-000000000010',
   paybackId: null,
   entryType: 'SPENDING_BUCKET',
+  paymentMethod: null,
   name: 'Work Food',
   amountMinor: 5000,
   status: 'PROCESSING',
@@ -96,6 +97,25 @@ describe('paycheck components', () => {
     );
     expect(view.getByLabelText('$21.45 spent, $28.55 left')).toBeTruthy();
     expect(view.getByLabelText('Change status for Work Food')).toBeTruthy();
+  });
+
+  it('shows Bill payment method as secondary text', async () => {
+    const view = await render(
+      <EntryRow
+        entry={{
+          ...entry,
+          entryType: 'BILL',
+          overBudget: null,
+          paymentMethod: 'MANUAL',
+          remainingMinor: null,
+          spentMinor: null,
+        }}
+        onEdit={jest.fn()}
+        onStatusPress={jest.fn()}
+      />,
+    );
+
+    expect(view.getByText(/Manual Pay/)).toBeTruthy();
   });
 
   it('shows zero remaining as left and over-budget as a positive over amount', async () => {

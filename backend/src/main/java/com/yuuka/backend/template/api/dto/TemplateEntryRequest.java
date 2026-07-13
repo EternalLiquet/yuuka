@@ -1,5 +1,6 @@
 package com.yuuka.backend.template.api.dto;
 
+import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -12,6 +13,7 @@ public record TemplateEntryRequest(
     @NotBlank @Size(max = 160) String name,
     @PositiveOrZero(message = "Amount must be greater than or equal to $0.00.")
         long defaultAmountMinor,
+    EntryPaymentMethod paymentMethod,
     Integer defaultDueOffsetDays,
     @Size(max = 160) String accountName,
     @Size(max = 160) String payee,
