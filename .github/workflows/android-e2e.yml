@@ -96,46 +96,7 @@ jobs:
           arch: x86_64
           profile: pixel_7
           disable-animations: true
-          script: |
-            mkdir -p .artifacts/android-e2e
-            pushd mobile
-            nohup npx expo start --localhost > ../metro-e2e.log 2>&1 &
-            metro_pid=$!
-            popd
-            trap 'kill "$metro_pid" || true' EXIT
-            bundle_ready=0
-            for attempt in {1..60}; do
-              if curl --fail --silent --show-error --connect-timeout 2 --max-time 120 \
-                "http://127.0.0.1:8081/index.bundle?platform=android&dev=true&minify=false" \
-                --output /tmp/yuuka-android-e2e.bundle; then
-                bundle_ready=1
-                break
-              fi
-              sleep 2
-            done
-            if [ "$bundle_ready" -ne 1 ]; then
-              cat metro-e2e.log
-              exit 1
-            fi
-            adb logcat -c
-            adb reverse tcp:8080 tcp:8080
-            adb reverse tcp:8081 tcp:8081
-            adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
-            set +e
-            maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/01-scratch-lifecycle.yaml
-            first_status=$?
-            if [ "$first_status" -eq 0 ]; then
-              maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/02-payback-delete-reassign.yaml
-              second_status=$?
-            else
-              second_status=0
-            fi
-            adb logcat -d > .artifacts/android-e2e/logcat.txt || true
-            cp -R "$HOME/.maestro/tests" .artifacts/android-e2e/maestro-tests || true
-            if [ "$first_status" -ne 0 ]; then
-              exit "$first_status"
-            fi
-            exit "$second_status"
+          script: bash .github/scripts/android-e2e.sh
       - name: Upload Android E2E diagnostics
         if: always()
         uses: actions/upload-artifact@v4
