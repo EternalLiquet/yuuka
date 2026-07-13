@@ -55,6 +55,10 @@ maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .ma
 
 Never run destructive E2E flows against production data. Flaky tests are failures and must be fixed, not disabled.
 
+For adding or debugging Maestro flows, use `docs/android-e2e-maestro.md`. It documents the Android
+workflow setup, Metro startup requirements, artifact paths, emulator pitfalls, and selector patterns
+that keep the E2E suite deterministic.
+
 ## GitHub Actions
 
 CI runs on pull requests targeting `master`, pushes to `master`, and manual dispatches.

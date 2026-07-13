@@ -10,4 +10,5 @@ Operational guides:
 - `deployment.md` - Docker homelab, Tailscale, and Android installation.
 - `backup-restore.md` - protected backups and destructive restore procedure.
 - `testing.md` - local and CI quality gates.
+- `android-e2e-maestro.md` - Android E2E and Maestro workflow runbook.
 - `openapi.json` - committed backend API contract snapshot.
