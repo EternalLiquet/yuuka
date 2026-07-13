@@ -79,7 +79,7 @@ jobs:
             https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.6.1/maestro.zip \
             --output maestro.zip
           unzip -q maestro.zip -d "$HOME/.maestro"
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.maestro/maestro/bin" >> "$GITHUB_PATH"
       - name: Start Metro
         working-directory: mobile
         env:
