@@ -1,0 +1,14 @@
+# Keep the backend image build context small while still allowing the build
+# stage to derive exact release-tag versions during local tagged Docker builds.
+*
+
+!backend
+!backend/**
+
+!.git
+!.git/HEAD
+!.git/refs
+!.git/refs/**
+!.git/objects
+!.git/objects/**
+!.git/packed-refs

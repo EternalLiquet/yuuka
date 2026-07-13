@@ -2,11 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Archive, CheckCircle2, Pencil, Plus, RotateCcw } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import type { Entry, EntryStatus, EntryType, Paycheck } from '@/api/contracts';
+import { displayError } from '@/api/display-error';
 import { EntryPayload, useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
@@ -15,6 +16,7 @@ import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
 import { EmptyState, ErrorState, StaleBanner } from '@/components/states';
 import { formatMoney } from '@/domain/money';
+import { BucketTransactionSheet } from '@/features/paychecks/bucket-transaction-sheet';
 import { EntryEditor } from '@/features/paychecks/entry-editor';
 import { filterAndSortEntries, EntrySort } from '@/features/paychecks/entry-list';
 import { EntryRow } from '@/features/paychecks/entry-row';
@@ -49,6 +51,7 @@ export default function PaycheckDetailScreen() {
   const api = useYuukaApi();
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
+  const { settings } = useSettings();
   const [statusFilter, setStatusFilter] = useState<'ALL' | EntryStatus>('ALL');
   const [typeFilter, setTypeFilter] = useState<'ALL' | EntryType>('ALL');
   const [sort, setSort] = useState<EntrySort>('custom');
@@ -57,12 +60,22 @@ export default function PaycheckDetailScreen() {
   const [entryEditorVisible, setEntryEditorVisible] = useState(false);
   const [statusEntry, setStatusEntry] = useState<Entry | null>(null);
   const [historyEntry, setHistoryEntry] = useState<Entry | null>(null);
+  const [bucketEntryId, setBucketEntryId] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState('');
   const [paycheckEditorVisible, setPaycheckEditorVisible] = useState(false);
+  const leftoverInFlight = useRef(false);
   const query = useQuery({ queryKey: ['paycheck', id], queryFn: () => api.paycheck(id) });
+  const paybacksQuery = useQuery({
+    queryKey: ['paybacks', 'entry-editor'],
+    queryFn: api.paybacks,
+    enabled: entryEditorVisible,
+  });
   const invalidate = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['paycheck', id] }),
       queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
+      queryClient.invalidateQueries({ queryKey: ['paybacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['payback'] }),
     ]);
   };
 
@@ -96,7 +109,30 @@ export default function PaycheckDetailScreen() {
       if (action.payload) return api.addEntry(id, action.payload);
       throw new Error('Entry action is incomplete.');
     },
-    onSuccess: invalidate,
+    onSuccess: async () => {
+      setDetailError('');
+      await invalidate();
+    },
+  });
+  const leftoverMutation = useMutation({
+    mutationFn: () => {
+      if (!query.data) throw new Error('Refresh the paycheck before allocating leftover.');
+      if (query.data.unallocatedMinor <= 0) {
+        throw new Error('There is no leftover money to allocate.');
+      }
+      return api.allocateLeftover(id, query.data.version);
+    },
+    onSuccess: async () => {
+      setDetailError('');
+      await invalidate();
+    },
+    onError: async (error) => {
+      setDetailError(displayError(error, settings.currencyCode));
+      await query.refetch();
+    },
+    onSettled: () => {
+      leftoverInFlight.current = false;
+    },
   });
   const reorderMutation = useMutation({
     mutationFn: (entryIds: string[]) => {
@@ -136,6 +172,10 @@ export default function PaycheckDetailScreen() {
       }),
     [direction, query.data?.entries, sort, statusFilter, typeFilter],
   );
+  const selectedBucketEntry = useMemo(
+    () => query.data?.entries.find((entry) => entry.id === bucketEntryId) ?? null,
+    [bucketEntryId, query.data?.entries],
+  );
   const canReorder =
     sort === 'custom' &&
     statusFilter === 'ALL' &&
@@ -152,12 +192,25 @@ export default function PaycheckDetailScreen() {
   if (query.isError && !query.data) {
     return (
       <Screen contentContainerStyle={styles.center}>
-        <ErrorState message={message(query.error)} retry={() => query.refetch()} />
+        <ErrorState
+          message={displayError(
+            query.error,
+            settings.currencyCode,
+            'The request could not be completed.',
+          )}
+          retry={() => query.refetch()}
+        />
       </Screen>
     );
   }
   const paycheck = query.data;
   if (!paycheck) return null;
+
+  function allocateLeftover() {
+    if (leftoverInFlight.current || leftoverMutation.isPending) return;
+    leftoverInFlight.current = true;
+    leftoverMutation.mutate();
+  }
 
   function reorder(entryIds: string[]) {
     reorderMutation.mutate(entryIds);
@@ -209,7 +262,10 @@ export default function PaycheckDetailScreen() {
               setSort={setSort}
               direction={direction}
               setDirection={setDirection}
+              detailError={detailError}
               lifecycleMutation={lifecycleMutation}
+              leftoverMutation={leftoverMutation}
+              onAllocateLeftover={allocateLeftover}
             />
           }
           onDragEnd={({ data }) => reorder(data.map((entry) => entry.id))}
@@ -236,6 +292,11 @@ export default function PaycheckDetailScreen() {
                 onMoveDown={() => moveEntry(index, 1)}
                 onMoveUp={() => moveEntry(index, -1)}
                 onHistory={() => setHistoryEntry(params.item)}
+                onBucketActivity={
+                  params.item.entryType === 'SPENDING_BUCKET'
+                    ? () => setBucketEntryId(params.item.id)
+                    : undefined
+                }
                 onStatusPress={() => setStatusEntry(params.item)}
                 reorderEnabled={canReorder}
               />
@@ -244,6 +305,11 @@ export default function PaycheckDetailScreen() {
         />
       </Screen>
 
+      <BucketTransactionSheet
+        entry={selectedBucketEntry}
+        onChanged={invalidate}
+        onClose={() => setBucketEntryId(null)}
+      />
       <StatusSheet
         entry={statusEntry}
         onClose={() => setStatusEntry(null)}
@@ -265,11 +331,23 @@ export default function PaycheckDetailScreen() {
                   .then(() => undefined)
             : undefined
         }
+        onRetryPaybacks={() => paybacksQuery.refetch()}
         onSubmit={(payload) =>
           entryMutation
             .mutateAsync({ type: editingEntry ? 'update' : 'add', entry: editingEntry, payload })
             .then(() => undefined)
         }
+        paybacks={paybacksQuery.data?.items ?? []}
+        paybacksError={
+          paybacksQuery.isError
+            ? displayError(
+                paybacksQuery.error,
+                settings.currencyCode,
+                'Paybacks could not be loaded.',
+              )
+            : null
+        }
+        paybacksLoading={paybacksQuery.isPending}
         visible={entryEditorVisible}
       />
       <PaycheckEditor
@@ -284,8 +362,11 @@ export default function PaycheckDetailScreen() {
 
 function DetailHeader({
   direction,
+  detailError,
   lifecycleMutation,
+  leftoverMutation,
   onAdd,
+  onAllocateLeftover,
   onEdit,
   paycheck,
   setDirection,
@@ -297,9 +378,12 @@ function DetailHeader({
   statusFilter,
   typeFilter,
 }: {
+  detailError: string;
   direction: 'asc' | 'desc';
   lifecycleMutation: UseMutationResult<Paycheck, Error, 'archive' | 'close' | 'reopen'>;
+  leftoverMutation: UseMutationResult<Entry, Error, void>;
   onAdd: () => void;
+  onAllocateLeftover: () => void;
   onEdit: () => void;
   paycheck: Paycheck;
   setDirection: (value: 'asc' | 'desc') => void;
@@ -367,6 +451,16 @@ function DetailHeader({
           <>
             <Button icon={Pencil} label="Edit paycheck" onPress={onEdit} variant="secondary" />
             <Button icon={Plus} label="Add entry" onPress={onAdd} />
+            {paycheck.unallocatedMinor > 0 ? (
+              <Button
+                disabled={leftoverMutation.isPending}
+                icon={Plus}
+                label="Add LEFTOVER"
+                loading={leftoverMutation.isPending}
+                onPress={onAllocateLeftover}
+                variant="secondary"
+              />
+            ) : null}
             {complete ? (
               <Button
                 icon={CheckCircle2}
@@ -394,7 +488,12 @@ function DetailHeader({
       </View>
       {lifecycleMutation.error ? (
         <AppText style={{ color: colors.danger }} variant="error">
-          {message(lifecycleMutation.error)}
+          {displayError(lifecycleMutation.error, settings.currencyCode)}
+        </AppText>
+      ) : null}
+      {detailError ? (
+        <AppText style={{ color: colors.danger }} variant="error">
+          {detailError}
         </AppText>
       ) : null}
       <View style={[styles.controls, { borderTopColor: colors.border }]}>
@@ -460,10 +559,6 @@ function formatDate(value: string) {
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(`${value}T12:00:00`));
-}
-
-function message(error: unknown) {
-  return error instanceof Error ? error.message : 'The request could not be completed.';
 }
 
 const styles = StyleSheet.create({

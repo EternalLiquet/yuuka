@@ -19,17 +19,17 @@ describe('money utilities', () => {
     expect(() => parseMoneyToMinor('9007199254740991.00')).toThrow('too large');
   });
 
-  it('formats integer minor units for display', () => {
+  it('formats integer cents for display', () => {
     expect(formatMoney(193923, 'USD', 'en-US')).toBe('$1,939.23');
     expect(formatMoney(-500, 'USD', 'en-US')).toBe('-$5.00');
   });
 
-  it('rejects non-integer minor units for display and editing', () => {
+  it('rejects non-integer money values for display and editing', () => {
     expect(() => formatMoney(10.5, 'USD', 'en-US')).toThrow('integer');
     expect(() => minorToInput(10.5)).toThrow('integer');
   });
 
-  it('converts minor units back to editable decimal input', () => {
+  it('converts stored cents back to editable decimal input', () => {
     expect(minorToInput(3)).toBe('0.03');
     expect(minorToInput(-500)).toBe('-5.00');
   });

@@ -4,11 +4,13 @@ import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { displayError } from '@/api/display-error';
 import { Paycheck } from '@/api/contracts';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { TextField } from '@/components/text-field';
 import { minorToInput, parseMoneyToMinor } from '@/domain/money';
+import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 import { PaycheckFormValues, paycheckFormSchema } from './form-schemas';
@@ -32,6 +34,7 @@ export function PaycheckEditor({
   visible: boolean;
 }) {
   const { colors } = useAppTheme();
+  const { settings } = useSettings();
   const {
     control,
     formState: { errors, isSubmitting },
@@ -59,7 +62,7 @@ export function PaycheckEditor({
       onClose();
     } catch (error) {
       setError('root', {
-        message: error instanceof Error ? error.message : 'The paycheck was not saved.',
+        message: displayError(error, settings.currencyCode, 'The paycheck was not saved.'),
       });
     }
   }

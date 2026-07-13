@@ -13,10 +13,16 @@ describe('committed backend contract', () => {
     ['/api/v1/paychecks/active', 'get'],
     ['/api/v1/paychecks/history', 'get'],
     ['/api/v1/paychecks/from-template', 'post'],
+    ['/api/v1/paychecks/{paycheckId}/leftover-entry', 'post'],
     ['/api/v1/paychecks/{paycheckId}/entries', 'post'],
     ['/api/v1/entries/{entryId}/status', 'post'],
     ['/api/v1/entries/{entryId}/status-history', 'get'],
     ['/api/v1/entries/{entryId}/bucket-transactions', 'post'],
+    ['/api/v1/paybacks', 'get'],
+    ['/api/v1/paybacks', 'post'],
+    ['/api/v1/paybacks/{paybackId}', 'get'],
+    ['/api/v1/paybacks/{paybackId}', 'patch'],
+    ['/api/v1/paybacks/{paybackId}/repayments', 'get'],
     ['/api/v1/templates', 'get'],
   ])('contains %s %s', (path, method) => {
     expect(contract.paths[path]?.[method]).toBeDefined();

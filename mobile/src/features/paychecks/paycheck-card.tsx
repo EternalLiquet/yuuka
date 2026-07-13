@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Paycheck } from '@/api/contracts';
 import { AppText } from '@/components/app-text';
-import { ProgressBar } from '@/components/progress-bar';
+import { PaymentProgressBar, ProgressBar } from '@/components/progress-bar';
 import { formatMoney } from '@/domain/money';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
@@ -53,10 +53,11 @@ export function PaycheckCard({ onPress, paycheck }: { onPress: () => void; paych
           accessibilityLabel={`${paycheck.allocationPercent}% allocated`}
           value={paycheck.allocationPercent}
         />
-        <ProgressBar
-          accessibilityLabel={`${paycheck.completionPercent}% posted`}
-          tone="posted"
-          value={paycheck.completionPercent}
+        <PaymentProgressBar
+          allocatedMinor={paycheck.allocatedMinor}
+          notPaidMinor={paycheck.notPaidMinor}
+          postedMinor={paycheck.postedMinor}
+          processingMinor={paycheck.processingMinor}
         />
       </View>
 

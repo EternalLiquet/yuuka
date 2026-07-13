@@ -10,11 +10,13 @@ import java.time.LocalDate;
 public record TemplateEntryRequest(
     @NotNull EntryType entryType,
     @NotBlank @Size(max = 160) String name,
-    @PositiveOrZero long defaultAmountMinor,
+    @PositiveOrZero(message = "Amount must be greater than or equal to $0.00.")
+        long defaultAmountMinor,
     Integer defaultDueOffsetDays,
     @Size(max = 160) String accountName,
     @Size(max = 160) String payee,
     @Size(max = 2000) String notes,
-    @PositiveOrZero Long targetMinor,
+    @PositiveOrZero(message = "Target amount must be greater than or equal to $0.00.")
+        Long targetMinor,
     LocalDate targetDate,
     @PositiveOrZero Long version) {}

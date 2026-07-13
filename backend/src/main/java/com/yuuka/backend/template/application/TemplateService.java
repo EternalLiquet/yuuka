@@ -295,9 +295,9 @@ public class TemplateService {
                 .toList());
     if (proposed.unallocatedMinor() < 0) {
       throw new BusinessRuleException(
-          "Template entries exceed the paycheck by "
-              + Math.abs(proposed.unallocatedMinor())
-              + " minor units.");
+          "PAYCHECK_OVER_ALLOCATED",
+          "This would over-allocate the paycheck.",
+          Map.of("amountMinor", Math.abs(proposed.unallocatedMinor()), "currencyCode", "USD"));
     }
 
     String paycheckName =
@@ -332,7 +332,8 @@ public class TemplateService {
                   source.payee(),
                   source.notes(),
                   source.targetMinor(),
-                  source.targetDate()));
+                  source.targetDate(),
+                  null));
       copied.add(entry);
       statusEvents.save(
           new EntryStatusEvent(
