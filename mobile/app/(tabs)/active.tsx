@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Plus } from 'lucide-react-native';
+import { Plus, Search } from 'lucide-react-native';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
@@ -78,6 +78,12 @@ export default function ActiveScreen() {
                 onPress={() => router.push('/paychecks/new')}
               />
             </View>
+            <Button
+              icon={Search}
+              label="Find entry"
+              onPress={() => router.push('/search/entries?scope=ACTIVE')}
+              variant="secondary"
+            />
             <YuukaRefreshIndicator visible={query.isFetching && Boolean(query.data)} />
             {query.isError && query.data ? <StaleBanner /> : null}
           </View>

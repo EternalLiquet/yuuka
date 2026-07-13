@@ -71,3 +71,14 @@ backend or documentation changes.
 ## Authentication boundary
 
 The mobile app uses short-lived signed access JWTs and one-time rotating opaque refresh tokens. Only refresh-token hashes are stored. Replaying a rotated token revokes its family. Production is single-owner, registration-disabled, password-plus-TOTP, and private-network-first.
+
+## Deferred search typo tolerance
+
+Global entry search currently supports exact amount matching plus case-insensitive partial text
+matching. If typo-tolerant entry search becomes important, prefer PostgreSQL `pg_trgm` over
+application-side fuzzy matching or paid search libraries. A future migration can enable the
+extension and add trigram indexes for live entry and paycheck names, then rank exact and substring
+matches ahead of trigram similarity matches. Only apply fuzzy matching to reasonably long queries
+such as four or more characters to avoid noisy short-query results. The expected tradeoff is extra
+index storage and slightly slower writes, with little impact on normal reads because PostgreSQL
+chooses query plans per query.

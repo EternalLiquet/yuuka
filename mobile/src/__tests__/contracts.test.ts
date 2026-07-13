@@ -2,6 +2,7 @@ import {
   auditEventSchema,
   bucketTransactionSchema,
   entrySchema,
+  entrySearchResultSchema,
   entryStatusSchema,
   entryTypeSchema,
   meSchema,
@@ -156,6 +157,20 @@ describe('API response contracts', () => {
         updatedAt: '2026-07-10T12:00:00Z',
       }),
     ).toMatchObject({ email: 'owner@yuuka.local' });
+    expect(
+      entrySearchResultSchema.parse({
+        amountMinor: 1399,
+        entryId: entry.id,
+        entryName: 'Work Food',
+        entryType: 'SPENDING_BUCKET',
+        kind: 'PAYCHECK_ENTRY',
+        paycheckContext: 'ACTIVE',
+        paycheckId: entry.paycheckId,
+        paycheckIncomeDate: '2026-07-10',
+        paycheckName: 'UTILITIES 1/2',
+        status: 'NOT_PAID',
+      }),
+    ).toMatchObject({ amountMinor: 1399, kind: 'PAYCHECK_ENTRY' });
     expect(
       pageSchema(entrySchema).parse({
         hasNext: false,

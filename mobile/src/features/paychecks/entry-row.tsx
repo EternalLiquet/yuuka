@@ -33,6 +33,7 @@ type EntryRowProps = {
   onMoveDown?: () => void;
   onMoveUp?: () => void;
   onStatusPress: () => void;
+  highlighted?: boolean;
   reorderEnabled?: boolean;
 };
 
@@ -47,6 +48,7 @@ export function EntryRow({
   onMoveDown,
   onMoveUp,
   onStatusPress,
+  highlighted,
   reorderEnabled,
 }: EntryRowProps) {
   const { colors } = useAppTheme();
@@ -60,7 +62,10 @@ export function EntryRow({
       onPress={onBucketActivity}
       style={({ pressed }) => [
         styles.row,
-        { borderBottomColor: colors.border },
+        {
+          backgroundColor: highlighted ? colors.accentSoft : 'transparent',
+          borderBottomColor: highlighted ? colors.accent : colors.border,
+        },
         pressed && styles.pressed,
       ]}
     >
@@ -189,7 +194,13 @@ const styles = StyleSheet.create({
   detailRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
   main: { gap: 11 },
   pressed: { opacity: 0.74 },
-  row: { borderBottomWidth: 1, gap: 12, paddingVertical: 15 },
+  row: {
+    borderBottomWidth: 1,
+    borderRadius: 8,
+    gap: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 15,
+  },
   titleBlock: { flex: 1, gap: 3 },
   titleRow: {
     alignItems: 'flex-start',
