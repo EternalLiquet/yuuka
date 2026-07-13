@@ -4,7 +4,7 @@ set -euo pipefail
 mkdir -p .artifacts/android-e2e
 
 cd mobile
-nohup npx expo start --localhost > ../metro-e2e.log 2>&1 &
+nohup ./node_modules/.bin/expo start --localhost > ../metro-e2e.log 2>&1 &
 metro_pid=$!
 cd ..
 
@@ -14,7 +14,7 @@ cleanup() {
 trap cleanup EXIT
 
 bundle_ready=0
-for attempt in {1..60}; do
+for attempt in {1..120}; do
   if curl --fail --silent --show-error --connect-timeout 2 --max-time 120 \
     "http://127.0.0.1:8081/index.bundle?platform=android&dev=true&minify=false" \
     --output /tmp/yuuka-android-e2e.bundle; then
