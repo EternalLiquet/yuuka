@@ -8,6 +8,7 @@ import {
   auditEventSchema,
   bucketTransactionSchema,
   entrySchema,
+  entrySearchResultSchema,
   meSchema,
   pageSchema,
   paybackListSchema,
@@ -74,6 +75,24 @@ export function useYuukaApi() {
       activePaychecks: () => get('/paychecks/active?size=100', pageSchema(paycheckSchema)),
       historyPaychecks: (query = '') =>
         get(`/paychecks/history?size=100${query}`, pageSchema(paycheckSchema)),
+      searchEntries: ({
+        amountMinor,
+        page = 0,
+        query,
+        scope = 'ALL',
+        size = 20,
+      }: {
+        amountMinor?: number;
+        page?: number;
+        query?: string;
+        scope?: 'ALL' | 'ACTIVE' | 'HISTORY';
+        size?: number;
+      }) => {
+        const params = new URLSearchParams({ page: String(page), scope, size: String(size) });
+        if (query?.trim()) params.set('query', query.trim());
+        if (amountMinor != null) params.set('amountMinor', String(amountMinor));
+        return get(`/search/entries?${params.toString()}`, pageSchema(entrySearchResultSchema));
+      },
       paycheck: (id: string) => get(`/paychecks/${id}`, paycheckSchema),
       paybacks: () => get('/paybacks', paybackListSchema),
       payback: (id: string) => get(`/paybacks/${id}`, paybackSchema),

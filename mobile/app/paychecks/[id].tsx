@@ -54,7 +54,7 @@ const sortOptions = [
 ] as const;
 
 export default function PaycheckDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { highlightEntryId, id } = useLocalSearchParams<{ highlightEntryId?: string; id: string }>();
   const api = useYuukaApi();
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
@@ -309,6 +309,7 @@ export default function PaycheckDetailScreen() {
                     : undefined
                 }
                 onStatusPress={() => setStatusEntry(params.item)}
+                highlighted={params.item.id === highlightEntryId}
                 reorderEnabled={canReorder}
               />
             );

@@ -1615,6 +1615,67 @@
           }
         }
       }
+    },
+    "/api/v1/search/entries" : {
+      "get" : {
+        "tags" : [ "search-controller" ],
+        "operationId" : "entries",
+        "parameters" : [ {
+          "name" : "query",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "amountMinor",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "scope",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "ALL", "ACTIVE", "HISTORY" ],
+            "default" : "ALL"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 25
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseEntrySearchResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -3034,6 +3095,79 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/BucketTransactionResponse"
+            }
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "hasNext" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "EntrySearchResultResponse" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "PAYCHECK_ENTRY" ]
+          },
+          "entryId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "paycheckId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entryName" : {
+            "type" : "string"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "entryType" : {
+            "type" : "string",
+            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "NOT_PAID", "PROCESSING", "POSTED" ]
+          },
+          "paycheckName" : {
+            "type" : "string"
+          },
+          "paycheckIncomeDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "paycheckContext" : {
+            "type" : "string",
+            "enum" : [ "ACTIVE", "HISTORY" ]
+          }
+        }
+      },
+      "PageResponseEntrySearchResultResponse" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EntrySearchResultResponse"
             }
           },
           "page" : {
