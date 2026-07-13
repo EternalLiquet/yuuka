@@ -133,7 +133,7 @@ jobs:
             exit "$second_status"
       - name: Upload Android E2E diagnostics
         if: always()
-        uses: actions/upload-artifact@v4.8.0
+        uses: actions/upload-artifact@v4
         with:
           name: android-e2e-diagnostics
           if-no-files-found: ignore
