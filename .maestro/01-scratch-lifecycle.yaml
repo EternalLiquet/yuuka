@@ -57,9 +57,18 @@ name: Scratch paycheck lifecycle
 - tapOn: "Effective date and time"
 - eraseText
 - inputText: "2026-07-16T12:00:00Z"
+- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Note (optional)"
+    direction: DOWN
 - tapOn: "Note (optional)"
 - inputText: "Scheduled"
 - hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save status"
+    direction: DOWN
 - tapOn: "Save status"
 - extendedWaitUntil:
     visible: "Status: Processing"
@@ -67,7 +76,10 @@ name: Scratch paycheck lifecycle
 
 - tapOn: "Change status for Phone"
 - tapOn: "Posted"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save status"
+    direction: DOWN
 - tapOn: "Save status"
 - extendedWaitUntil:
     visible: "Status: Posted"
@@ -75,7 +87,10 @@ name: Scratch paycheck lifecycle
 
 - tapOn: "Change status for Food"
 - tapOn: "Posted"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save status"
+    direction: DOWN
 - tapOn: "Save status"
 - extendedWaitUntil:
     visible: "Close paycheck"

@@ -156,6 +156,20 @@ If a row action is below the visible portion of the list, scroll to the action i
 
 This is not a weakened assertion. It models the user action needed to reach an off-screen control.
 
+After typing into a field inside a bottom sheet, assume the Android keyboard may cover the next field or action. Hide the keyboard and scroll to the next target before tapping it:
+
+```yaml
+- inputText: "2026-07-16T12:00:00Z"
+- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Note (optional)"
+    direction: DOWN
+- tapOn: "Note (optional)"
+```
+
+Use the same pattern before bottom-sheet save buttons when the sheet content can extend below the fold.
+
 ## Debugging Failures Fast
 
 Use this order:
