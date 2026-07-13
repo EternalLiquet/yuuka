@@ -16,7 +16,7 @@ trap cleanup EXIT
 bundle_ready=0
 for attempt in {1..120}; do
   if curl --fail --silent --show-error --connect-timeout 2 --max-time 120 \
-    "http://127.0.0.1:8081/index.bundle?platform=android&dev=true&minify=false" \
+    "http://localhost:8081/index.bundle?platform=android&dev=true&minify=false" \
     --output /tmp/yuuka-android-e2e.bundle; then
     bundle_ready=1
     break
