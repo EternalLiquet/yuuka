@@ -63,7 +63,7 @@ name: Payback delete unassigns entry
     visible: "Repay Payback"
     timeout: 10000
 
-- back
+- tapOn: "Back"
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000

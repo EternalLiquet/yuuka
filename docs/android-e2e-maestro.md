@@ -199,10 +199,10 @@ When a flow creates nested detail screens and then switches tabs, first navigate
     timeout: 10000
 ```
 
-The app's detail routes hide the bottom tab bar. After saving inside a paycheck or payback detail screen, navigate back to the tab screen and wait for its landmark before tapping another tab:
+The app's detail routes hide the bottom tab bar. After saving inside a paycheck or payback detail screen, use the visible app `Back` control when present, then wait for the tab-screen landmark before tapping another tab:
 
 ```yaml
-- back
+- tapOn: "Back"
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
