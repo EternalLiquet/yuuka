@@ -10,7 +10,7 @@ describe('entry search criteria', () => {
     expect(buildEntrySearchCriteria('13.99', 'ALL')).toEqual({ amountMinor: 1399 });
   });
 
-  it('keeps numeric-looking text as a name when name mode is explicit', () => {
+  it('keeps mixed numeric text as a name in Name and automatic modes', () => {
     expect(buildEntrySearchCriteria(' 13.99 plan ', 'NAME')).toEqual({ query: '13.99 plan' });
     expect(buildEntrySearchCriteria('13.99 plan', 'ALL')).toEqual({ query: '13.99 plan' });
   });
