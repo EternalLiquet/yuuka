@@ -47,6 +47,10 @@ name: Scratch paycheck lifecycle
     visible: "Food"
     timeout: 10000
 
+- scrollUntilVisible:
+    centerElement: true
+    element: "Move Food up"
+    direction: DOWN
 - tapOn: "Move Food up"
 - tapOn: "Change status for Phone"
 - tapOn: "Processing"

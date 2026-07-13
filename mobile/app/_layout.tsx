@@ -2,7 +2,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { StyleSheet } from 'react-native';
+import { LogBox, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/auth/auth-provider';
@@ -13,6 +13,10 @@ import { navigationThemes } from '@/theme/navigation-theme';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 export { ErrorBoundary } from 'expo-router';
+
+if (process.env.EXPO_PUBLIC_E2E === '1') {
+  LogBox.ignoreAllLogs();
+}
 
 export const unstable_settings = {
   initialRouteName: 'index',

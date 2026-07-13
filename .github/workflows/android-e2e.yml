@@ -68,6 +68,7 @@ jobs:
       - name: Generate and build Android debug app
         working-directory: mobile
         env:
+          EXPO_PUBLIC_E2E: "1"
           EXPO_PUBLIC_API_BASE_URL: http://localhost:8080/api/v1
         run: |
           npx expo prebuild --platform android --no-install
@@ -98,6 +99,7 @@ jobs:
         env:
           CI: "1"
           EXPO_UNSTABLE_HEADLESS: "1"
+          EXPO_PUBLIC_E2E: "1"
           EXPO_PUBLIC_API_BASE_URL: http://localhost:8080/api/v1
         with:
           api-level: 35
