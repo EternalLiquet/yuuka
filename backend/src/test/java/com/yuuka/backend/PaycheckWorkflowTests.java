@@ -281,29 +281,33 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
                 UUID.fromString(manual.path("id").asText())))
         .isEqualTo("MANUAL");
 
-    mockMvc
-        .perform(
-            patch("/api/v1/entries/{id}", manual.path("id").asText())
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    """
-                    {
-                      "entryType":"BILL",
-                      "name":"Manual Bill Updated",
-                      "amountMinor":11000,
-                      "paymentMethod":"AUTOPAY",
-                      "dueDate":"2026-07-20",
-                      "accountName":"Checking",
-                      "payee":"Utility Co",
-                      "notes":"Pay automatically",
-                      "paybackId":"%s",
-                      "version":%d
-                    }
-                    """
-                        .formatted(paybackId, manual.path("version").asLong())))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.paymentMethod").value("AUTOPAY"));
+    MvcResult explicitAutopayUpdate =
+        mockMvc
+            .perform(
+                patch("/api/v1/entries/{id}", manual.path("id").asText())
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "entryType":"BILL",
+                          "name":"Manual Bill Updated",
+                          "amountMinor":11000,
+                          "paymentMethod":"AUTOPAY",
+                          "dueDate":"2026-07-20",
+                          "accountName":"Checking",
+                          "payee":"Utility Co",
+                          "notes":"Pay automatically",
+                          "paybackId":"%s",
+                          "version":%d
+                        }
+                        """
+                            .formatted(paybackId, manual.path("version").asLong())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.paymentMethod").value("AUTOPAY"))
+            .andReturn();
+
+    manual = objectMapper.readTree(explicitAutopayUpdate.getResponse().getContentAsString());
 
     mockMvc
         .perform(
