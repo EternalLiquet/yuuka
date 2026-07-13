@@ -171,6 +171,7 @@ Common symptoms:
 
 - Blank screen before `Yuuka`: Metro is not serving the native Expo virtual entry, Metro died, or adb reverse is missing.
 - `curl localhost:8081/status` fails at first: normal while Metro starts. The script retries.
+- `Quickstep isn't responding`: emulator system UI noise, not an app failure. Keep the optional `Wait` tap in `shared/sign-in.yaml` and the short settle after APK install.
 - `Save entry` not found: usually off-screen. Use `scrollUntilVisible`.
 - Next action after save still sees form text: the save tap may have been intercepted or navigation has not completed. Wait for a detail-screen control such as `Add entry`.
 - `Open debugger to view warnings`: a dev warning opened LogBox. Keep `EXPO_PUBLIC_E2E=1`; if a new app warning appears, fix the warning if it is in app code, or document the dependency warning if it is external.

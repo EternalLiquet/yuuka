@@ -36,6 +36,7 @@ adb logcat -c
 adb reverse tcp:8080 tcp:8080
 adb reverse tcp:8081 tcp:8081
 adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+sleep 5
 
 set +e
 maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/01-scratch-lifecycle.yaml
