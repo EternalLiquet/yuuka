@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -62,7 +62,7 @@ function routeWrapper(queryClient: QueryClient) {
   };
 }
 
-function renderRoute() {
+async function renderRoute() {
   const queryClient = new QueryClient({
     defaultOptions: {
       mutations: { gcTime: Infinity, retry: false },
@@ -70,7 +70,10 @@ function renderRoute() {
     },
   });
   queryClients.push(queryClient);
-  return render(<EntrySearchScreen />, { wrapper: routeWrapper(queryClient) });
+  const view = await render(<EntrySearchScreen />, { wrapper: routeWrapper(queryClient) });
+  return Object.assign(view, {
+    queryClient,
+  });
 }
 
 describe('entry search route', () => {
@@ -96,7 +99,9 @@ describe('entry search route', () => {
     const view = await renderRoute();
 
     expect(view.getByLabelText('History').props.accessibilityState.checked).toBe(true);
-    fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), '$13.99');
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), '$13.99');
+    });
     await settleDebounce();
 
     await waitFor(() =>
@@ -108,14 +113,20 @@ describe('entry search route', () => {
       }),
     );
 
-    fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), 'streaming');
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), 'streaming');
+    });
     await settleDebounce();
 
     expect(await view.findByText('Netflix')).toBeTruthy();
-    fireEvent.press(await view.findByLabelText('Load more'));
+    await act(async () => {
+      fireEvent.press(await view.findByLabelText('Load more'));
+    });
 
     expect(await view.findByText('Hulu')).toBeTruthy();
-    fireEvent.press(view.getByLabelText('Open Hulu in July Paycheck'));
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Open Hulu in July Paycheck'));
+    });
 
     expect(mockApi.searchEntries).toHaveBeenLastCalledWith({
       amountMinor: undefined,
@@ -129,10 +140,141 @@ describe('entry search route', () => {
     });
     expect(view.getByLabelText('Open Hulu in July Paycheck')).toBeTruthy();
   });
+
+  it('hides successful results immediately when the input is cleared', async () => {
+    const first = result({ entryName: 'Netflix' });
+    mockApi.searchEntries.mockResolvedValueOnce(page([first]));
+    const view = await renderRoute();
+
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), 'Netflix');
+    });
+    await settleDebounce();
+
+    expect(await view.findByLabelText('Open Netflix in July Paycheck')).toBeTruthy();
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), '');
+    });
+
+    await waitFor(() => expect(view.getByText('Start a search')).toBeTruthy());
+    await waitFor(() => expect(view.getByText('0 results')).toBeTruthy());
+    await waitFor(() => expect(view.queryByLabelText('Open Netflix in July Paycheck')).toBeNull());
+  });
+
+  it('hides successful results immediately when the current amount is invalid', async () => {
+    const first = result({ amountMinor: 1399, entryName: 'Netflix' });
+    mockApi.searchEntries.mockResolvedValueOnce(page([first]));
+    const view = await renderRoute();
+
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), '$13.99');
+    });
+    await settleDebounce();
+
+    expect(await view.findByLabelText('Open Netflix in July Paycheck')).toBeTruthy();
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), '1.234');
+    });
+
+    await waitFor(() => expect(view.getByText('Check the amount')).toBeTruthy());
+    await waitFor(() => expect(view.getByText('0 results')).toBeTruthy());
+    await waitFor(() => expect(view.queryByLabelText('Open Netflix in July Paycheck')).toBeNull());
+  });
+
+  it('hides name results when Amount mode makes the current text invalid', async () => {
+    const first = result({ entryName: 'Netflix' });
+    mockApi.searchEntries.mockResolvedValueOnce(page([first]));
+    const view = await renderRoute();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('segmented-Search mode-NAME'));
+    });
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), 'Netflix');
+    });
+    await settleDebounce();
+
+    expect(await view.findByLabelText('Open Netflix in July Paycheck')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('segmented-Search mode-AMOUNT'));
+    });
+
+    await waitFor(() => expect(view.getByText('Check the amount')).toBeTruthy());
+    await waitFor(() => expect(view.getByText('0 results')).toBeTruthy());
+    await waitFor(() => expect(view.queryByLabelText('Open Netflix in July Paycheck')).toBeNull());
+  });
+
+  it('keeps previous rows during a valid-to-valid search transition', async () => {
+    const huluSearch = deferred<Page<EntrySearchResult>>();
+    mockApi.searchEntries
+      .mockResolvedValueOnce(page([result({ entryName: 'Netflix' })]))
+      .mockReturnValueOnce(huluSearch.promise);
+    const view = await renderRoute();
+
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), 'Netflix');
+    });
+    await settleDebounce();
+
+    expect(await view.findByLabelText('Open Netflix in July Paycheck')).toBeTruthy();
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), 'Hulu');
+    });
+    await settleDebounce();
+
+    await waitFor(() =>
+      expect(mockApi.searchEntries).toHaveBeenLastCalledWith({
+        amountMinor: undefined,
+        page: 0,
+        query: 'Hulu',
+        scope: 'ALL',
+      }),
+    );
+    expect(view.getByLabelText('Open Netflix in July Paycheck')).toBeTruthy();
+
+    await act(async () => {
+      huluSearch.resolve(page([result({ entryId: uuid('102'), entryName: 'Hulu' })]));
+    });
+    expect(await view.findByLabelText('Open Hulu in July Paycheck')).toBeTruthy();
+  });
+
+  it('shows stale server data only while the current criteria remain valid', async () => {
+    mockApi.searchEntries.mockResolvedValueOnce(page([result({ entryName: 'Netflix' })]));
+    const view = await renderRoute();
+
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), 'Netflix');
+    });
+    await settleDebounce();
+
+    expect(await view.findByLabelText('Open Netflix in July Paycheck')).toBeTruthy();
+    await act(async () => {
+      const searchQuery = view.queryClient
+        .getQueryCache()
+        .find({ queryKey: ['search', 'entries', 'ALL', 'Netflix', null] });
+      searchQuery?.setState({ error: new Error('offline'), status: 'error' });
+    });
+
+    expect(await view.findByText('Showing saved data. Reconnect to refresh.')).toBeTruthy();
+    expect(view.getByLabelText('Open Netflix in July Paycheck')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), '');
+    });
+
+    await waitFor(() => expect(view.getByText('Start a search')).toBeTruthy());
+    await waitFor(() => expect(view.getByText('0 results')).toBeTruthy());
+    await waitFor(() =>
+      expect(view.queryByText('Showing saved data. Reconnect to refresh.')).toBeNull(),
+    );
+    await waitFor(() => expect(view.queryByLabelText('Open Netflix in July Paycheck')).toBeNull());
+  });
 });
 
 async function settleDebounce() {
-  await new Promise((resolve) => setTimeout(resolve, 350));
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  });
 }
 
 function page(
@@ -169,4 +311,14 @@ function result(overrides: Partial<EntrySearchResult> = {}): EntrySearchResult {
 
 function uuid(suffix: string) {
   return `11111111-1111-4111-8111-111111111${suffix}`;
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, reject, resolve };
 }

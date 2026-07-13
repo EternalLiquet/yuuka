@@ -50,12 +50,17 @@ export default function EntrySearchScreen() {
     return () => clearTimeout(timeout);
   }, [rawQuery]);
 
-  const criteria = useMemo(
+  const currentCriteria = useMemo(() => buildEntrySearchCriteria(rawQuery, mode), [rawQuery, mode]);
+  const currentCriteriaError =
+    currentCriteria && 'error' in currentCriteria ? (currentCriteria.error ?? '') : '';
+  const hasDisplayableCriteria = Boolean(currentCriteria && !currentCriteriaError);
+  const debouncedCriteria = useMemo(
     () => buildEntrySearchCriteria(debouncedQuery, mode),
     [debouncedQuery, mode],
   );
-  const criteriaError = criteria && 'error' in criteria ? (criteria.error ?? '') : '';
-  const activeCriteria = criteria && !criteriaError ? criteria : null;
+  const debouncedCriteriaError =
+    debouncedCriteria && 'error' in debouncedCriteria ? (debouncedCriteria.error ?? '') : '';
+  const activeCriteria = debouncedCriteria && !debouncedCriteriaError ? debouncedCriteria : null;
   const query = useInfiniteQuery<
     EntrySearchPage,
     Error,
@@ -85,10 +90,11 @@ export default function EntrySearchScreen() {
       activeCriteria?.amountMinor ?? null,
     ],
   });
-  const results = query.data?.pages.flatMap((page) => page.items) ?? [];
-  const totalItems = query.data?.pages[0]?.totalItems ?? 0;
+  const displayedPages = hasDisplayableCriteria ? query.data?.pages : undefined;
+  const results = displayedPages?.flatMap((page) => page.items) ?? [];
+  const totalItems = displayedPages?.[0]?.totalItems ?? 0;
   const isInitial = !rawQuery.trim();
-  const validation = rawQuery.trim() ? criteriaError : '';
+  const validation = rawQuery.trim() ? currentCriteriaError : '';
 
   return (
     <>

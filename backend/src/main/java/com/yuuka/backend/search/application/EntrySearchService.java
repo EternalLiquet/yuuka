@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class EntrySearchService {
   private static final int MAX_PAGE_SIZE = 100;
+  private static final char LIKE_ESCAPE = '!';
 
   private final JpaEntrySearchRepository searches;
   private final PaycheckVisibilityPolicy visibilityPolicy;
@@ -40,11 +41,13 @@ public class EntrySearchService {
           "Enter a name or amount before searching.",
           Map.of("query", "A search term or amount is required."));
     }
+    String likeQuery = normalizedQuery == null ? null : escapeLikeQuery(normalizedQuery);
     Page<EntrySearchResultResponse> results =
         searches
             .searchEntries(
                 ownerId,
                 normalizedQuery,
+                likeQuery,
                 amountMinor,
                 scope == SearchScope.ACTIVE,
                 scope == SearchScope.HISTORY,
@@ -78,6 +81,18 @@ public class EntrySearchService {
     }
     String trimmed = query.trim().toLowerCase(Locale.ROOT);
     return trimmed.isEmpty() ? null : trimmed;
+  }
+
+  private String escapeLikeQuery(String query) {
+    StringBuilder escaped = new StringBuilder(query.length());
+    for (int index = 0; index < query.length(); index++) {
+      char value = query.charAt(index);
+      if (value == LIKE_ESCAPE || value == '%' || value == '_') {
+        escaped.append(LIKE_ESCAPE);
+      }
+      escaped.append(value);
+    }
+    return escaped.toString();
   }
 
   private int normalizePage(int page) {

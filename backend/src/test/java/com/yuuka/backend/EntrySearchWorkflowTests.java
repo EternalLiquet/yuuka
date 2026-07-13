@@ -54,6 +54,47 @@ class EntrySearchWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void treatsLikeWildcardAndEscapeCharactersAsLiteralNameText() throws Exception {
+    String token = registerAndGetAccessToken("entry-search-literals@yuuka.local");
+    String otherToken = registerAndGetAccessToken("entry-search-literals-other@yuuka.local");
+    String paycheck = createPaycheck(token, "Literal Match Check", 100000, "2026-07-12");
+    String otherPaycheck = createPaycheck(otherToken, "Literal Match Check", 100000, "2026-07-12");
+    addEntry(token, paycheck, "Save 100%", "BILL", 1000);
+    addEntry(token, paycheck, "Save 1000", "BILL", 1000);
+    addEntry(token, paycheck, "under_score_bill", "BILL", 1000);
+    addEntry(token, paycheck, "underXscore bill", "BILL", 1000);
+    addEntry(token, paycheck, "bang!escape", "BILL", 1000);
+    addEntry(otherToken, otherPaycheck, "Save 100%", "BILL", 1000);
+
+    mockMvc
+        .perform(
+            get("/api/v1/search/entries")
+                .param("query", "100%")
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalItems").value(1))
+        .andExpect(jsonPath("$.items[0].entryName").value("Save 100%"));
+
+    mockMvc
+        .perform(
+            get("/api/v1/search/entries")
+                .param("query", "UNDER_score")
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalItems").value(1))
+        .andExpect(jsonPath("$.items[0].entryName").value("under_score_bill"));
+
+    mockMvc
+        .perform(
+            get("/api/v1/search/entries")
+                .param("query", "bang!")
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalItems").value(1))
+        .andExpect(jsonPath("$.items[0].entryName").value("bang!escape"));
+  }
+
+  @Test
   void searchesExactAmountAndReturnsDuplicateAmounts() throws Exception {
     String token = registerAndGetAccessToken("entry-search-amount@yuuka.local");
     String paycheck = createPaycheck(token, "Paycheck", 100000, "2026-07-12");

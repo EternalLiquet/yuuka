@@ -115,8 +115,8 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
             )
             and (
               (:query is not null and (
-                lower(entry.name) like concat('%', :query, '%')
-                or lower(paycheck.name) like concat('%', :query, '%')
+                lower(entry.name) like concat('%', :likeQuery, '%') escape '!'
+                or lower(paycheck.name) like concat('%', :likeQuery, '%') escape '!'
               ))
               or (:amountMinor is not null and entry.amountMinor = :amountMinor)
             )
@@ -201,8 +201,8 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
             )
             and (
               (:query is not null and (
-                lower(entry.name) like concat('%', :query, '%')
-                or lower(paycheck.name) like concat('%', :query, '%')
+                lower(entry.name) like concat('%', :likeQuery, '%') escape '!'
+                or lower(paycheck.name) like concat('%', :likeQuery, '%') escape '!'
               ))
               or (:amountMinor is not null and entry.amountMinor = :amountMinor)
             )
@@ -210,6 +210,7 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
   Page<EntrySearchProjection> searchEntries(
       @Param("ownerId") UUID ownerId,
       @Param("query") String query,
+      @Param("likeQuery") String likeQuery,
       @Param("amountMinor") Long amountMinor,
       @Param("activeOnly") boolean activeOnly,
       @Param("historyOnly") boolean historyOnly,

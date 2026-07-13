@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Archive, CheckCircle2, Pencil, Plus, RotateCcw } from 'lucide-react-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
@@ -56,6 +56,14 @@ const sortOptions = [
 type EntryListHandle = {
   scrollToIndex: (params: { animated?: boolean; index: number; viewPosition?: number }) => void;
 };
+type ScrollToIndexFailureInfo = {
+  averageItemLength: number;
+  highestMeasuredFrameIndex: number;
+  index: number;
+};
+
+const HIGHLIGHT_SCROLL_RETRY_DELAY_MS = 80;
+const MAX_HIGHLIGHT_SCROLL_RETRIES = 2;
 
 export default function PaycheckDetailScreen() {
   const { highlightEntryId, id } = useLocalSearchParams<{
@@ -80,6 +88,8 @@ export default function PaycheckDetailScreen() {
   const leftoverInFlight = useRef(false);
   const listRef = useRef<EntryListHandle | null>(null);
   const highlightScrolledRef = useRef(false);
+  const highlightRetryCountRef = useRef(0);
+  const highlightRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userInteractedWithListRef = useRef(false);
   const query = useQuery({ queryKey: ['paycheck', id], queryFn: () => api.paycheck(id) });
   const paybacksQuery = useQuery({
@@ -200,6 +210,65 @@ export default function PaycheckDetailScreen() {
     typeFilter === 'ALL' &&
     query.data?.state === 'ACTIVE';
 
+  const markListInteracted = useCallback(() => {
+    userInteractedWithListRef.current = true;
+    if (highlightRetryTimeoutRef.current) {
+      clearTimeout(highlightRetryTimeoutRef.current);
+      highlightRetryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleHighlightRetry = useCallback((index: number) => {
+    if (userInteractedWithListRef.current || highlightRetryTimeoutRef.current) {
+      return;
+    }
+    if (highlightRetryCountRef.current >= MAX_HIGHLIGHT_SCROLL_RETRIES) {
+      return;
+    }
+    highlightRetryCountRef.current += 1;
+    highlightRetryTimeoutRef.current = setTimeout(() => {
+      highlightRetryTimeoutRef.current = null;
+      if (userInteractedWithListRef.current || !listRef.current) {
+        return;
+      }
+      try {
+        listRef.current.scrollToIndex({ animated: true, index, viewPosition: 0.35 });
+      } catch {
+        // Native list measurement can still be catching up; onScrollToIndexFailed bounds retries.
+      }
+    }, HIGHLIGHT_SCROLL_RETRY_DELAY_MS);
+  }, []);
+
+  const handleScrollToIndexFailed = useCallback(
+    (info: ScrollToIndexFailureInfo) => {
+      if (!highlightEntryId || userInteractedWithListRef.current) {
+        return;
+      }
+      const highlightIndex = displayedEntries.findIndex((entry) => entry.id === highlightEntryId);
+      if (highlightIndex < 0 || info.index !== highlightIndex) {
+        return;
+      }
+      scheduleHighlightRetry(info.index);
+    },
+    [displayedEntries, highlightEntryId, scheduleHighlightRetry],
+  );
+
+  useEffect(() => {
+    highlightScrolledRef.current = false;
+    highlightRetryCountRef.current = 0;
+    userInteractedWithListRef.current = false;
+    if (highlightRetryTimeoutRef.current) {
+      clearTimeout(highlightRetryTimeoutRef.current);
+      highlightRetryTimeoutRef.current = null;
+    }
+    return () => {
+      if (highlightRetryTimeoutRef.current) {
+        clearTimeout(highlightRetryTimeoutRef.current);
+        highlightRetryTimeoutRef.current = null;
+      }
+    };
+  }, [highlightEntryId, id]);
+
   useEffect(() => {
     if (
       showColdLoader ||
@@ -220,9 +289,10 @@ export default function PaycheckDetailScreen() {
       listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.35 });
       highlightScrolledRef.current = true;
     } catch {
+      scheduleHighlightRetry(index);
       highlightScrolledRef.current = true;
     }
-  }, [displayedEntries, highlightEntryId, showColdLoader]);
+  }, [displayedEntries, highlightEntryId, scheduleHighlightRetry, showColdLoader]);
 
   if (showColdLoader) {
     return (
@@ -281,9 +351,7 @@ export default function PaycheckDetailScreen() {
           contentContainerStyle={styles.list}
           data={displayedEntries}
           keyExtractor={(entry) => entry.id}
-          onDragBegin={() => {
-            userInteractedWithListRef.current = true;
-          }}
+          onDragBegin={markListInteracted}
           ListEmptyComponent={
             <EmptyState
               mascot="clipboard"
@@ -316,9 +384,8 @@ export default function PaycheckDetailScreen() {
             />
           }
           onDragEnd={({ data }) => reorder(data.map((entry) => entry.id))}
-          onScrollBeginDrag={() => {
-            userInteractedWithListRef.current = true;
-          }}
+          onScrollBeginDrag={markListInteracted}
+          onScrollToIndexFailed={handleScrollToIndexFailed}
           ref={(instance) => {
             listRef.current = instance;
           }}
