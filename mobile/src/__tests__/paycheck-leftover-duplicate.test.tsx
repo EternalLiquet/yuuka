@@ -163,6 +163,7 @@ describe('leftover duplicate tap protection', () => {
       createdAt: '2026-07-10T12:00:00Z',
       dueDate: null,
       entryType: 'BILL',
+      paymentMethod: 'AUTOPAY',
       id: '11111111-1111-4111-8111-111111111120',
       name: 'LEFTOVER',
       notes: null,

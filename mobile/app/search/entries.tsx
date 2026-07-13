@@ -215,7 +215,7 @@ export default function EntrySearchScreen() {
               {item.entryName}
             </AppText>
             <AppText style={{ color: colors.muted }} variant="caption">
-              {typeLabel(item.entryType)} | {statusLabel(item.status)}
+              {resultMetadata(item).join(' | ')}
             </AppText>
           </View>
           <AppText variant="money">{formatMoney(item.amountMinor, settings.currencyCode)}</AppText>
@@ -294,6 +294,19 @@ function statusLabel(value: EntrySearchResult['status']) {
     POSTED: 'Posted',
     PROCESSING: 'Processing',
   }[value];
+}
+
+function paymentMethodLabel(value: NonNullable<EntrySearchResult['paymentMethod']>) {
+  return value === 'MANUAL' ? 'Manual Pay' : 'Autopay';
+}
+
+function resultMetadata(item: EntrySearchResult) {
+  const metadata = [typeLabel(item.entryType)];
+  if (item.entryType === 'BILL' && item.paymentMethod) {
+    metadata.push(paymentMethodLabel(item.paymentMethod));
+  }
+  metadata.push(statusLabel(item.status));
+  return metadata;
 }
 
 function contextLabel(value: EntrySearchResult['paycheckContext']) {

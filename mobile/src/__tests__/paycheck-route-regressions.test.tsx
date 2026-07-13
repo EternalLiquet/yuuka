@@ -135,7 +135,13 @@ async function renderRoute(screen: ReactElement) {
 }
 
 const entries: Entry[] = [
-  entry({ entryType: 'BILL', name: 'Electricity', position: 0, status: 'NOT_PAID' }),
+  entry({
+    entryType: 'BILL',
+    name: 'Electricity',
+    paymentMethod: 'MANUAL',
+    position: 0,
+    status: 'NOT_PAID',
+  }),
   entry({
     entryType: 'SPENDING_BUCKET',
     name: 'Work Food',
@@ -322,6 +328,21 @@ describe('paycheck route regressions', () => {
     expect(view.queryByText('Add LEFTOVER')).toBeNull();
   });
 
+  it('filters Manual Pay Bills together with Not Paid status', async () => {
+    const view = await renderRoute(<PaycheckDetailScreen />);
+
+    expect(await view.findByText('Electricity')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('segmented-Payment method filter-MANUAL'));
+      fireEvent.press(view.getByTestId('segmented-Status filter-NOT_PAID'));
+    });
+
+    expect(view.getByText('Electricity')).toBeTruthy();
+    expect(view.getAllByText(/Manual Pay/).length).toBeGreaterThanOrEqual(1);
+    expect(view.queryByText('Work Food')).toBeNull();
+    expect(view.queryByText('Tires')).toBeNull();
+  });
+
   it('allocates leftover as an exact bill entry', async () => {
     mockApi.paycheck.mockResolvedValue({
       ...paycheck,
@@ -386,6 +407,7 @@ function entry(overrides: Partial<Entry>): Entry {
     createdAt: '2026-07-10T12:00:00Z',
     dueDate: null,
     entryType: 'BILL',
+    paymentMethod: overrides.entryType && overrides.entryType !== 'BILL' ? null : 'AUTOPAY',
     id: `11111111-1111-4111-8111-11111111111${overrides.position ?? 0}`,
     name: 'Entry',
     notes: null,

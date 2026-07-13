@@ -1,5 +1,6 @@
 package com.yuuka.backend.template.domain;
 
+import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,6 +33,10 @@ public class TemplateEntry {
   @Enumerated(EnumType.STRING)
   @Column(name = "entry_type", nullable = false, length = 32)
   private EntryType entryType;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "payment_method", length = 20)
+  private EntryPaymentMethod paymentMethod;
 
   @Column(nullable = false, length = 160)
   private String name;
@@ -79,6 +84,7 @@ public class TemplateEntry {
       String name,
       long defaultAmountMinor,
       int position,
+      EntryPaymentMethod paymentMethod,
       Integer defaultDueOffsetDays,
       String accountName,
       String payee,
@@ -91,6 +97,7 @@ public class TemplateEntry {
     this.name = name;
     this.defaultAmountMinor = defaultAmountMinor;
     this.position = position;
+    this.paymentMethod = paymentMethod;
     this.defaultDueOffsetDays = defaultDueOffsetDays;
     this.accountName = accountName;
     this.payee = payee;
@@ -115,6 +122,7 @@ public class TemplateEntry {
       EntryType entryType,
       String name,
       long defaultAmountMinor,
+      EntryPaymentMethod paymentMethod,
       Integer defaultDueOffsetDays,
       String accountName,
       String payee,
@@ -124,6 +132,7 @@ public class TemplateEntry {
     this.entryType = entryType;
     this.name = name;
     this.defaultAmountMinor = defaultAmountMinor;
+    this.paymentMethod = paymentMethod;
     this.defaultDueOffsetDays = defaultDueOffsetDays;
     this.accountName = accountName;
     this.payee = payee;
@@ -150,6 +159,10 @@ public class TemplateEntry {
 
   public EntryType getEntryType() {
     return entryType;
+  }
+
+  public EntryPaymentMethod getPaymentMethod() {
+    return paymentMethod;
   }
 
   public String getName() {

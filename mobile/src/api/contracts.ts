@@ -11,6 +11,9 @@ export type EntryStatus = z.infer<typeof entryStatusSchema>;
 export const entryTypeSchema = z.enum(['BILL', 'SPENDING_BUCKET', 'SINKING_FUND']);
 export type EntryType = z.infer<typeof entryTypeSchema>;
 
+export const entryPaymentMethodSchema = z.enum(['AUTOPAY', 'MANUAL']);
+export type EntryPaymentMethod = z.infer<typeof entryPaymentMethodSchema>;
+
 export const searchScopeSchema = z.enum(['ALL', 'ACTIVE', 'HISTORY']);
 export type SearchScope = z.infer<typeof searchScopeSchema>;
 
@@ -22,6 +25,7 @@ export const entrySchema = z.object({
   paycheckId: uuid,
   paybackId: uuid.nullable(),
   entryType: entryTypeSchema,
+  paymentMethod: entryPaymentMethodSchema.nullable(),
   name: z.string(),
   amountMinor: minor.nonnegative(),
   status: entryStatusSchema,
@@ -126,6 +130,7 @@ export type PaybackRepayment = z.infer<typeof paybackRepaymentSchema>;
 export const templateEntrySchema = z.object({
   id: uuid,
   entryType: entryTypeSchema,
+  paymentMethod: entryPaymentMethodSchema.nullable(),
   name: z.string(),
   defaultAmountMinor: minor.nonnegative(),
   position: z.number().int().nonnegative(),
@@ -200,6 +205,7 @@ export const entrySearchResultSchema = z.object({
   entryName: z.string(),
   amountMinor: minor.nonnegative(),
   entryType: entryTypeSchema,
+  paymentMethod: entryPaymentMethodSchema.nullable(),
   status: entryStatusSchema,
   paycheckName: z.string(),
   paycheckIncomeDate: date,

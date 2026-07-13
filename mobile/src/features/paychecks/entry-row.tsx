@@ -77,6 +77,9 @@ export function EntryRow({
             </AppText>
             <AppText style={{ color: colors.muted }} variant="caption">
               {typeLabels[entry.entryType]}
+              {entry.entryType === 'BILL' && entry.paymentMethod
+                ? `  |  ${paymentMethodLabel(entry.paymentMethod)}`
+                : ''}
               {entry.dueDate ? `  |  Due ${formatDate(entry.dueDate)}` : ''}
             </AppText>
           </View>
@@ -169,6 +172,10 @@ function BucketSummary({ entry }: { entry: Entry }) {
       </AppText>
     </View>
   );
+}
+
+function paymentMethodLabel(value: NonNullable<Entry['paymentMethod']>) {
+  return value === 'MANUAL' ? 'Manual Pay' : 'Autopay';
 }
 
 function formatDate(value: string) {

@@ -20,6 +20,7 @@ import com.yuuka.backend.paycheck.api.dto.StatusEventResponse;
 import com.yuuka.backend.paycheck.api.dto.UpdateEntryRequest;
 import com.yuuka.backend.paycheck.api.dto.UpdatePaycheckRequest;
 import com.yuuka.backend.paycheck.domain.AllocationLine;
+import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryStatus;
 import com.yuuka.backend.paycheck.domain.EntryStatusEvent;
 import com.yuuka.backend.paycheck.domain.EntryType;
@@ -220,6 +221,7 @@ public class PaycheckService {
                 "LEFTOVER",
                 metrics.unallocatedMinor(),
                 entries.findMaxLivePosition(paycheckId) + 1,
+                EntryPaymentMethod.AUTOPAY,
                 null,
                 null,
                 null,
@@ -268,6 +270,7 @@ public class PaycheckService {
             request.name().trim(),
             request.amountMinor(),
             entries.findMaxLivePosition(paycheckId) + 1,
+            paymentMethod(request.entryType(), request.paymentMethod()),
             billValue(request.entryType(), request.dueDate()),
             billValue(request.entryType(), normalizeOptional(request.accountName())),
             billValue(request.entryType(), normalizeOptional(request.payee())),
@@ -321,6 +324,7 @@ public class PaycheckService {
         request.entryType(),
         request.name().trim(),
         request.amountMinor(),
+        paymentMethod(request.entryType(), request.paymentMethod()),
         billValue(request.entryType(), request.dueDate()),
         billValue(request.entryType(), normalizeOptional(request.accountName())),
         billValue(request.entryType(), normalizeOptional(request.payee())),
@@ -587,6 +591,16 @@ public class PaycheckService {
 
   private <T> T billValue(EntryType type, T value) {
     return type == EntryType.BILL ? value : null;
+  }
+
+  private EntryPaymentMethod paymentMethod(EntryType type, EntryPaymentMethod requested) {
+    if (type != EntryType.BILL) {
+      if (requested != null) {
+        throw new BusinessRuleException("Only Bills can have a payment method.");
+      }
+      return null;
+    }
+    return requested == null ? EntryPaymentMethod.AUTOPAY : requested;
   }
 
   private <T> T sinkingValue(EntryType type, T value) {

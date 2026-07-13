@@ -3,6 +3,7 @@ import {
   bucketTransactionSchema,
   entrySchema,
   entrySearchResultSchema,
+  entryPaymentMethodSchema,
   entryStatusSchema,
   entryTypeSchema,
   meSchema,
@@ -21,6 +22,7 @@ const entry = {
   createdAt: '2026-07-10T12:00:00Z',
   dueDate: null,
   entryType: 'SPENDING_BUCKET',
+  paymentMethod: null,
   id: '11111111-1111-4111-8111-111111111111',
   name: 'Work Food',
   notes: null,
@@ -44,6 +46,7 @@ const templateEntry = {
   defaultAmountMinor: 5000,
   defaultDueOffsetDays: null,
   entryType: 'SPENDING_BUCKET',
+  paymentMethod: null,
   id: '11111111-1111-4111-8111-111111111112',
   name: 'Work Food',
   notes: null,
@@ -59,6 +62,7 @@ describe('API response contracts', () => {
   it('parses representative domain payloads', () => {
     expect(entryStatusSchema.parse('POSTED')).toBe('POSTED');
     expect(entryTypeSchema.parse('BILL')).toBe('BILL');
+    expect(entryPaymentMethodSchema.parse('MANUAL')).toBe('MANUAL');
     expect(entrySchema.parse(entry)).toMatchObject({ name: 'Work Food' });
     expect(
       paycheckSchema.parse({
@@ -163,6 +167,7 @@ describe('API response contracts', () => {
         entryId: entry.id,
         entryName: 'Work Food',
         entryType: 'SPENDING_BUCKET',
+        paymentMethod: null,
         kind: 'PAYCHECK_ENTRY',
         paycheckContext: 'ACTIVE',
         paycheckId: entry.paycheckId,

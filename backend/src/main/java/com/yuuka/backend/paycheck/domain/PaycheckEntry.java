@@ -35,6 +35,10 @@ public class PaycheckEntry {
   @Column(name = "entry_type", nullable = false, length = 32)
   private EntryType entryType;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "payment_method", length = 20)
+  private EntryPaymentMethod paymentMethod;
+
   @Column(nullable = false, length = 160)
   private String name;
 
@@ -88,6 +92,7 @@ public class PaycheckEntry {
       String name,
       long amountMinor,
       int position,
+      EntryPaymentMethod paymentMethod,
       LocalDate dueDate,
       String accountName,
       String payee,
@@ -99,6 +104,7 @@ public class PaycheckEntry {
     this.paycheckId = paycheckId;
     this.paybackId = paybackId;
     this.entryType = entryType;
+    this.paymentMethod = paymentMethod;
     this.name = name;
     this.amountMinor = amountMinor;
     this.position = position;
@@ -126,6 +132,7 @@ public class PaycheckEntry {
       EntryType entryType,
       String name,
       long amountMinor,
+      EntryPaymentMethod paymentMethod,
       LocalDate dueDate,
       String accountName,
       String payee,
@@ -136,6 +143,7 @@ public class PaycheckEntry {
     this.entryType = entryType;
     this.name = name;
     this.amountMinor = amountMinor;
+    this.paymentMethod = paymentMethod;
     this.dueDate = dueDate;
     this.accountName = accountName;
     this.payee = payee;
@@ -181,6 +189,10 @@ public class PaycheckEntry {
 
   public EntryType getEntryType() {
     return entryType;
+  }
+
+  public EntryPaymentMethod getPaymentMethod() {
+    return paymentMethod;
   }
 
   public String getName() {

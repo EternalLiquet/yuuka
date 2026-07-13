@@ -94,12 +94,14 @@ class CriticalBudgetWorkflowTests extends AbstractIntegrationTest {
                     {
                       "name":"UTILITIES 1/2",
                       "entries":[
-                        {"entryType":"BILL","name":"Electricity","defaultAmountMinor":13050},
+                        {"entryType":"BILL","name":"Electricity","defaultAmountMinor":13050,"paymentMethod":"MANUAL"},
                         {"entryType":"BILL","name":"Other","defaultAmountMinor":180870}
                       ]
                     }
                     """),
             201);
+    assertThat(template.path("entries").get(0).path("paymentMethod").asText()).isEqualTo("MANUAL");
+    assertThat(template.path("entries").get(1).path("paymentMethod").asText()).isEqualTo("AUTOPAY");
     String templateId = template.path("id").asText();
 
     JsonNode paycheck =
@@ -119,6 +121,8 @@ class CriticalBudgetWorkflowTests extends AbstractIntegrationTest {
             201);
     assertThat(paycheck.path("allocatedMinor").asLong()).isEqualTo(193920);
     assertThat(paycheck.path("unallocatedMinor").asLong()).isEqualTo(3);
+    assertThat(paycheck.path("entries").get(0).path("paymentMethod").asText()).isEqualTo("MANUAL");
+    assertThat(paycheck.path("entries").get(1).path("paymentMethod").asText()).isEqualTo("AUTOPAY");
 
     JsonNode copiedElectricity = paycheck.path("entries").get(0);
     json(

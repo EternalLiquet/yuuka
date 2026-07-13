@@ -152,6 +152,7 @@ describe('entry search route', () => {
     await settleDebounce();
 
     expect(await view.findByLabelText('Open Netflix in July Paycheck')).toBeTruthy();
+    expect(view.getByText(/Autopay/)).toBeTruthy();
     await act(async () => {
       fireEvent.changeText(view.getByPlaceholderText('Netflix or $13.99'), '');
     });
@@ -299,6 +300,7 @@ function result(overrides: Partial<EntrySearchResult> = {}): EntrySearchResult {
     entryId: uuid('001'),
     entryName: 'Netflix',
     entryType: 'BILL',
+    paymentMethod: 'AUTOPAY',
     kind: 'PAYCHECK_ENTRY',
     paycheckContext: 'ACTIVE',
     paycheckId: uuid('900'),

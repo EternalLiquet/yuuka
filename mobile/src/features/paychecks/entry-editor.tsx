@@ -5,7 +5,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
-import { Entry, Payback } from '@/api/contracts';
+import { Entry, EntryPaymentMethod, Payback } from '@/api/contracts';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { SegmentedControl } from '@/components/segmented-control';
@@ -43,6 +43,7 @@ export function EntryEditor({
     entryType: EntryFormValues['entryType'];
     name: string;
     notes: string | null;
+    paymentMethod: EntryPaymentMethod | null;
     payee: string | null;
     paybackId: string | null;
     targetDate: string | null;
@@ -62,6 +63,7 @@ export function EntryEditor({
     handleSubmit,
     reset,
     setError,
+    setValue,
   } = useForm<EntryFormValues>({
     resolver: zodResolver(entryFormSchema),
     defaultValues: defaults(entry),
@@ -72,12 +74,20 @@ export function EntryEditor({
     if (visible) reset(defaults(entry));
   }, [entry, reset, visible]);
 
+  useEffect(() => {
+    if (entryType !== 'BILL') {
+      setValue('manualPay', false);
+    }
+  }, [entryType, setValue]);
+
   async function submit(values: EntryFormValues) {
     try {
       await onSubmit({
         entryType: values.entryType,
         name: values.name.trim(),
         amountMinor: parseMoneyToMinor(values.amount),
+        paymentMethod:
+          values.entryType === 'BILL' ? (values.manualPay ? 'MANUAL' : 'AUTOPAY') : null,
         dueDate: values.entryType === 'BILL' && values.dueDate ? values.dueDate : null,
         accountName:
           values.entryType === 'BILL' && values.accountName.trim()
@@ -167,6 +177,36 @@ export function EntryEditor({
               />
               <ControlledField control={control} label="Account (optional)" name="accountName" />
               <ControlledField control={control} label="Payee (optional)" name="payee" />
+              <Controller
+                control={control}
+                name="manualPay"
+                render={({ field }) => (
+                  <Pressable
+                    accessibilityLabel="I need to pay this manually"
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: Boolean(field.value) }}
+                    onPress={() => field.onChange(!field.value)}
+                    style={({ pressed }) => [
+                      styles.checkboxRow,
+                      { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.checkbox,
+                        {
+                          backgroundColor: field.value ? colors.accent : 'transparent',
+                          borderColor: field.value ? colors.accent : colors.border,
+                        },
+                      ]}
+                    >
+                      {field.value ? <Check color={colors.background} size={15} /> : null}
+                    </View>
+                    <AppText variant="label">I need to pay this manually</AppText>
+                  </Pressable>
+                )}
+              />
             </>
           ) : null}
           {entryType === 'SINKING_FUND' ? (
@@ -268,6 +308,7 @@ function defaults(entry?: Entry | null): EntryFormValues {
     name: entry?.name ?? '',
     amount: entry ? minorToInput(entry.amountMinor) : '',
     dueDate: entry?.dueDate ?? '',
+    manualPay: entry?.paymentMethod === 'MANUAL',
     accountName: entry?.accountName ?? '',
     payee: entry?.payee ?? '',
     notes: entry?.notes ?? '',
@@ -444,6 +485,24 @@ function PaybackSelectOption({
 }
 
 const styles = StyleSheet.create({
+  checkbox: {
+    alignItems: 'center',
+    borderRadius: 4,
+    borderWidth: 1,
+    height: 22,
+    justifyContent: 'center',
+    width: 22,
+  },
+  checkboxRow: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    minHeight: 48,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+  },
   close: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   fieldGroup: { gap: 8 },
   form: { gap: 17, padding: 18, paddingBottom: 40 },

@@ -123,6 +123,6 @@ public class DemoDataSeeder implements ApplicationRunner {
 
   private TemplateEntryRequest entry(EntryType type, String name, long amountMinor) {
     return new TemplateEntryRequest(
-        type, name, amountMinor, null, null, null, null, null, null, null);
+        type, name, amountMinor, null, null, null, null, null, null, null, null);
   }
 }

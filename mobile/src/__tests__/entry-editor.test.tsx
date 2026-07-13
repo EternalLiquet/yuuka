@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import type { Entry, Payback } from '@/api/contracts';
 import { EntryEditor } from '@/features/paychecks/entry-editor';
@@ -14,7 +14,49 @@ jest.mock('@/settings/settings-provider', () => ({
   }),
 }));
 
+afterEach(() => {
+  cleanup();
+});
+
 describe('EntryEditor', () => {
+  it('shows an accessible manual-payment checkbox for Bills', async () => {
+    const view = await render(
+      <EntryEditor entry={null} onClose={jest.fn()} onSubmit={jest.fn()} visible />,
+    );
+
+    const checkbox = await view.findByLabelText('I need to pay this manually');
+    expect(checkbox.props.accessibilityRole).toBe('checkbox');
+    expect(checkbox.props.accessibilityState.checked).toBe(false);
+
+    await fireEvent.press(checkbox);
+    expect(
+      view.getByLabelText('I need to pay this manually').props.accessibilityState.checked,
+    ).toBe(true);
+  });
+
+  it('hides and clears manual payment when changing away from Bill', async () => {
+    const onSubmit = jest.fn().mockResolvedValue(undefined);
+    const view = await render(
+      <EntryEditor
+        entry={entry({ paymentMethod: 'MANUAL' })}
+        onClose={jest.fn()}
+        onSubmit={onSubmit}
+        visible
+      />,
+    );
+
+    expect(
+      (await view.findByLabelText('I need to pay this manually')).props.accessibilityState.checked,
+    ).toBe(true);
+    await fireEvent.press(view.getByTestId('segmented-Entry type-SPENDING_BUCKET'));
+
+    expect(view.queryByLabelText('I need to pay this manually')).toBeNull();
+    await fireEvent.press(view.getByTestId('segmented-Entry type-BILL'));
+    expect(
+      (await view.findByLabelText('I need to pay this manually')).props.accessibilityState.checked,
+    ).toBe(false);
+  });
+
   it('opens Payback choices in a compact selector instead of rendering every option inline', async () => {
     const view = await render(
       <EntryEditor
@@ -150,6 +192,7 @@ function entry(overrides: Partial<Entry> = {}): Entry {
     createdAt: '2026-07-12T12:00:00Z',
     dueDate: null,
     entryType: 'BILL',
+    paymentMethod: 'AUTOPAY',
     id: '11111111-1111-4111-8111-111111111201',
     name: 'Repayment',
     notes: null,

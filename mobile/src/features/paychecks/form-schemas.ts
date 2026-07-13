@@ -29,6 +29,7 @@ export const entryFormSchema = z
     name: z.string().trim().min(1, 'Enter an entry name.').max(160),
     amount: money,
     dueDate: z.string(),
+    manualPay: z.boolean(),
     accountName: z.string().max(160),
     payee: z.string().max(160),
     notes: z.string().max(2000),

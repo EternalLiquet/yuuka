@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
-import type { Entry, EntryStatus, EntryType, Paycheck } from '@/api/contracts';
+import type { Entry, EntryPaymentMethod, EntryStatus, EntryType, Paycheck } from '@/api/contracts';
 import { displayError } from '@/api/display-error';
 import { EntryPayload, useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
@@ -45,6 +45,11 @@ const typeOptions = [
   { label: 'Buckets', value: 'SPENDING_BUCKET' },
   { label: 'Funds', value: 'SINKING_FUND' },
 ] as const;
+const paymentMethodOptions = [
+  { label: 'All payment methods', value: 'ALL' },
+  { label: 'Manual Pay', value: 'MANUAL' },
+  { label: 'Autopay', value: 'AUTOPAY' },
+] as const;
 const sortOptions = [
   { label: 'Custom', value: 'custom' },
   { label: 'Amount', value: 'amount' },
@@ -76,6 +81,7 @@ export default function PaycheckDetailScreen() {
   const { settings } = useSettings();
   const [statusFilter, setStatusFilter] = useState<'ALL' | EntryStatus>('ALL');
   const [typeFilter, setTypeFilter] = useState<'ALL' | EntryType>('ALL');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<'ALL' | EntryPaymentMethod>('ALL');
   const [sort, setSort] = useState<EntrySort>('custom');
   const [direction, setDirection] = useState<'asc' | 'desc'>('asc');
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
@@ -195,10 +201,11 @@ export default function PaycheckDetailScreen() {
       filterAndSortEntries(query.data?.entries ?? [], {
         sort,
         direction,
+        paymentMethod: paymentMethodFilter === 'ALL' ? undefined : paymentMethodFilter,
         status: statusFilter === 'ALL' ? undefined : statusFilter,
         type: typeFilter === 'ALL' ? undefined : typeFilter,
       }),
-    [direction, query.data?.entries, sort, statusFilter, typeFilter],
+    [direction, paymentMethodFilter, query.data?.entries, sort, statusFilter, typeFilter],
   );
   const selectedBucketEntry = useMemo(
     () => query.data?.entries.find((entry) => entry.id === bucketEntryId) ?? null,
@@ -373,6 +380,8 @@ export default function PaycheckDetailScreen() {
               setStatusFilter={setStatusFilter}
               typeFilter={typeFilter}
               setTypeFilter={setTypeFilter}
+              paymentMethodFilter={paymentMethodFilter}
+              setPaymentMethodFilter={setPaymentMethodFilter}
               sort={sort}
               setSort={setSort}
               direction={direction}
@@ -490,9 +499,11 @@ function DetailHeader({
   onAdd,
   onAllocateLeftover,
   onEdit,
+  paymentMethodFilter,
   paycheck,
   refreshing,
   setDirection,
+  setPaymentMethodFilter,
   setSort,
   setStatusFilter,
   setTypeFilter,
@@ -508,9 +519,11 @@ function DetailHeader({
   onAdd: () => void;
   onAllocateLeftover: () => void;
   onEdit: () => void;
+  paymentMethodFilter: 'ALL' | EntryPaymentMethod;
   paycheck: Paycheck;
   refreshing: boolean;
   setDirection: (value: 'asc' | 'desc') => void;
+  setPaymentMethodFilter: (value: 'ALL' | EntryPaymentMethod) => void;
   setSort: (value: EntrySort) => void;
   setStatusFilter: (value: 'ALL' | EntryStatus) => void;
   setTypeFilter: (value: 'ALL' | EntryType) => void;
@@ -528,7 +541,11 @@ function DetailHeader({
     paycheck.processingCount === 0 &&
     paycheck.notPaidCount === 0 &&
     paycheck.postedMinor === paycheck.allocatedMinor;
-  const nonDefault = statusFilter !== 'ALL' || typeFilter !== 'ALL' || sort !== 'custom';
+  const nonDefault =
+    statusFilter !== 'ALL' ||
+    typeFilter !== 'ALL' ||
+    paymentMethodFilter !== 'ALL' ||
+    sort !== 'custom';
   return (
     <View style={styles.header}>
       <YuukaRefreshIndicator visible={refreshing} />
@@ -641,6 +658,12 @@ function DetailHeader({
           onChange={setTypeFilter}
           options={typeOptions}
           value={typeFilter}
+        />
+        <SegmentedControl
+          label="Payment method filter"
+          onChange={setPaymentMethodFilter}
+          options={paymentMethodOptions}
+          value={paymentMethodFilter}
         />
         <SegmentedControl
           label="Entry sort"

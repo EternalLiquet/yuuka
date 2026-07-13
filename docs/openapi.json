@@ -1709,6 +1709,10 @@
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
           "name" : {
             "type" : "string",
             "maxLength" : 160,
@@ -1762,6 +1766,10 @@
           "entryType" : {
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
           },
           "name" : {
             "type" : "string"
@@ -1942,6 +1950,10 @@
           "entryType" : {
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
           },
           "name" : {
             "type" : "string"
@@ -2126,6 +2138,10 @@
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
           "name" : {
             "type" : "string",
             "maxLength" : 160,
@@ -2232,6 +2248,10 @@
           "entryType" : {
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
           },
           "name" : {
             "type" : "string",
@@ -2689,6 +2709,10 @@
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
           "name" : {
             "type" : "string",
             "maxLength" : 160,
@@ -3143,6 +3167,10 @@
           "entryType" : {
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
           },
           "status" : {
             "type" : "string",

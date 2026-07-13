@@ -1,5 +1,6 @@
 package com.yuuka.backend.search.api.dto;
 
+import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryStatus;
 import com.yuuka.backend.paycheck.domain.EntryType;
 import com.yuuka.backend.search.domain.PaycheckContext;
@@ -14,6 +15,7 @@ public record EntrySearchResultResponse(
     String entryName,
     long amountMinor,
     EntryType entryType,
+    EntryPaymentMethod paymentMethod,
     EntryStatus status,
     String paycheckName,
     LocalDate paycheckIncomeDate,
