@@ -4,3 +4,4 @@ dist/
 node_modules/
 android/
 ios/
+settings.json

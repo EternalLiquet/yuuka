@@ -5,6 +5,7 @@ import { Save } from 'lucide-react-native';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
+import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
@@ -12,6 +13,7 @@ import { ScrollScreen } from '@/components/scroll-screen';
 import { TextField } from '@/components/text-field';
 import { parseMoneyToMinor } from '@/domain/money';
 import { PaycheckFormValues, paycheckFormSchema, today } from '@/features/paychecks/form-schemas';
+import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 export default function NewPaycheckScreen() {
@@ -19,6 +21,7 @@ export default function NewPaycheckScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
+  const { settings } = useSettings();
   const {
     control,
     formState: { errors, isSubmitting },
@@ -49,7 +52,7 @@ export default function NewPaycheckScreen() {
       await mutation.mutateAsync(values);
     } catch (error) {
       setError('root', {
-        message: error instanceof Error ? error.message : 'The paycheck was not created.',
+        message: displayError(error, settings.currencyCode, 'The paycheck was not created.'),
       });
     }
   }

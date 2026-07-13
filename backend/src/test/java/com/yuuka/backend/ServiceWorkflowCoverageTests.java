@@ -361,7 +361,7 @@ class ServiceWorkflowCoverageTests extends AbstractIntegrationTest {
                     """
                     {"amountMinor":0,"effectiveDate":"2026-07-18"}
                     """))
-        .andExpect(status().isUnprocessableEntity());
+        .andExpect(status().isBadRequest());
     mockMvc
         .perform(
             get("/api/v1/entries/{id}/bucket-transactions", bucket.path("id").asText())

@@ -28,6 +28,9 @@ public class PaycheckEntry {
   @Column(name = "paycheck_id", nullable = false)
   private UUID paycheckId;
 
+  @Column(name = "payback_id")
+  private UUID paybackId;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "entry_type", nullable = false, length = 32)
   private EntryType entryType;
@@ -90,9 +93,11 @@ public class PaycheckEntry {
       String payee,
       String notes,
       Long targetMinor,
-      LocalDate targetDate) {
+      LocalDate targetDate,
+      UUID paybackId) {
     this.ownerId = ownerId;
     this.paycheckId = paycheckId;
+    this.paybackId = paybackId;
     this.entryType = entryType;
     this.name = name;
     this.amountMinor = amountMinor;
@@ -126,7 +131,8 @@ public class PaycheckEntry {
       String payee,
       String notes,
       Long targetMinor,
-      LocalDate targetDate) {
+      LocalDate targetDate,
+      UUID paybackId) {
     this.entryType = entryType;
     this.name = name;
     this.amountMinor = amountMinor;
@@ -136,6 +142,11 @@ public class PaycheckEntry {
     this.notes = notes;
     this.targetMinor = targetMinor;
     this.targetDate = targetDate;
+    this.paybackId = paybackId;
+  }
+
+  public void assignPayback(UUID paybackId) {
+    this.paybackId = paybackId;
   }
 
   public EntryStatus transitionTo(EntryStatus nextStatus) {
@@ -162,6 +173,10 @@ public class PaycheckEntry {
 
   public UUID getPaycheckId() {
     return paycheckId;
+  }
+
+  public UUID getPaybackId() {
+    return paybackId;
   }
 
   public EntryType getEntryType() {

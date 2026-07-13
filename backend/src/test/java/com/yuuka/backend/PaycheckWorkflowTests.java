@@ -1,5 +1,6 @@
 package com.yuuka.backend;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -117,6 +118,68 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void fullyPostedPaycheckLeavesActiveAndAppearsInHistory() throws Exception {
+    String token = registerAndGetAccessToken("completed-active@yuuka.local");
+
+    MvcResult created =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"name":"Complete","amountMinor":15000,"incomeDate":"2026-07-17"}
+                        """))
+            .andExpect(status().isCreated())
+            .andReturn();
+    JsonNode paycheck = objectMapper.readTree(created.getResponse().getContentAsString());
+    String paycheckId = paycheck.path("id").asText();
+
+    MvcResult entryResult =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks/{id}/entries", paycheckId)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"entryType":"BILL","name":"Verizon","amountMinor":15000}
+                        """))
+            .andExpect(status().isCreated())
+            .andReturn();
+    JsonNode entry = objectMapper.readTree(entryResult.getResponse().getContentAsString());
+
+    mockMvc
+        .perform(
+            post("/api/v1/entries/{id}/status", entry.path("id").asText())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"toStatus":"POSTED","effectiveAt":"2026-07-17T12:00:00Z","version":%d}
+                    """
+                        .formatted(entry.path("version").asLong())))
+        .andExpect(status().isOk());
+
+    mockMvc
+        .perform(get("/api/v1/paychecks/active").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalItems").value(0));
+
+    mockMvc
+        .perform(get("/api/v1/paychecks/history").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].id").value(paycheckId));
+  }
+
+  @Test
+  void overAllocationErrorsUseStructuredMoneyDetailsWithoutInternalTerminology() throws Exception {
+    assertOverAllocationError("over-98@yuuka.local", 100, 198, 98);
+    assertOverAllocationError("over-150@yuuka.local", 100, 250, 150);
+  }
+
+  @Test
   void rejectsMissingMoneyAmountsInsteadOfDefaultingToZero() throws Exception {
     String token = registerAndGetAccessToken("amount-required@yuuka.local");
 
@@ -183,6 +246,49 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/paychecks/{id}", id).header("Authorization", "Bearer " + otherToken))
         .andExpect(status().isNotFound());
+  }
+
+  private void assertOverAllocationError(
+      String email, long paycheckAmountMinor, long entryAmountMinor, long expectedOverageMinor)
+      throws Exception {
+    String token = registerAndGetAccessToken(email);
+    MvcResult created =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"name":"Over allocation","amountMinor":%d,"incomeDate":"2026-07-17"}
+                        """
+                            .formatted(paycheckAmountMinor)))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String paycheckId =
+        objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asText();
+
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks/{id}/entries", paycheckId)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"entryType":"BILL","name":"Too much","amountMinor":%d}
+                        """
+                            .formatted(entryAmountMinor)))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("PAYCHECK_OVER_ALLOCATED"))
+            .andExpect(jsonPath("$.message").value("This would over-allocate the paycheck."))
+            .andExpect(jsonPath("$.details.amountMinor").value(expectedOverageMinor))
+            .andExpect(jsonPath("$.details.currencyCode").value("USD"))
+            .andReturn();
+
+    String body = result.getResponse().getContentAsString();
+    assertThat(body).doesNotContain("minor unit");
+    assertThat(body).doesNotContain("amountMinor must");
   }
 
   private String registerAndGetAccessToken(String email) throws Exception {

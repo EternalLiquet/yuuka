@@ -4,6 +4,7 @@ import com.yuuka.backend.audit.api.dto.AuditEventResponse;
 import com.yuuka.backend.audit.application.AuditService;
 import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.security.AuthenticatedOwner;
+import com.yuuka.backend.paycheck.api.dto.AllocateLeftoverRequest;
 import com.yuuka.backend.paycheck.api.dto.CreateEntryRequest;
 import com.yuuka.backend.paycheck.api.dto.CreatePaycheckRequest;
 import com.yuuka.backend.paycheck.api.dto.EntryResponse;
@@ -114,6 +115,16 @@ public class PaycheckController {
   public PaycheckResponse archive(
       @AuthenticationPrincipal Jwt jwt, @PathVariable UUID paycheckId, @RequestParam long version) {
     return paycheckService.archive(AuthenticatedOwner.id(jwt), paycheckId, version);
+  }
+
+  @PostMapping("/paychecks/{paycheckId}/leftover-entry")
+  @ResponseStatus(HttpStatus.CREATED)
+  public EntryResponse allocateLeftover(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID paycheckId,
+      @Valid @RequestBody AllocateLeftoverRequest request) {
+    return paycheckService.allocateLeftover(
+        AuthenticatedOwner.id(jwt), paycheckId, request.paycheckVersion());
   }
 
   @PostMapping("/paychecks/{paycheckId}/entries")

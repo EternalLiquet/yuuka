@@ -17,7 +17,25 @@ Example error:
   "code": "VALIDATION_ERROR",
   "message": "The request could not be completed.",
   "fieldErrors": {
-    "amountMinor": "Must be greater than or equal to zero."
+    "amountMinor": "Amount must be greater than or equal to $0.00."
+  },
+  "details": {},
+  "traceId": "..."
+}
+```
+
+Business-rule errors that involve money should keep the API's integer money fields in
+`details` and use user-readable messages. Mobile formats those details as currency before
+display. Example:
+
+```json
+{
+  "code": "PAYCHECK_OVER_ALLOCATED",
+  "message": "This would over-allocate the paycheck.",
+  "fieldErrors": {},
+  "details": {
+    "amountMinor": 98,
+    "currencyCode": "USD"
   },
   "traceId": "..."
 }
@@ -47,6 +65,8 @@ Example error:
 ### Entries
 
 - `POST /paychecks/{paycheckId}/entries`
+- `paybackId` may be supplied on entry create/update to assign that entry to an Active Payback.
+- `POST /paychecks/{paycheckId}/leftover-entry` creates a normal `BILL` named `LEFTOVER` for the exact current unallocated amount when the supplied paycheck version is current.
 - `PATCH /entries/{id}`
 - `DELETE /entries/{id}`
 - `POST /entries/{id}/status`
@@ -66,9 +86,23 @@ Status-change request:
 ### Bucket transactions
 
 - `GET /entries/{entryId}/bucket-transactions`
-- `POST /entries/{entryId}/bucket-transactions`
-- `PATCH /bucket-transactions/{id}`
+- `POST /entries/{entryId}/bucket-transactions` with positive `amountMinor`, `effectiveDate`, optional `description`, and optional `notes`.
+- `PATCH /bucket-transactions/{id}` with positive `amountMinor`, `effectiveDate`, optional `description`, optional `notes`, and `version`.
 - `DELETE /bucket-transactions/{id}`
+
+### Paybacks
+
+- `GET /paybacks` returns active and paid-off Paybacks plus a summary total.
+- `POST /paybacks`
+- `GET /paybacks/{id}`
+- `PATCH /paybacks/{id}`
+- `POST /paybacks/reorder` persists the owner-defined Payback order used by the Paybacks screen and selectors.
+- `DELETE /paybacks/{id}` soft-deletes the Payback, reverses any active repayments, and clears live entry assignments in one transaction.
+- `GET /paybacks/{id}/repayments` returns active and reversed repayment history.
+
+Payback business-rule errors use structured money details for mobile formatting. For example,
+overpayment uses `PAYBACK_REPAYMENT_OVERPAID` with `details.amountMinor` and `details.currencyCode`
+instead of embedding raw storage values in the message.
 
 ### Templates
 
@@ -89,8 +123,30 @@ Status-change request:
 
 ### Health
 
-- `GET /health`
-- `GET /health/ready`
+- `GET /health` returns liveness and the packaged backend version.
+- `GET /health/live` returns the same liveness contract explicitly for deployment checks.
+- `GET /health/ready` checks dependency readiness, including PostgreSQL.
+
+Liveness response:
+
+```json
+{
+  "status": "UP",
+  "version": "1.0.2"
+}
+```
+
+Readiness response:
+
+```json
+{
+  "status": "UP"
+}
+```
+
+Health endpoints are unauthenticated so Docker, local deployment scripts, and tailnet-only
+monitoring can check the process without API credentials. They must not expose environment
+variables, secrets, database URLs, hostnames, stack traces, or authentication configuration.
 
 ## Security requirements
 
