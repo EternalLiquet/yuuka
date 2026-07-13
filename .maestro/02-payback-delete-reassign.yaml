@@ -52,6 +52,10 @@ name: Payback delete unassigns entry
 - hideKeyboard
 - tapOn: "Apply to Payback, selected No Payback"
 - tapOn: "E2E Delete Source"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save entry"
+    direction: DOWN
 - tapOn: "Save entry"
 - extendedWaitUntil:
     visible: "Repay Payback"
@@ -71,6 +75,10 @@ name: Payback delete unassigns entry
 - assertVisible: "No Payback"
 - tapOn: "Apply to Payback, selected No Payback"
 - tapOn: "E2E Delete Target"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save entry"
+    direction: DOWN
 - tapOn: "Save entry"
 - extendedWaitUntil:
     visible: "Repay Payback"

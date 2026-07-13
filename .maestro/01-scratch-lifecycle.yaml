@@ -19,6 +19,10 @@ name: Scratch paycheck lifecycle
 - tapOn: "Amount"
 - inputText: "50.00"
 - hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save entry"
+    direction: DOWN
 - tapOn: "Save entry"
 - extendedWaitUntil:
     visible: "Phone"
@@ -31,6 +35,10 @@ name: Scratch paycheck lifecycle
 - tapOn: "Budget amount"
 - inputText: "150.00"
 - hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save entry"
+    direction: DOWN
 - tapOn: "Save entry"
 - extendedWaitUntil:
     visible: "Food"
