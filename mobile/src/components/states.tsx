@@ -5,6 +5,7 @@ import { useAppTheme } from '@/theme/use-app-theme';
 
 import { AppText } from './app-text';
 import { Button } from './button';
+import { YuukaMascot } from './yuuka-mascot';
 
 export function EmptyState({ message, title }: { message: string; title: string }) {
   const { colors } = useAppTheme();
@@ -29,6 +30,32 @@ export function ErrorState({ message, retry }: { message: string; retry: () => v
         {message}
       </AppText>
       <Button icon={RefreshCw} label="Retry" onPress={retry} variant="secondary" />
+    </View>
+  );
+}
+
+export function YuukaLoadingState({
+  message = 'Loading...',
+  minHeight = 220,
+  size = 74,
+}: {
+  message?: string;
+  minHeight?: number;
+  size?: number;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <View
+      accessibilityLabel={message}
+      accessibilityLiveRegion="polite"
+      accessibilityRole="progressbar"
+      accessibilityState={{ busy: true }}
+      style={[styles.state, { minHeight }]}
+    >
+      <YuukaMascot size={size} testID="yuuka-loading-mascot" />
+      <AppText style={{ color: colors.muted, textAlign: 'center' }} variant="caption">
+        {message}
+      </AppText>
     </View>
   );
 }

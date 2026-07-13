@@ -197,7 +197,23 @@ At minimum:
 - timezone,
 - currency display,
 - sign out,
-- app version.
+- backend release version from `/health/version`.
+
+The Settings footer displays the packaged backend version because that is the deployed homelab
+release source of truth. Normal semantic versions receive one `v` prefix for display, already
+prefixed versions are preserved, and `0.0.0-dev` is shown without a forced prefix. Readiness remains
+driven by `/health/ready`; version loading and failures do not replace the connection status.
+
+## Loading states
+
+Prominent initial loads may use the reusable Yuuka mascot loader. The current mascot asset lives at
+`mobile/assets/yuuka/yuuka-sprite-sheet.png`, and the implemented animation uses the extracted
+running frames in `mobile/assets/yuuka/running/`. Use it sparingly for full initial screen loads,
+not mutation buttons, pull-to-refresh, retry controls, stale-data banners, or cached background
+refetches.
+
+The mascot image is decorative. Loading text remains visible and accessible, and reduced-motion
+settings render a static representative frame instead of cycling frames.
 
 ## UX quality rules
 

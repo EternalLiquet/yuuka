@@ -32,7 +32,8 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/paybacks/{paybackId}",
           "/api/v1/paybacks/{paybackId}/repayments",
           "/api/v1/templates",
-          "/health/live");
+          "/health/live",
+          "/health/version");
 
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
@@ -50,6 +51,28 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     JsonNode generated = objectMapper.readTree(content);
     assertThat(generated.path("openapi").asText()).startsWith("3.");
     assertThat(generated.path("paths").fieldNames()).toIterable().containsAll(REQUIRED_PATHS);
+    JsonNode versionOperation = generated.path("paths").path("/health/version").path("get");
+    JsonNode versionSchema =
+        versionOperation
+            .path("responses")
+            .path("200")
+            .path("content")
+            .path("application/json")
+            .path("schema");
+    assertThat(versionSchema.path("$ref").asText())
+        .isEqualTo("#/components/schemas/VersionResponse");
+    assertThat(versionOperation.path("security").isArray()).isTrue();
+    assertThat(versionOperation.path("security").size()).isZero();
+    JsonNode versionResponse = generated.path("components").path("schemas").path("VersionResponse");
+    assertThat(versionResponse.path("required").size()).isEqualTo(1);
+    assertThat(versionResponse.path("required").get(0).asText()).isEqualTo("version");
+    assertThat(versionResponse.path("properties").fieldNames())
+        .toIterable()
+        .containsExactly("version");
+    assertThat(versionResponse.path("properties").path("version").path("type").asText())
+        .isEqualTo("string");
+    assertThat(versionResponse.path("properties").path("version").path("minLength").asInt())
+        .isEqualTo(1);
 
     Path generatedPath = Path.of("build", "generated", "openapi.json");
     Files.createDirectories(generatedPath.getParent());

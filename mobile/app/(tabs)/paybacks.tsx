@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ArrowDown, ArrowUp, Plus } from 'lucide-react-native';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
 import { Payback } from '@/api/contracts';
@@ -10,7 +10,7 @@ import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { IconButton } from '@/components/icon-button';
 import { Screen } from '@/components/screen';
-import { EmptyState, ErrorState, StaleBanner } from '@/components/states';
+import { EmptyState, ErrorState, StaleBanner, YuukaLoadingState } from '@/components/states';
 import { formatMoney } from '@/domain/money';
 import { PaybackCard } from '@/features/paybacks/payback-card';
 import { useSettings } from '@/settings/settings-provider';
@@ -63,7 +63,7 @@ export default function PaybacksScreen() {
         keyExtractor={(item) => (item.kind === 'section' ? item.id : item.payback.id)}
         ListEmptyComponent={
           query.isPending ? (
-            <ActivityIndicator color={colors.accent} size="large" style={styles.loader} />
+            <YuukaLoadingState message="Loading Paybacks..." />
           ) : query.isError && !query.data ? (
             <ErrorState
               message={displayError(
@@ -206,7 +206,6 @@ function Metric({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   content: { flexGrow: 1, gap: 12, padding: 16, paddingBottom: 28 },
   header: { gap: 13, marginBottom: 3 },
-  loader: { marginTop: 80 },
   metric: { flex: 1, gap: 3 },
   metrics: { flexDirection: 'row', gap: 12 },
   paybackCard: { flex: 1 },

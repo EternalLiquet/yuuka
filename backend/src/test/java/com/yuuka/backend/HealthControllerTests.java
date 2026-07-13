@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuuka.backend.common.api.ApplicationVersion;
 import com.yuuka.backend.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,7 @@ import org.springframework.test.web.servlet.MvcResult;
 class HealthControllerTests extends AbstractIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private ApplicationVersion applicationVersion;
 
   @Test
   void livenessReportsStatusAndVersionWithoutAuthentication() throws Exception {
@@ -30,7 +32,7 @@ class HealthControllerTests extends AbstractIntegrationTest {
             .andReturn();
 
     JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
-    assertThat(response.path("version").asText()).isEqualTo("0.0.0-dev");
+    assertThat(response.path("version").asText()).isEqualTo(applicationVersion.version());
   }
 
   @Test
@@ -39,7 +41,7 @@ class HealthControllerTests extends AbstractIntegrationTest {
         .perform(get("/health"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("UP"))
-        .andExpect(jsonPath("$.version").value("0.0.0-dev"));
+        .andExpect(jsonPath("$.version").value(applicationVersion.version()));
   }
 
   @Test
@@ -64,6 +66,33 @@ class HealthControllerTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void versionReportsOnlyApplicationVersionWithoutAuthentication() throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(get("/health/version"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.version").value(applicationVersion.version()))
+            .andReturn();
+
+    assertThat(result.getResponse().getContentType()).contains("application/json");
+    JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
+    assertThat(response.fieldNames()).toIterable().containsExactly("version");
+    assertThat(response.fieldNames())
+        .toIterable()
+        .doesNotContain(
+            "status",
+            "environment",
+            "commit",
+            "branch",
+            "host",
+            "hostname",
+            "database",
+            "datasource",
+            "path",
+            "dependencies");
+  }
+
+  @Test
   void readinessStillChecksDependenciesAndDoesNotExposeVersion() throws Exception {
     MvcResult result =
         mockMvc
@@ -78,7 +107,11 @@ class HealthControllerTests extends AbstractIntegrationTest {
 
   @Test
   void healthEndpointsArePublicButPrivateApiStillRequiresAuthentication() throws Exception {
+    mockMvc.perform(get("/health")).andExpect(status().isOk());
     mockMvc.perform(get("/health/live")).andExpect(status().isOk());
+    mockMvc.perform(get("/health/ready")).andExpect(status().isOk());
+    mockMvc.perform(get("/health/version")).andExpect(status().isOk());
     mockMvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
+    mockMvc.perform(get("/api/v1/paychecks/active")).andExpect(status().isUnauthorized());
   }
 }

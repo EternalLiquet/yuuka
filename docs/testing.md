@@ -34,7 +34,10 @@ npx expo export --platform android --output-dir dist/android
 
 Jest enforces 85% line/function/statement and 80% branch coverage for money, API contracts/parsing, session expiry, settings storage, validation, and list behavior. Expo Router page wiring is validated through React Native Testing Library and Maestro rather than counted as isolated unit logic. The resulting targeted threshold exceeds the required 85/80 core-logic and 75 overall minima for the code under the unit coverage gate.
 
-The mobile OpenAPI test reads `docs/openapi.json`; the backend test regenerates that document from Springdoc and requires byte-for-byte structural equality.
+The mobile OpenAPI test reads `docs/openapi.json`; the backend test regenerates that document from
+Springdoc and requires byte-for-byte structural equality. The version contract must keep
+`/health/version` outside `/api/v1`, unauthenticated, JSON-only, and limited to a required nonblank
+`version` string.
 
 ## Android end to end
 
@@ -96,7 +99,7 @@ short commit-derived changelog.
 The version source of truth is:
 
 ```text
-Git tag -> CI release version -> Spring Boot build info -> packaged jar/Docker image -> /health/live
+Git tag -> CI release version -> Spring Boot build info -> packaged jar/Docker image -> /health/version
 ```
 
 Gradle resolves versions from `-PyuukaVersion`, then `YUUKA_BUILD_VERSION`, then an exact

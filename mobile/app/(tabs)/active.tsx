@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Plus } from 'lucide-react-native';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
-import { EmptyState, ErrorState, StaleBanner } from '@/components/states';
+import { EmptyState, ErrorState, StaleBanner, YuukaLoadingState } from '@/components/states';
 import { PaycheckCard } from '@/features/paychecks/paycheck-card';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
@@ -31,7 +31,7 @@ export default function ActiveScreen() {
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
           query.isPending ? (
-            <ActivityIndicator color={colors.accent} size="large" style={styles.loader} />
+            <YuukaLoadingState message="Loading paychecks..." />
           ) : query.isError && !query.data ? (
             <ErrorState
               message={displayError(
@@ -85,7 +85,6 @@ export default function ActiveScreen() {
 const styles = StyleSheet.create({
   content: { flexGrow: 1, gap: 12, padding: 16, paddingBottom: 28 },
   header: { gap: 13, marginBottom: 3 },
-  loader: { marginTop: 80 },
   titleBlock: { gap: 3 },
   titleRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
 });

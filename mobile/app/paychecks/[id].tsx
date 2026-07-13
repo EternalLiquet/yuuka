@@ -3,7 +3,7 @@ import type { UseMutationResult } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Archive, CheckCircle2, Pencil, Plus, RotateCcw } from 'lucide-react-native';
 import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-native';
+import { RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import type { Entry, EntryStatus, EntryType, Paycheck } from '@/api/contracts';
@@ -14,7 +14,7 @@ import { Button } from '@/components/button';
 import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
-import { EmptyState, ErrorState, StaleBanner } from '@/components/states';
+import { EmptyState, ErrorState, StaleBanner, YuukaLoadingState } from '@/components/states';
 import { formatMoney } from '@/domain/money';
 import { BucketTransactionSheet } from '@/features/paychecks/bucket-transaction-sheet';
 import { EntryEditor } from '@/features/paychecks/entry-editor';
@@ -185,7 +185,7 @@ export default function PaycheckDetailScreen() {
   if (query.isPending && !query.data) {
     return (
       <Screen contentContainerStyle={styles.center}>
-        <ActivityIndicator color={colors.accent} size="large" />
+        <YuukaLoadingState message="Loading paycheck..." />
       </Screen>
     );
   }

@@ -1,5 +1,6 @@
 package com.yuuka.backend.common.api;
 
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,6 +23,11 @@ public class HealthController {
   @GetMapping("/health/live")
   public SystemStatusResponse live() {
     return new SystemStatusResponse("UP", applicationVersion.version());
+  }
+
+  @GetMapping(value = "/health/version", produces = MediaType.APPLICATION_JSON_VALUE)
+  public VersionResponse version() {
+    return new VersionResponse(applicationVersion.version());
   }
 
   @GetMapping("/health/ready")

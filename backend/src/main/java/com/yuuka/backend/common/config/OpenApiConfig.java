@@ -5,6 +5,8 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import java.util.List;
+import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -28,5 +30,22 @@ public class OpenApiConfig {
                         .scheme("bearer")
                         .bearerFormat("JWT")))
         .addSecurityItem(new SecurityRequirement().addList(scheme));
+  }
+
+  @Bean
+  public OpenApiCustomizer publicHealthOperations() {
+    List<String> publicPaths =
+        List.of("/health", "/health/live", "/health/ready", "/health/version");
+    return openApi ->
+        publicPaths.forEach(
+            path -> {
+              if (openApi.getPaths().containsKey(path)) {
+                openApi
+                    .getPaths()
+                    .get(path)
+                    .readOperations()
+                    .forEach(operation -> operation.setSecurity(List.of()));
+              }
+            });
   }
 }

@@ -2,14 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
-import { EmptyState, ErrorState, StaleBanner } from '@/components/states';
+import { EmptyState, ErrorState, StaleBanner, YuukaLoadingState } from '@/components/states';
 import { TextField } from '@/components/text-field';
 import { PaycheckCard } from '@/features/paychecks/paycheck-card';
 import { useSettings } from '@/settings/settings-provider';
@@ -50,7 +50,7 @@ export default function HistoryScreen() {
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
           query.isPending ? (
-            <ActivityIndicator color={colors.accent} size="large" style={styles.loader} />
+            <YuukaLoadingState message="Loading history..." />
           ) : query.isError && !query.data ? (
             <ErrorState
               message={displayError(
@@ -132,7 +132,6 @@ const styles = StyleSheet.create({
   dateField: { flex: 1 },
   dateRow: { flexDirection: 'row', gap: 10 },
   header: { gap: 14, marginBottom: 3 },
-  loader: { marginTop: 80 },
   searchBlock: { position: 'relative' },
   searchField: { flex: 1 },
   searchIcon: { position: 'absolute', right: 13, top: 39, zIndex: 2 },

@@ -50,14 +50,15 @@ be shown separately, but each section preserves the persisted order.
 
 Yuuka release tags are the version source of truth. CI converts a successful `master` release tag
 into a Gradle build property, Spring Boot writes that value to build metadata, and the packaged
-backend reports it through `/health/live` and `/health`. Local tagged builds derive the exact
-checked-out tag in Gradle, stripping a leading `v`, so homelab rebuilds from release tags report
-the release version. Untagged local builds fall back to `0.0.0-dev`.
+backend reports it through `/health/version`, `/health/live`, and `/health`. Local tagged builds
+derive the exact checked-out tag in Gradle, stripping a leading `v`, so homelab rebuilds from
+release tags report the release version. Untagged local builds fall back to `0.0.0-dev`.
 
-Liveness only reports process status and safe build version metadata. Readiness remains separate at
-`/health/ready` and may check required dependencies such as PostgreSQL. Docker health checks
-continue to use readiness, while deployment verification should check both readiness and
-liveness/version.
+`/health/version` returns only `{ "version": "..." }`, is publicly readable with the rest of the
+health suite, and does not query PostgreSQL. Liveness only reports process status and safe build
+version metadata. Readiness remains separate at `/health/ready` and may check required dependencies
+such as PostgreSQL. Docker health checks continue to use readiness, while deployment verification
+should check both readiness and liveness/version.
 
 ## Android E2E cadence
 

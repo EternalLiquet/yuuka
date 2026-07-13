@@ -187,6 +187,13 @@ export const auditEventSchema = z.object({
 });
 export type AuditEvent = z.infer<typeof auditEventSchema>;
 
+export const versionResponseSchema = z
+  .object({
+    version: z.string().trim().min(1),
+  })
+  .strict();
+export type VersionResponse = z.infer<typeof versionResponseSchema>;
+
 export const meSchema = z.object({
   id: uuid,
   email: z.string().email(),

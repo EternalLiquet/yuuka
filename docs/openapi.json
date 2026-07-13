@@ -1252,7 +1252,27 @@
               }
             }
           }
-        }
+        },
+        "security" : [ ]
+      }
+    },
+    "/health/version" : {
+      "get" : {
+        "tags" : [ "health-controller" ],
+        "operationId" : "version",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VersionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ ]
       }
     },
     "/health/ready" : {
@@ -1270,7 +1290,8 @@
               }
             }
           }
-        }
+        },
+        "security" : [ ]
       }
     },
     "/health/live" : {
@@ -1288,7 +1309,8 @@
               }
             }
           }
-        }
+        },
+        "security" : [ ]
       }
     },
     "/api/v1/paychecks/{paycheckId}/audit" : {
@@ -2691,6 +2713,16 @@
             "type" : "string"
           }
         }
+      },
+      "VersionResponse" : {
+        "type" : "object",
+        "properties" : {
+          "version" : {
+            "type" : "string",
+            "minLength" : 1
+          }
+        },
+        "required" : [ "version" ]
       },
       "HealthResponse" : {
         "type" : "object",

@@ -10,7 +10,9 @@ import {
   statusEventSchema,
   templateEntrySchema,
   templateSchema,
+  versionResponseSchema,
 } from '@/api/contracts';
+import { formatYuukaVersion, formatYuukaVersionFooter } from '@/api/version-format';
 
 const entry = {
   accountName: null,
@@ -164,5 +166,20 @@ describe('API response contracts', () => {
         totalPages: 1,
       }),
     ).toMatchObject({ items: [expect.objectContaining({ id: entry.id })] });
+  });
+
+  it('validates and formats backend version responses', () => {
+    expect(versionResponseSchema.parse({ version: ' 1.2.3 ' })).toEqual({ version: '1.2.3' });
+    expect(() => versionResponseSchema.parse({})).toThrow();
+    expect(() => versionResponseSchema.parse({ version: '' })).toThrow();
+    expect(() => versionResponseSchema.parse({ version: '   ' })).toThrow();
+    expect(() => versionResponseSchema.parse({ version: 123 })).toThrow();
+
+    expect(formatYuukaVersion('1.2.3')).toBe('v1.2.3');
+    expect(formatYuukaVersion('v1.2.3')).toBe('v1.2.3');
+    expect(formatYuukaVersion('0.0.0-dev')).toBe('0.0.0-dev');
+    expect(formatYuukaVersion(' 1.2.3 ')).toBe('v1.2.3');
+    expect(formatYuukaVersion('')).toBeNull();
+    expect(formatYuukaVersionFooter(undefined)).toBe('Yuuka version unavailable');
   });
 });

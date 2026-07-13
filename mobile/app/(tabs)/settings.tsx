@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import Constants from 'expo-constants';
 import { CheckCircle2, LogOut, Save, Server, WifiOff } from 'lucide-react-native';
 import { useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { apiRequest } from '@/api/api-client';
+import { apiRequest, parseApiResponse } from '@/api/api-client';
+import { versionResponseSchema } from '@/api/contracts';
+import { formatYuukaVersionFooter } from '@/api/version-format';
 import { useAuth } from '@/auth/auth-provider';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
@@ -52,6 +53,17 @@ function SettingsDraft() {
     refetchInterval: 30_000,
     retry: false,
   });
+  const version = useQuery({
+    queryKey: ['version', settings.apiBaseUrl],
+    queryFn: async () => {
+      const response = await apiRequest(`${apiOrigin(settings.apiBaseUrl)}/health/version`, {
+        timeoutMs: 5000,
+      });
+      return parseApiResponse(response, versionResponseSchema);
+    },
+    retry: false,
+    staleTime: 300_000,
+  });
 
   async function save() {
     setSaving(true);
@@ -70,6 +82,10 @@ function SettingsDraft() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function checkNow() {
+    void Promise.allSettled([health.refetch(), version.refetch()]);
   }
 
   return (
@@ -103,12 +119,7 @@ function SettingsDraft() {
           onChangeText={setApiBaseUrl}
           value={apiBaseUrl}
         />
-        <Button
-          icon={Server}
-          label="Check now"
-          onPress={() => health.refetch()}
-          variant="secondary"
-        />
+        <Button icon={Server} label="Check now" onPress={checkNow} variant="secondary" />
       </Section>
 
       <Section title="Appearance">
@@ -144,7 +155,9 @@ function SettingsDraft() {
       <Button icon={Save} label="Save settings" loading={saving} onPress={save} />
       <Button icon={LogOut} label="Sign out" onPress={signOut} variant="danger" />
       <AppText style={[styles.version, { color: colors.muted }]} variant="caption">
-        Yuuka {Constants.expoConfig?.version ?? 'development'}
+        {version.isPending
+          ? 'Yuuka · Checking version'
+          : formatYuukaVersionFooter(version.data?.version)}
       </AppText>
     </ScrollScreen>
   );
