@@ -170,6 +170,16 @@ After typing into a field inside a bottom sheet, assume the Android keyboard may
 
 Use the same pattern before bottom-sheet save buttons when the sheet content can extend below the fold.
 
+When replacing an existing text-field value, remember that Maestro `eraseText` sends backspaces from the current cursor position. Tap near the end of the field before erasing, or a suffix can remain and make the next value invalid:
+
+```yaml
+- tapOn:
+    text: "Effective date and time"
+    point: "90%,50%"
+- eraseText: 100
+- inputText: "2026-07-16T12:00:00Z"
+```
+
 ## Debugging Failures Fast
 
 Use this order:

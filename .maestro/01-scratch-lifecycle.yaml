@@ -54,8 +54,10 @@ name: Scratch paycheck lifecycle
 - tapOn: "Move Food up"
 - tapOn: "Change status for Phone"
 - tapOn: "Processing"
-- tapOn: "Effective date and time"
-- eraseText
+- tapOn:
+    text: "Effective date and time"
+    point: "90%,50%"
+- eraseText: 100
 - inputText: "2026-07-16T12:00:00Z"
 - hideKeyboard
 - scrollUntilVisible:
