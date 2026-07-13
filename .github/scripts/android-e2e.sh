@@ -28,6 +28,10 @@ if [ "$metro_ready" -ne 1 ]; then
   exit 1
 fi
 
+curl --fail --silent --show-error --connect-timeout 2 --max-time 180 \
+  "http://localhost:8081/node_modules/expo-router/entry.bundle?platform=android&dev=true&minify=false" \
+  > /dev/null
+
 adb logcat -c
 adb reverse tcp:8080 tcp:8080
 adb reverse tcp:8081 tcp:8081
