@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Image, StyleSheet } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 
-type YuukaMascotVariant = 'running';
+export type YuukaMascotVariant = 'clipboard' | 'heart' | 'idle' | 'running' | 'wave';
+export type YuukaMascotPlayback = 'loop' | 'once' | 'static';
 
 type YuukaMascotProps = {
-  playing?: boolean;
+  onPlaybackEnd?: () => void;
+  playback?: YuukaMascotPlayback;
   size?: number;
   testID?: string;
   variant?: YuukaMascotVariant;
@@ -22,23 +24,56 @@ const runningFrames = [
   require('../../assets/yuuka/running/frame-08.png'),
 ] satisfies ImageSourcePropType[];
 
+const idleFrame = require('../../assets/yuuka/idle/frame-01.png') as ImageSourcePropType;
+const heartFrame = require('../../assets/yuuka/heart/frame-01.png') as ImageSourcePropType;
+
 const framesByVariant: Record<YuukaMascotVariant, ImageSourcePropType[]> = {
+  clipboard: [require('../../assets/yuuka/clipboard/frame-01.png')],
+  heart: [idleFrame, heartFrame],
+  idle: [idleFrame],
   running: runningFrames,
+  wave: [require('../../assets/yuuka/wave/frame-01.png')],
 };
 
 const frameDurationMs = 100;
 
 export function YuukaMascot({
-  playing = true,
+  onPlaybackEnd,
+  playback = 'loop',
   size = 74,
   testID,
   variant = 'running',
 }: YuukaMascotProps) {
+  return (
+    <YuukaMascotAnimation
+      key={`${variant}:${playback}`}
+      onPlaybackEnd={onPlaybackEnd}
+      playback={playback}
+      size={size}
+      testID={testID}
+      variant={variant}
+    />
+  );
+}
+
+function YuukaMascotAnimation({
+  onPlaybackEnd,
+  playback,
+  size,
+  testID,
+  variant,
+}: Required<Pick<YuukaMascotProps, 'playback' | 'size' | 'variant'>> &
+  Pick<YuukaMascotProps, 'onPlaybackEnd' | 'testID'>) {
   const reducedMotion = useReducedMotion();
   const [frameIndex, setFrameIndex] = useState(0);
+  const onPlaybackEndRef = useRef(onPlaybackEnd);
   const frames = framesByVariant[variant];
-  const shouldAnimate = playing && !reducedMotion && frames.length > 1;
-  const displayedFrameIndex = shouldAnimate ? frameIndex : 0;
+  const shouldAnimate = playback !== 'static' && !reducedMotion && frames.length > 1;
+  const displayedFrameIndex = reducedMotion && playback === 'once' ? frames.length - 1 : frameIndex;
+
+  useEffect(() => {
+    onPlaybackEndRef.current = onPlaybackEnd;
+  }, [onPlaybackEnd]);
 
   useEffect(() => {
     if (!shouldAnimate) {
@@ -46,11 +81,18 @@ export function YuukaMascot({
     }
 
     const interval = setInterval(() => {
-      setFrameIndex((current) => (current + 1) % frames.length);
+      setFrameIndex((current) => {
+        if (playback === 'once' && current >= frames.length - 1) {
+          clearInterval(interval);
+          onPlaybackEndRef.current?.();
+          return current;
+        }
+        return (current + 1) % frames.length;
+      });
     }, frameDurationMs);
 
     return () => clearInterval(interval);
-  }, [frames.length, shouldAnimate]);
+  }, [frames.length, playback, shouldAnimate]);
 
   return (
     <Image

@@ -69,6 +69,7 @@ describe('Settings route version footer', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -139,6 +140,54 @@ describe('Settings route version footer', () => {
 
     await waitFor(() => expect(versionRequests).toBe(2));
     expect(view.getByText('Yuuka v1.2.3')).toBeTruthy();
+    client.clear();
+  });
+
+  it('plays one locked heart interaction without changing the version or fetching', async () => {
+    const client = queryClient();
+    const view = await render(<SettingsScreen />, { wrapper: wrapper(client) });
+    await waitFor(() => expect(view.getByText('Yuuka v1.2.3')).toBeTruthy());
+    const requestsBeforeTap = fetchMock.mock.calls.length;
+
+    await fireEvent.press(view.getByLabelText('Animate Yuuka mascot'));
+
+    await waitFor(() =>
+      expect(
+        view.getByTestId('settings-mascot-heart', { includeHiddenElements: true }),
+      ).toBeTruthy(),
+    );
+    expect(view.getByText('Yuuka v1.2.3')).toBeTruthy();
+    expect(view.getByLabelText('Animate Yuuka mascot').props.accessibilityState).toEqual({
+      disabled: true,
+    });
+    await fireEvent.press(view.getByLabelText('Animate Yuuka mascot'));
+    expect(
+      view.getAllByTestId('settings-mascot-heart', { includeHiddenElements: true }),
+    ).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(requestsBeforeTap);
+
+    await waitFor(
+      () =>
+        expect(
+          view.getByTestId('settings-mascot-idle', { includeHiddenElements: true }),
+        ).toBeTruthy(),
+      { timeout: 1500 },
+    );
+    expect(view.getByText('Yuuka v1.2.3')).toBeTruthy();
+    client.clear();
+  });
+
+  it('clears the mascot interaction timer on unmount', async () => {
+    const client = queryClient();
+    const view = await render(<SettingsScreen />, { wrapper: wrapper(client) });
+    await waitFor(() => expect(view.getByText('Yuuka v1.2.3')).toBeTruthy());
+    jest.useFakeTimers();
+    const clearTimeoutSpy = jest.spyOn(globalThis, 'clearTimeout');
+
+    await fireEvent.press(view.getByLabelText('Animate Yuuka mascot'));
+    await view.unmount();
+
+    expect(clearTimeoutSpy).toHaveBeenCalled();
     client.clear();
   });
 });

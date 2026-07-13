@@ -199,21 +199,35 @@ At minimum:
 - sign out,
 - backend release version from `/health/version`.
 
-The Settings footer displays the packaged backend version because that is the deployed homelab
-release source of truth. Normal semantic versions receive one `v` prefix for display, already
-prefixed versions are preserved, and `0.0.0-dev` is shown without a forced prefix. Readiness remains
-driven by `/health/ready`; version loading and failures do not replace the connection status.
+The Settings footer displays the packaged backend version beside a small static Yuuka because that
+is the deployed homelab release source of truth. Normal semantic versions receive one `v` prefix
+for display, already prefixed versions are preserved, and `0.0.0-dev` is shown without a forced
+prefix. Readiness remains driven by `/health/ready`; version loading and failures do not replace the
+connection status. Tapping the footer mascot plays one brief, non-networked heart interaction;
+additional taps are ignored until it returns to idle.
 
 ## Loading states
 
-Prominent initial loads may use the reusable Yuuka mascot loader. The current mascot asset lives at
-`mobile/assets/yuuka/yuuka-sprite-sheet.png`, and the implemented animation uses the extracted
-running frames in `mobile/assets/yuuka/running/`. Use it sparingly for full initial screen loads,
-not mutation buttons, pull-to-refresh, retry controls, stale-data banners, or cached background
-refetches.
+Prominent initial loads without usable cached data use the reusable Yuuka mascot loader for at
+least one second. The request and minimum timer run concurrently, so a slow request is not followed
+by an additional delay. Cached navigation and background refetches keep their content and controls
+available and show a compact, non-blocking running mascot for a short readable minimum. Native
+pull-to-refresh continues to own the gesture and refresh state while the same compact mascot
+communicates progress; mutations and button loading states retain their existing compact behavior.
 
-The mascot image is decorative. Loading text remains visible and accessible, and reduced-motion
-settings render a static representative frame instead of cycling frames.
+Selected first-party empty states use contextual static mascot poses while retaining their title,
+explanation, and actions. Error states do not use mascot art. The source sheet lives at
+`mobile/assets/yuuka/yuuka-sprite-sheet.png`; extracted true-alpha frames are grouped under
+`mobile/assets/yuuka/running/`, `idle/`, `wave/`, `clipboard/`, and `heart/`. Prefer suitable poses
+from the source sheet. Any future generated supporting art must closely preserve the established
+character and chibi style, use true transparency and consistent alignment, and be added only when
+the source sheet is insufficient.
+
+Mascot frames are decorative and are not announced individually. Loading and refresh text remains
+visible and accessible. Reduced-motion settings keep the loading duration and messages but render
+static frames; the Settings interaction briefly shows its final heart pose without cycling frames.
+Mascots remain restrained to cold loading, refresh feedback, selected empty states, and the Settings
+footer.
 
 ## UX quality rules
 

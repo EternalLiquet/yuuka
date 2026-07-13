@@ -1,8 +1,13 @@
 import TestRenderer, { act } from 'react-test-renderer';
 import type { ReactElement } from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, Pressable } from 'react-native';
 
-import { YuukaLoadingState } from '@/components/states';
+import {
+  EmptyState,
+  ErrorState,
+  YuukaLoadingState,
+  YuukaRefreshIndicator,
+} from '@/components/states';
 import { YuukaMascot } from '@/components/yuuka-mascot';
 
 jest.mock('@/settings/settings-provider', () => ({
@@ -62,7 +67,7 @@ describe('Yuuka mascot loading animation', () => {
   });
 
   it('does not advance when paused', () => {
-    const renderer = renderTree(<YuukaMascot playing={false} testID="mascot" />);
+    const renderer = renderTree(<YuukaMascot playback="static" testID="mascot" />);
     const firstSource = mascot(renderer).props.source;
 
     act(() => jest.advanceTimersByTime(500));
@@ -87,15 +92,15 @@ describe('Yuuka mascot loading animation', () => {
     expect(remove).toHaveBeenCalled();
   });
 
-  it('starts and stops animation when playing changes', () => {
-    const renderer = renderTree(<YuukaMascot playing={false} testID="mascot" />);
+  it('starts and stops animation when playback changes', () => {
+    const renderer = renderTree(<YuukaMascot playback="static" testID="mascot" />);
     const firstSource = mascot(renderer).props.source;
 
-    act(() => renderer.update(<YuukaMascot playing testID="mascot" />));
+    act(() => renderer.update(<YuukaMascot playback="loop" testID="mascot" />));
     act(() => jest.advanceTimersByTime(100));
     expect(mascot(renderer).props.source).not.toBe(firstSource);
 
-    act(() => renderer.update(<YuukaMascot playing={false} testID="mascot" />));
+    act(() => renderer.update(<YuukaMascot playback="static" testID="mascot" />));
     const pausedSource = mascot(renderer).props.source;
     act(() => jest.advanceTimersByTime(300));
     expect(mascot(renderer).props.source).toBe(pausedSource);
@@ -115,12 +120,84 @@ describe('Yuuka mascot loading animation', () => {
     unmount(renderer);
   });
 
+  it('plays a one-shot sequence once and holds its final frame', () => {
+    const onPlaybackEnd = jest.fn();
+    const renderer = renderTree(
+      <YuukaMascot onPlaybackEnd={onPlaybackEnd} playback="once" testID="mascot" variant="heart" />,
+    );
+    const firstSource = mascot(renderer).props.source;
+
+    act(() => jest.advanceTimersByTime(200));
+
+    expect(mascot(renderer).props.source).not.toBe(firstSource);
+    expect(onPlaybackEnd).toHaveBeenCalledTimes(1);
+    act(() => jest.advanceTimersByTime(500));
+    expect(onPlaybackEnd).toHaveBeenCalledTimes(1);
+    unmount(renderer);
+  });
+
+  it('uses the static heart pose for one-shot playback under reduced motion', () => {
+    const renderer = renderTree(<YuukaMascot playback="once" testID="mascot" variant="heart" />);
+    const animatedInitialSource = mascot(renderer).props.source;
+
+    act(() => reduceMotionHandler(true));
+
+    expect(mascot(renderer).props.source).not.toBe(animatedInitialSource);
+    act(() => jest.advanceTimersByTime(500));
+    expect(mascot(renderer).props.source).not.toBe(animatedInitialSource);
+    unmount(renderer);
+  });
+
   it('keeps loading text accessible beside the decorative mascot', () => {
     const renderer = renderTree(<YuukaLoadingState message="Loading paychecks..." />);
 
     expect(renderer.root.findByProps({ accessibilityLabel: 'Loading paychecks...' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'yuuka-loading-mascot' })).toBeTruthy();
     expect(renderer.root.findByProps({ children: 'Loading paychecks...' })).toBeTruthy();
+    unmount(renderer);
+  });
+
+  it('renders requested empty-state art decoratively while preserving copy', () => {
+    const onAction = jest.fn();
+    const renderer = renderTree(
+      <EmptyState
+        action={<Pressable accessibilityLabel="Create one" onPress={onAction} />}
+        mascot="clipboard"
+        message="Nothing matched."
+        title="No results"
+      />,
+    );
+
+    expect(renderer.root.findByProps({ testID: 'empty-state-mascot-clipboard' })).toBeTruthy();
+    expect(renderer.root.findByProps({ children: 'No results' })).toBeTruthy();
+    expect(renderer.root.findByProps({ children: 'Nothing matched.' })).toBeTruthy();
+    expect(mascot(renderer).props.accessible).toBe(false);
+    act(() => renderer.root.findByProps({ accessibilityLabel: 'Create one' }).props.onPress());
+    expect(onAction).toHaveBeenCalledTimes(1);
+    unmount(renderer);
+  });
+
+  it('keeps error states mascot-free', () => {
+    const renderer = renderTree(<ErrorState message="Offline" retry={jest.fn()} />);
+
+    expect(renderer.root.findAllByType(YuukaMascot)).toHaveLength(0);
+    unmount(renderer);
+  });
+
+  it('keeps a short refresh readable without blocking controls', () => {
+    const renderer = renderTree(<YuukaRefreshIndicator visible />);
+
+    expect(
+      renderer.root.findByProps({ testID: 'yuuka-refresh-indicator' }).props.pointerEvents,
+    ).toBe('none');
+    act(() => jest.advanceTimersByTime(100));
+    act(() => renderer.update(<YuukaRefreshIndicator visible={false} />));
+    expect(renderer.root.findByProps({ testID: 'yuuka-refresh-indicator' })).toBeTruthy();
+
+    act(() => jest.advanceTimersByTime(699));
+    expect(renderer.root.findByProps({ testID: 'yuuka-refresh-indicator' })).toBeTruthy();
+    act(() => jest.advanceTimersByTime(1));
+    expect(renderer.root.findAllByProps({ testID: 'yuuka-refresh-indicator' })).toHaveLength(0);
     unmount(renderer);
   });
 });
