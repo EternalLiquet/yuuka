@@ -103,7 +103,7 @@ jobs:
           api-level: 35
           arch: x86_64
           profile: pixel_7
-          disable-animations: true
+          disable-animations: false
           script: bash .github/scripts/android-e2e.sh
       - name: Upload Android E2E diagnostics
         if: always()

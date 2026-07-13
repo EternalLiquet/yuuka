@@ -27,6 +27,9 @@ name: Scratch paycheck lifecycle
 - extendedWaitUntil:
     visible: "Phone"
     timeout: 10000
+- extendedWaitUntil:
+    visible: "Add entry"
+    timeout: 10000
 
 - tapOn: "Add entry"
 - tapOn: "Spending Bucket"
