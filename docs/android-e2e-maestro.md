@@ -189,7 +189,7 @@ For full-screen React Native modals, prefer `back` when the next assertion only 
     timeout: 10000
 ```
 
-When a flow creates nested detail screens and then switches tabs, first navigate back to a stable list landmark. Generic labels such as `Active` can also appear as status text, so do not tap the tab until the current screen is known:
+When a flow creates nested detail screens and then switches tabs, first navigate back to a stable list landmark. Generic labels such as `Active` can also appear as status text in paychecks or paybacks, so use the tab-specific accessibility labels instead of the raw tab title:
 
 ```yaml
 - back
@@ -197,6 +197,7 @@ When a flow creates nested detail screens and then switches tabs, first navigate
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
+- tapOn: "Paybacks tab"
 ```
 
 The app's detail routes hide the bottom tab bar. After saving inside a paycheck or payback detail screen, use the visible app `Back` control when present, then wait for the tab-screen landmark before tapping another tab:
@@ -206,8 +207,10 @@ The app's detail routes hide the bottom tab bar. After saving inside a paycheck 
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
-- tapOn: "Paybacks"
+- tapOn: "Paybacks tab"
 ```
+
+The bottom tabs currently expose `Active tab`, `History tab`, `Paybacks tab`, `Templates tab`, and `Settings tab`. Prefer those labels in Maestro. A raw `tapOn: "Active"` can match an `Active` status badge inside a payback card and open the wrong detail screen.
 
 ## Debugging Failures Fast
 

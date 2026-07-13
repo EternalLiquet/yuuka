@@ -2,7 +2,7 @@ appId: com.yuuka.mobile
 name: Payback delete unassigns entry
 ---
 - runFlow: shared/sign-in.yaml
-- tapOn: "Paybacks"
+- tapOn: "Paybacks tab"
 - tapOn: "New Payback"
 - tapOn: "Name"
 - inputText: "E2E Delete Source"
@@ -67,7 +67,7 @@ name: Payback delete unassigns entry
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
-- tapOn: "Paybacks"
+- tapOn: "Paybacks tab"
 - tapOn: 'E2E Delete Source, \$40\.00 left, 0 percent repaid since tracking began'
 - tapOn: "Delete"
 - extendedWaitUntil:
@@ -75,7 +75,7 @@ name: Payback delete unassigns entry
     timeout: 10000
 - assertNotVisible: "E2E Delete Source"
 
-- tapOn: "Active"
+- tapOn: "Active tab"
 - extendedWaitUntil:
     visible: "E2E Payback Assign"
     timeout: 10000

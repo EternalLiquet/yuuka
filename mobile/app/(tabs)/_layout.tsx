@@ -40,6 +40,7 @@ export default function TabLayout() {
         name="active"
         options={{
           title: 'Active',
+          tabBarAccessibilityLabel: 'Active tab',
           tabBarIcon: ({ color }) => <TabIcon icon={WalletCards} color={color} />,
         }}
       />
@@ -47,6 +48,7 @@ export default function TabLayout() {
         name="history"
         options={{
           title: 'History',
+          tabBarAccessibilityLabel: 'History tab',
           tabBarIcon: ({ color }) => <TabIcon icon={History} color={color} />,
         }}
       />
@@ -54,6 +56,7 @@ export default function TabLayout() {
         name="paybacks"
         options={{
           title: 'Paybacks',
+          tabBarAccessibilityLabel: 'Paybacks tab',
           tabBarIcon: ({ color }) => <TabIcon icon={RotateCcw} color={color} />,
         }}
       />
@@ -61,6 +64,7 @@ export default function TabLayout() {
         name="templates"
         options={{
           title: 'Templates',
+          tabBarAccessibilityLabel: 'Templates tab',
           tabBarIcon: ({ color }) => <TabIcon icon={LayoutTemplate} color={color} />,
         }}
       />
@@ -68,6 +72,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: 'Settings',
+          tabBarAccessibilityLabel: 'Settings tab',
           tabBarIcon: ({ color }) => <TabIcon icon={Settings} color={color} />,
         }}
       />

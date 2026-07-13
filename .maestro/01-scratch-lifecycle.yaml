@@ -111,7 +111,7 @@ name: Scratch paycheck lifecycle
     visible: "Reopen paycheck"
     timeout: 10000
 - back
-- tapOn: "History"
+- tapOn: "History tab"
 - extendedWaitUntil:
     visible: "E2E Scratch"
     timeout: 10000
