@@ -1,74 +1,64 @@
 {
-  "openapi": "3.1.0",
-  "info": {
-    "title": "Yuuka API",
-    "description": "Private paycheck-first budgeting API.",
-    "version": "v1"
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "Yuuka API",
+    "description" : "Private paycheck-first budgeting API.",
+    "version" : "v1"
   },
-  "servers": [
-    {
-      "url": "http://localhost",
-      "description": "Generated server url"
-    }
-  ],
-  "security": [
-    {
-      "bearerAuth": []
-    }
-  ],
-  "paths": {
-    "/api/v1/templates": {
-      "get": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "list",
-        "parameters": [
-          {
-            "name": "includeArchived",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
+  "servers" : [ {
+    "url" : "http://localhost",
+    "description" : "Generated server url"
+  } ],
+  "security" : [ {
+    "bearerAuth" : [ ]
+  } ],
+  "paths" : {
+    "/api/v1/templates" : {
+      "get" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "list",
+        "parameters" : [ {
+          "name" : "includeArchived",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PageResponseTemplateResponse"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseTemplateResponse"
                 }
               }
             }
           }
         }
       },
-      "post": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateTemplateRequest"
+      "post" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "create",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateTemplateRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateResponse"
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateResponse"
                 }
               }
             }
@@ -76,40 +66,36 @@
         }
       }
     },
-    "/api/v1/templates/{templateId}/restore": {
-      "post": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "restore",
-        "parameters": [
-          {
-            "name": "templateId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/templates/{templateId}/restore" : {
+      "post" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "restore",
+        "parameters" : [ {
+          "name" : "templateId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VersionRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateResponse"
                 }
               }
             }
@@ -117,40 +103,36 @@
         }
       }
     },
-    "/api/v1/templates/{templateId}/entries": {
-      "post": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "addEntry",
-        "parameters": [
-          {
-            "name": "templateId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/templates/{templateId}/entries" : {
+      "post" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "addEntry",
+        "parameters" : [ {
+          "name" : "templateId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TemplateEntryRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TemplateEntryRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateEntryResponse"
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateEntryResponse"
                 }
               }
             }
@@ -158,40 +140,36 @@
         }
       }
     },
-    "/api/v1/templates/{templateId}/entries/reorder": {
-      "post": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "reorder",
-        "parameters": [
-          {
-            "name": "templateId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/templates/{templateId}/entries/reorder" : {
+      "post" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "reorder",
+        "parameters" : [ {
+          "name" : "templateId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReorderTemplateEntriesRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReorderTemplateEntriesRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateResponse"
                 }
               }
             }
@@ -199,39 +177,35 @@
         }
       }
     },
-    "/api/v1/templates/{templateId}/duplicate": {
-      "post": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "duplicate",
-        "parameters": [
-          {
-            "name": "templateId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/templates/{templateId}/duplicate" : {
+      "post" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "duplicate",
+        "parameters" : [ {
+          "name" : "templateId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DuplicateTemplateRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DuplicateTemplateRequest"
               }
             }
           }
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateResponse"
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateResponse"
                 }
               }
             }
@@ -239,40 +213,36 @@
         }
       }
     },
-    "/api/v1/templates/{templateId}/archive": {
-      "post": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "archive",
-        "parameters": [
-          {
-            "name": "templateId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/templates/{templateId}/archive" : {
+      "post" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "archive",
+        "parameters" : [ {
+          "name" : "templateId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VersionRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateResponse"
                 }
               }
             }
@@ -280,29 +250,27 @@
         }
       }
     },
-    "/api/v1/paychecks": {
-      "post": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "create_1",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreatePaycheckRequest"
+    "/api/v1/paychecks" : {
+      "post" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "create_1",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreatePaycheckRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaycheckResponse"
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
                 }
               }
             }
@@ -310,40 +278,36 @@
         }
       }
     },
-    "/api/v1/paychecks/{paycheckId}/reopen": {
-      "post": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "reopen",
-        "parameters": [
-          {
-            "name": "paycheckId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/paychecks/{paycheckId}/reopen" : {
+      "post" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "reopen",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VersionRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaycheckResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
                 }
               }
             }
@@ -351,40 +315,36 @@
         }
       }
     },
-    "/api/v1/paychecks/{paycheckId}/leftover-entry": {
-      "post": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "allocateLeftover",
-        "parameters": [
-          {
-            "name": "paycheckId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/paychecks/{paycheckId}/leftover-entry" : {
+      "post" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "allocateLeftover",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AllocateLeftoverRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AllocateLeftoverRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntryResponse"
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryResponse"
                 }
               }
             }
@@ -392,40 +352,36 @@
         }
       }
     },
-    "/api/v1/paychecks/{paycheckId}/entries": {
-      "post": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "addEntry_1",
-        "parameters": [
-          {
-            "name": "paycheckId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/paychecks/{paycheckId}/entries" : {
+      "post" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "addEntry_1",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateEntryRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateEntryRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntryResponse"
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryResponse"
                 }
               }
             }
@@ -433,40 +389,36 @@
         }
       }
     },
-    "/api/v1/paychecks/{paycheckId}/entries/reorder": {
-      "post": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "reorder_1",
-        "parameters": [
-          {
-            "name": "paycheckId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/paychecks/{paycheckId}/entries/reorder" : {
+      "post" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "reorder_1",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReorderEntriesRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReorderEntriesRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaycheckResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
                 }
               }
             }
@@ -474,40 +426,36 @@
         }
       }
     },
-    "/api/v1/paychecks/{paycheckId}/close": {
-      "post": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "close",
-        "parameters": [
-          {
-            "name": "paycheckId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/paychecks/{paycheckId}/close" : {
+      "post" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "close",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VersionRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaycheckResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
                 }
               }
             }
@@ -515,29 +463,27 @@
         }
       }
     },
-    "/api/v1/paychecks/from-template": {
-      "post": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "createPaycheck",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreatePaycheckFromTemplateRequest"
+    "/api/v1/paychecks/from-template" : {
+      "post" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "createPaycheck",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreatePaycheckFromTemplateRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaycheckResponse"
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
                 }
               }
             }
@@ -545,47 +491,43 @@
         }
       }
     },
-    "/api/v1/paybacks": {
-      "get": {
-        "tags": [
-          "payback-controller"
-        ],
-        "operationId": "list_1",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaybackListResponse"
+    "/api/v1/paybacks" : {
+      "get" : {
+        "tags" : [ "payback-controller" ],
+        "operationId" : "list_1",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaybackListResponse"
                 }
               }
             }
           }
         }
       },
-      "post": {
-        "tags": [
-          "payback-controller"
-        ],
-        "operationId": "create_2",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreatePaybackRequest"
+      "post" : {
+        "tags" : [ "payback-controller" ],
+        "operationId" : "create_2",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreatePaybackRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaybackResponse"
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaybackResponse"
                 }
               }
             }
@@ -593,40 +535,36 @@
         }
       }
     },
-    "/api/v1/entries/{entryId}/status": {
-      "post": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "changeStatus",
-        "parameters": [
-          {
-            "name": "entryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/entries/{entryId}/status" : {
+      "post" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "changeStatus",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StatusChangeRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StatusChangeRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntryResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryResponse"
                 }
               }
             }
@@ -634,69 +572,61 @@
         }
       }
     },
-    "/api/v1/entries/{entryId}/bucket-transactions": {
-      "get": {
-        "tags": [
-          "bucket-transaction-controller"
-        ],
-        "operationId": "list_2",
-        "parameters": [
-          {
-            "name": "entryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/entries/{entryId}/bucket-transactions" : {
+      "get" : {
+        "tags" : [ "bucket-transaction-controller" ],
+        "operationId" : "list_2",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PageResponseBucketTransactionResponse"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseBucketTransactionResponse"
                 }
               }
             }
           }
         }
       },
-      "post": {
-        "tags": [
-          "bucket-transaction-controller"
-        ],
-        "operationId": "create_3",
-        "parameters": [
-          {
-            "name": "entryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+      "post" : {
+        "tags" : [ "bucket-transaction-controller" ],
+        "operationId" : "create_3",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateBucketTransactionRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateBucketTransactionRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/BucketTransactionResponse"
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BucketTransactionResponse"
                 }
               }
             }
@@ -704,30 +634,28 @@
         }
       }
     },
-    "/api/v1/auth/register": {
-      "post": {
-        "tags": [
-          "auth-controller"
-        ],
-        "summary": "Register an account when explicitly enabled",
-        "operationId": "register",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterRequest"
+    "/api/v1/auth/register" : {
+      "post" : {
+        "tags" : [ "auth-controller" ],
+        "summary" : "Register an account when explicitly enabled",
+        "operationId" : "register",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegisterRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthResponse"
                 }
               }
             }
@@ -735,30 +663,28 @@
         }
       }
     },
-    "/api/v1/auth/refresh": {
-      "post": {
-        "tags": [
-          "auth-controller"
-        ],
-        "summary": "Rotate a refresh token and issue a new session",
-        "operationId": "refresh",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshRequest"
+    "/api/v1/auth/refresh" : {
+      "post" : {
+        "tags" : [ "auth-controller" ],
+        "summary" : "Rotate a refresh token and issue a new session",
+        "operationId" : "refresh",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RefreshRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthResponse"
                 }
               }
             }
@@ -766,54 +692,50 @@
         }
       }
     },
-    "/api/v1/auth/logout": {
-      "post": {
-        "tags": [
-          "auth-controller"
-        ],
-        "summary": "Revoke a refresh token",
-        "operationId": "logout",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LogoutRequest"
+    "/api/v1/auth/logout" : {
+      "post" : {
+        "tags" : [ "auth-controller" ],
+        "summary" : "Revoke a refresh token",
+        "operationId" : "logout",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LogoutRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "204": {
-            "description": "No Content"
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
           }
         }
       }
     },
-    "/api/v1/auth/login": {
-      "post": {
-        "tags": [
-          "auth-controller"
-        ],
-        "summary": "Authenticate the configured owner",
-        "operationId": "login",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
+    "/api/v1/auth/login" : {
+      "post" : {
+        "tags" : [ "auth-controller" ],
+        "summary" : "Authenticate the configured owner",
+        "operationId" : "login",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoginRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthResponse"
                 }
               }
             }
@@ -821,69 +743,61 @@
         }
       }
     },
-    "/api/v1/templates/{templateId}": {
-      "get": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "get",
-        "parameters": [
-          {
-            "name": "templateId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/templates/{templateId}" : {
+      "get" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "get",
+        "parameters" : [ {
+          "name" : "templateId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateResponse"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateResponse"
                 }
               }
             }
           }
         }
       },
-      "patch": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "update",
-        "parameters": [
-          {
-            "name": "templateId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+      "patch" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "update",
+        "parameters" : [ {
+          "name" : "templateId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateTemplateRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateTemplateRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateResponse"
                 }
               }
             }
@@ -891,71 +805,62 @@
         }
       }
     },
-    "/api/v1/template-entries/{entryId}": {
-      "delete": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "deleteEntry",
-        "parameters": [
-          {
-            "name": "entryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "version",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
+    "/api/v1/template-entries/{entryId}" : {
+      "delete" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "deleteEntry",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
+        }, {
+          "name" : "version",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
           }
         }
       },
-      "patch": {
-        "tags": [
-          "template-controller"
-        ],
-        "operationId": "updateEntry",
-        "parameters": [
-          {
-            "name": "entryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+      "patch" : {
+        "tags" : [ "template-controller" ],
+        "operationId" : "updateEntry",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TemplateEntryRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TemplateEntryRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateEntryResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateEntryResponse"
                 }
               }
             }
@@ -963,151 +868,126 @@
         }
       }
     },
-    "/api/v1/paychecks/{paycheckId}": {
-      "get": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "get_1",
-        "parameters": [
-          {
-            "name": "paycheckId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "NOT_PAID",
-                "PROCESSING",
-                "POSTED"
-              ]
-            }
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "BILL",
-                "SPENDING_BUCKET",
-                "SINKING_FUND"
-              ]
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "custom"
-            }
-          },
-          {
-            "name": "ascending",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": true
-            }
+    "/api/v1/paychecks/{paycheckId}" : {
+      "get" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "get_1",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaycheckResponse"
+        }, {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "NOT_PAID", "PROCESSING", "POSTED" ]
+          }
+        }, {
+          "name" : "type",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
+          }
+        }, {
+          "name" : "sort",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "custom"
+          }
+        }, {
+          "name" : "ascending",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : true
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
                 }
               }
             }
           }
         }
       },
-      "delete": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "archive_1",
-        "parameters": [
-          {
-            "name": "paycheckId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "version",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
+      "delete" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "archive_1",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaycheckResponse"
+        }, {
+          "name" : "version",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
                 }
               }
             }
           }
         }
       },
-      "patch": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "update_1",
-        "parameters": [
-          {
-            "name": "paycheckId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+      "patch" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "update_1",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdatePaycheckRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdatePaycheckRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaycheckResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
                 }
               }
             }
@@ -1115,100 +995,87 @@
         }
       }
     },
-    "/api/v1/paybacks/{paybackId}": {
-      "get": {
-        "tags": [
-          "payback-controller"
-        ],
-        "operationId": "get_2",
-        "parameters": [
-          {
-            "name": "paybackId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+    "/api/v1/paybacks/{paybackId}" : {
+      "get" : {
+        "tags" : [ "payback-controller" ],
+        "operationId" : "get_2",
+        "parameters" : [ {
+          "name" : "paybackId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaybackResponse"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaybackResponse"
                 }
               }
             }
           }
         }
       },
-      "delete": {
-        "tags": [
-          "payback-controller"
-        ],
-        "operationId": "delete",
-        "parameters": [
-          {
-            "name": "paybackId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "version",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
+      "delete" : {
+        "tags" : [ "payback-controller" ],
+        "operationId" : "delete",
+        "parameters" : [ {
+          "name" : "paybackId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
+        }, {
+          "name" : "version",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
           }
         }
       },
-      "patch": {
-        "tags": [
-          "payback-controller"
-        ],
-        "operationId": "update_2",
-        "parameters": [
-          {
-            "name": "paybackId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+      "patch" : {
+        "tags" : [ "payback-controller" ],
+        "operationId" : "update_2",
+        "parameters" : [ {
+          "name" : "paybackId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdatePaybackRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdatePaybackRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaybackResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaybackResponse"
                 }
               }
             }
@@ -1216,71 +1083,62 @@
         }
       }
     },
-    "/api/v1/entries/{entryId}": {
-      "delete": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "deleteEntry_1",
-        "parameters": [
-          {
-            "name": "entryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "version",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
+    "/api/v1/entries/{entryId}" : {
+      "delete" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "deleteEntry_1",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
+        }, {
+          "name" : "version",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
           }
         }
       },
-      "patch": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "updateEntry_1",
-        "parameters": [
-          {
-            "name": "entryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+      "patch" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "updateEntry_1",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateEntryRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateEntryRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntryResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryResponse"
                 }
               }
             }
@@ -1288,71 +1146,62 @@
         }
       }
     },
-    "/api/v1/bucket-transactions/{transactionId}": {
-      "delete": {
-        "tags": [
-          "bucket-transaction-controller"
-        ],
-        "operationId": "delete_1",
-        "parameters": [
-          {
-            "name": "transactionId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "version",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
+    "/api/v1/bucket-transactions/{transactionId}" : {
+      "delete" : {
+        "tags" : [ "bucket-transaction-controller" ],
+        "operationId" : "delete_1",
+        "parameters" : [ {
+          "name" : "transactionId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
+        }, {
+          "name" : "version",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
           }
         }
       },
-      "patch": {
-        "tags": [
-          "bucket-transaction-controller"
-        ],
-        "operationId": "update_3",
-        "parameters": [
-          {
-            "name": "transactionId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+      "patch" : {
+        "tags" : [ "bucket-transaction-controller" ],
+        "operationId" : "update_3",
+        "parameters" : [ {
+          "name" : "transactionId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateBucketTransactionRequest"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateBucketTransactionRequest"
               }
             }
           },
-          "required": true
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/BucketTransactionResponse"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BucketTransactionResponse"
                 }
               }
             }
@@ -1360,22 +1209,17 @@
         }
       }
     },
-    "/health": {
-      "get": {
-        "tags": [
-          "health-controller"
-        ],
-        "operationId": "health",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
+    "/health" : {
+      "get" : {
+        "tags" : [ "health-controller" ],
+        "operationId" : "health",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SystemStatusResponse"
                 }
               }
             }
@@ -1383,22 +1227,17 @@
         }
       }
     },
-    "/health/ready": {
-      "get": {
-        "tags": [
-          "health-controller"
-        ],
-        "operationId": "readiness",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
+    "/health/ready" : {
+      "get" : {
+        "tags" : [ "health-controller" ],
+        "operationId" : "readiness",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HealthResponse"
                 }
               }
             }
@@ -1406,50 +1245,17 @@
         }
       }
     },
-    "/api/v1/paychecks/{paycheckId}/audit": {
-      "get": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "paycheckAudit",
-        "parameters": [
-          {
-            "name": "paycheckId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 0
-            }
-          },
-          {
-            "name": "size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 50
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PageResponseAuditEventResponse"
+    "/health/live" : {
+      "get" : {
+        "tags" : [ "health-controller" ],
+        "operationId" : "live",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SystemStatusResponse"
                 }
               }
             }
@@ -1457,76 +1263,44 @@
         }
       }
     },
-    "/api/v1/paychecks/history": {
-      "get": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "history",
-        "parameters": [
-          {
-            "name": "search",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "from",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "to",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "oldestFirst",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 0
-            }
-          },
-          {
-            "name": "size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 50
-            }
+    "/api/v1/paychecks/{paycheckId}/audit" : {
+      "get" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "paycheckAudit",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PageResponsePaycheckResponse"
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseAuditEventResponse"
                 }
               }
             }
@@ -1534,41 +1308,67 @@
         }
       }
     },
-    "/api/v1/paychecks/active": {
-      "get": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "active",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 0
-            }
-          },
-          {
-            "name": "size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 50
-            }
+    "/api/v1/paychecks/history" : {
+      "get" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "history",
+        "parameters" : [ {
+          "name" : "search",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PageResponsePaycheckResponse"
+        }, {
+          "name" : "from",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "to",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "oldestFirst",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponsePaycheckResponse"
                 }
               }
             }
@@ -1576,50 +1376,36 @@
         }
       }
     },
-    "/api/v1/paybacks/{paybackId}/repayments": {
-      "get": {
-        "tags": [
-          "payback-controller"
-        ],
-        "operationId": "repayments",
-        "parameters": [
-          {
-            "name": "paybackId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 0
-            }
-          },
-          {
-            "name": "size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 50
-            }
+    "/api/v1/paychecks/active" : {
+      "get" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "active",
+        "parameters" : [ {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PageResponsePaybackRepaymentResponse"
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponsePaycheckResponse"
                 }
               }
             }
@@ -1627,19 +1413,44 @@
         }
       }
     },
-    "/api/v1/me": {
-      "get": {
-        "tags": [
-          "me-controller"
-        ],
-        "operationId": "me",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/MeResponse"
+    "/api/v1/paybacks/{paybackId}/repayments" : {
+      "get" : {
+        "tags" : [ "payback-controller" ],
+        "operationId" : "repayments",
+        "parameters" : [ {
+          "name" : "paybackId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponsePaybackRepaymentResponse"
                 }
               }
             }
@@ -1647,50 +1458,17 @@
         }
       }
     },
-    "/api/v1/entries/{entryId}/status-history": {
-      "get": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "statusHistory",
-        "parameters": [
-          {
-            "name": "entryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 0
-            }
-          },
-          {
-            "name": "size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 50
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PageResponseStatusEventResponse"
+    "/api/v1/me" : {
+      "get" : {
+        "tags" : [ "me-controller" ],
+        "operationId" : "me",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MeResponse"
                 }
               }
             }
@@ -1698,50 +1476,89 @@
         }
       }
     },
-    "/api/v1/entries/{entryId}/audit": {
-      "get": {
-        "tags": [
-          "paycheck-controller"
-        ],
-        "operationId": "entryAudit",
-        "parameters": [
-          {
-            "name": "entryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 0
-            }
-          },
-          {
-            "name": "size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 50
+    "/api/v1/entries/{entryId}/status-history" : {
+      "get" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "statusHistory",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseStatusEventResponse"
+                }
+              }
             }
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/PageResponseAuditEventResponse"
+        }
+      }
+    },
+    "/api/v1/entries/{entryId}/audit" : {
+      "get" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "entryAudit",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseAuditEventResponse"
                 }
               }
             }
@@ -1750,1529 +1567,1424 @@
       }
     }
   },
-  "components": {
-    "schemas": {
-      "CreateTemplateRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 0
+  "components" : {
+    "schemas" : {
+      "CreateTemplateRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0
           },
-          "description": {
-            "type": "string",
-            "maxLength": 1000,
-            "minLength": 0
+          "description" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
           },
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TemplateEntryRequest"
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TemplateEntryRequest"
             }
           }
         },
-        "required": [
-          "name"
-        ]
+        "required" : [ "name" ]
       },
-      "TemplateEntryRequest": {
-        "type": "object",
-        "properties": {
-          "entryType": {
-            "type": "string",
-            "enum": [
-              "BILL",
-              "SPENDING_BUCKET",
-              "SINKING_FUND"
-            ]
+      "TemplateEntryRequest" : {
+        "type" : "object",
+        "properties" : {
+          "entryType" : {
+            "type" : "string",
+            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
-          "name": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "defaultAmountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "defaultAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "defaultDueOffsetDays": {
-            "type": "integer",
-            "format": "int32"
+          "defaultDueOffsetDays" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "accountName": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "accountName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "payee": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "payee" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
           },
-          "targetMinor": {
-            "type": "integer",
-            "format": "int64"
+          "targetMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "targetDate": {
-            "type": "string",
-            "format": "date"
+          "targetDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "entryType",
-          "name"
-        ]
+        "required" : [ "entryType", "name" ]
       },
-      "TemplateEntryResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+      "TemplateEntryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "entryType": {
-            "type": "string",
-            "enum": [
-              "BILL",
-              "SPENDING_BUCKET",
-              "SINKING_FUND"
-            ]
+          "entryType" : {
+            "type" : "string",
+            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
-          "name": {
-            "type": "string"
+          "name" : {
+            "type" : "string"
           },
-          "defaultAmountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "defaultAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "position": {
-            "type": "integer",
-            "format": "int32"
+          "position" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "defaultDueOffsetDays": {
-            "type": "integer",
-            "format": "int32"
+          "defaultDueOffsetDays" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "accountName": {
-            "type": "string"
+          "accountName" : {
+            "type" : "string"
           },
-          "payee": {
-            "type": "string"
+          "payee" : {
+            "type" : "string"
           },
-          "notes": {
-            "type": "string"
+          "notes" : {
+            "type" : "string"
           },
-          "targetMinor": {
-            "type": "integer",
-            "format": "int64"
+          "targetMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "targetDate": {
-            "type": "string",
-            "format": "date"
+          "targetDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       },
-      "TemplateResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+      "TemplateResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "name": {
-            "type": "string"
+          "name" : {
+            "type" : "string"
           },
-          "description": {
-            "type": "string"
+          "description" : {
+            "type" : "string"
           },
-          "archived": {
-            "type": "boolean"
+          "archived" : {
+            "type" : "boolean"
           },
-          "entryCount": {
-            "type": "integer",
-            "format": "int32"
+          "entryCount" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "defaultTotalMinor": {
-            "type": "integer",
-            "format": "int64"
+          "defaultTotalMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TemplateEntryResponse"
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TemplateEntryResponse"
             }
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "archivedAt": {
-            "type": "string",
-            "format": "date-time"
+          "archivedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       },
-      "VersionRequest": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "integer",
-            "format": "int64"
+      "VersionRequest" : {
+        "type" : "object",
+        "properties" : {
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "version"
-        ]
+        "required" : [ "version" ]
       },
-      "ReorderTemplateEntriesRequest": {
-        "type": "object",
-        "properties": {
-          "entryIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
+      "ReorderTemplateEntriesRequest" : {
+        "type" : "object",
+        "properties" : {
+          "entryIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
             },
-            "minItems": 1
+            "minItems" : 1
           },
-          "templateVersion": {
-            "type": "integer",
-            "format": "int64"
+          "templateVersion" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "entryIds",
-          "templateVersion"
-        ]
+        "required" : [ "entryIds", "templateVersion" ]
       },
-      "DuplicateTemplateRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 0
+      "DuplicateTemplateRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0
           }
         }
       },
-      "CreatePaycheckRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 0
+      "CreatePaycheckRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0
           },
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "incomeDate": {
-            "type": "string",
-            "format": "date"
+          "incomeDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "source": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "source" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
           }
         },
-        "required": [
-          "amountMinor",
-          "incomeDate",
-          "name"
-        ]
+        "required" : [ "amountMinor", "incomeDate", "name" ]
       },
-      "EntryResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+      "EntryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "paycheckId": {
-            "type": "string",
-            "format": "uuid"
+          "paycheckId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "paybackId": {
-            "type": "string",
-            "format": "uuid"
+          "paybackId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "entryType": {
-            "type": "string",
-            "enum": [
-              "BILL",
-              "SPENDING_BUCKET",
-              "SINKING_FUND"
-            ]
+          "entryType" : {
+            "type" : "string",
+            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
-          "name": {
-            "type": "string"
+          "name" : {
+            "type" : "string"
           },
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "status": {
-            "type": "string",
-            "enum": [
-              "NOT_PAID",
-              "PROCESSING",
-              "POSTED"
-            ]
+          "status" : {
+            "type" : "string",
+            "enum" : [ "NOT_PAID", "PROCESSING", "POSTED" ]
           },
-          "position": {
-            "type": "integer",
-            "format": "int32"
+          "position" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "dueDate": {
-            "type": "string",
-            "format": "date"
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "accountName": {
-            "type": "string"
+          "accountName" : {
+            "type" : "string"
           },
-          "payee": {
-            "type": "string"
+          "payee" : {
+            "type" : "string"
           },
-          "notes": {
-            "type": "string"
+          "notes" : {
+            "type" : "string"
           },
-          "targetMinor": {
-            "type": "integer",
-            "format": "int64"
+          "targetMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "targetDate": {
-            "type": "string",
-            "format": "date"
+          "targetDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "spentMinor": {
-            "type": "integer",
-            "format": "int64"
+          "spentMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "remainingMinor": {
-            "type": "integer",
-            "format": "int64"
+          "remainingMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "overBudget": {
-            "type": "boolean"
+          "overBudget" : {
+            "type" : "boolean"
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       },
-      "PaycheckResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+      "PaycheckResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "name": {
-            "type": "string"
+          "name" : {
+            "type" : "string"
           },
-          "source": {
-            "type": "string"
+          "source" : {
+            "type" : "string"
           },
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "incomeDate": {
-            "type": "string",
-            "format": "date"
+          "incomeDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "state": {
-            "type": "string",
-            "enum": [
-              "ACTIVE",
-              "CLOSED",
-              "ARCHIVED"
-            ]
+          "state" : {
+            "type" : "string",
+            "enum" : [ "ACTIVE", "CLOSED", "ARCHIVED" ]
           },
-          "templateSourceId": {
-            "type": "string",
-            "format": "uuid"
+          "templateSourceId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "notes": {
-            "type": "string"
+          "notes" : {
+            "type" : "string"
           },
-          "allocatedMinor": {
-            "type": "integer",
-            "format": "int64"
+          "allocatedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "unallocatedMinor": {
-            "type": "integer",
-            "format": "int64"
+          "unallocatedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "allocationPercent": {
-            "type": "number"
+          "allocationPercent" : {
+            "type" : "number"
           },
-          "postedMinor": {
-            "type": "integer",
-            "format": "int64"
+          "postedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "processingMinor": {
-            "type": "integer",
-            "format": "int64"
+          "processingMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "notPaidMinor": {
-            "type": "integer",
-            "format": "int64"
+          "notPaidMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "completionPercent": {
-            "type": "number"
+          "completionPercent" : {
+            "type" : "number"
           },
-          "postedCount": {
-            "type": "integer",
-            "format": "int64"
+          "postedCount" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "processingCount": {
-            "type": "integer",
-            "format": "int64"
+          "processingCount" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "notPaidCount": {
-            "type": "integer",
-            "format": "int64"
+          "notPaidCount" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "requiresAttention": {
-            "type": "boolean"
+          "requiresAttention" : {
+            "type" : "boolean"
           },
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EntryResponse"
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EntryResponse"
             }
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "closedAt": {
-            "type": "string",
-            "format": "date-time"
+          "closedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "reopenedAt": {
-            "type": "string",
-            "format": "date-time"
+          "reopenedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "archivedAt": {
-            "type": "string",
-            "format": "date-time"
+          "archivedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       },
-      "AllocateLeftoverRequest": {
-        "type": "object",
-        "properties": {
-          "paycheckVersion": {
-            "type": "integer",
-            "format": "int64"
+      "AllocateLeftoverRequest" : {
+        "type" : "object",
+        "properties" : {
+          "paycheckVersion" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "paycheckVersion"
-        ]
+        "required" : [ "paycheckVersion" ]
       },
-      "CreateEntryRequest": {
-        "type": "object",
-        "properties": {
-          "entryType": {
-            "type": "string",
-            "enum": [
-              "BILL",
-              "SPENDING_BUCKET",
-              "SINKING_FUND"
-            ]
+      "CreateEntryRequest" : {
+        "type" : "object",
+        "properties" : {
+          "entryType" : {
+            "type" : "string",
+            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
-          "name": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "dueDate": {
-            "type": "string",
-            "format": "date"
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "accountName": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "accountName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "payee": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "payee" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
           },
-          "targetMinor": {
-            "type": "integer",
-            "format": "int64"
+          "targetMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "targetDate": {
-            "type": "string",
-            "format": "date"
+          "targetDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "paybackId": {
-            "type": "string",
-            "format": "uuid"
+          "paybackId" : {
+            "type" : "string",
+            "format" : "uuid"
           }
         },
-        "required": [
-          "amountMinor",
-          "entryType",
-          "name"
-        ]
+        "required" : [ "amountMinor", "entryType", "name" ]
       },
-      "ReorderEntriesRequest": {
-        "type": "object",
-        "properties": {
-          "entryIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
+      "ReorderEntriesRequest" : {
+        "type" : "object",
+        "properties" : {
+          "entryIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
             },
-            "minItems": 1
+            "minItems" : 1
           },
-          "paycheckVersion": {
-            "type": "integer",
-            "format": "int64"
+          "paycheckVersion" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "entryIds",
-          "paycheckVersion"
-        ]
+        "required" : [ "entryIds", "paycheckVersion" ]
       },
-      "CreatePaycheckFromTemplateRequest": {
-        "type": "object",
-        "properties": {
-          "templateId": {
-            "type": "string",
-            "format": "uuid"
+      "CreatePaycheckFromTemplateRequest" : {
+        "type" : "object",
+        "properties" : {
+          "templateId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "name": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 0
+          "name" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0
           },
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "incomeDate": {
-            "type": "string",
-            "format": "date"
+          "incomeDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "source": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "source" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
           },
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TemplateApplicationEntryRequest"
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TemplateApplicationEntryRequest"
             }
           }
         },
-        "required": [
-          "incomeDate",
-          "templateId"
-        ]
+        "required" : [ "incomeDate", "templateId" ]
       },
-      "TemplateApplicationEntryRequest": {
-        "type": "object",
-        "properties": {
-          "entryType": {
-            "type": "string",
-            "enum": [
-              "BILL",
-              "SPENDING_BUCKET",
-              "SINKING_FUND"
-            ]
+      "TemplateApplicationEntryRequest" : {
+        "type" : "object",
+        "properties" : {
+          "entryType" : {
+            "type" : "string",
+            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
-          "name": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "dueDate": {
-            "type": "string",
-            "format": "date"
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "accountName": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "accountName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "payee": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "payee" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
           },
-          "targetMinor": {
-            "type": "integer",
-            "format": "int64"
+          "targetMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "targetDate": {
-            "type": "string",
-            "format": "date"
+          "targetDate" : {
+            "type" : "string",
+            "format" : "date"
           }
         },
-        "required": [
-          "entryType",
-          "name"
-        ]
+        "required" : [ "entryType", "name" ]
       },
-      "CreatePaybackRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+      "CreatePaybackRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "originalAmountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "originalAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "openingRemainingAmountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "openingRemainingAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "borrowedDate": {
-            "type": "string",
-            "format": "date"
+          "borrowedDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "source": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "source" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
           }
         },
-        "required": [
-          "borrowedDate",
-          "name",
-          "openingRemainingAmountMinor",
-          "originalAmountMinor"
-        ]
+        "required" : [ "borrowedDate", "name", "openingRemainingAmountMinor", "originalAmountMinor" ]
       },
-      "PaybackResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+      "PaybackResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "name": {
-            "type": "string"
+          "name" : {
+            "type" : "string"
           },
-          "originalAmountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "originalAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "openingRemainingAmountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "openingRemainingAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "repaidMinor": {
-            "type": "integer",
-            "format": "int64"
+          "repaidMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "remainingMinor": {
-            "type": "integer",
-            "format": "int64"
+          "remainingMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "progressPercent": {
-            "type": "number",
-            "format": "double"
+          "progressPercent" : {
+            "type" : "number",
+            "format" : "double"
           },
-          "borrowedDate": {
-            "type": "string",
-            "format": "date"
+          "borrowedDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "source": {
-            "type": "string"
+          "source" : {
+            "type" : "string"
           },
-          "notes": {
-            "type": "string"
+          "notes" : {
+            "type" : "string"
           },
-          "state": {
-            "type": "string",
-            "enum": [
-              "ACTIVE",
-              "PAID_OFF"
-            ]
+          "state" : {
+            "type" : "string",
+            "enum" : [ "ACTIVE", "PAID_OFF" ]
           },
-          "repaymentCount": {
-            "type": "integer",
-            "format": "int64"
+          "repaymentCount" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       },
-      "StatusChangeRequest": {
-        "type": "object",
-        "properties": {
-          "toStatus": {
-            "type": "string",
-            "enum": [
-              "NOT_PAID",
-              "PROCESSING",
-              "POSTED"
-            ]
+      "StatusChangeRequest" : {
+        "type" : "object",
+        "properties" : {
+          "toStatus" : {
+            "type" : "string",
+            "enum" : [ "NOT_PAID", "PROCESSING", "POSTED" ]
           },
-          "effectiveAt": {
-            "type": "string",
-            "format": "date-time"
+          "effectiveAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "note": {
-            "type": "string",
-            "maxLength": 1000,
-            "minLength": 0
+          "note" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "effectiveAt",
-          "toStatus"
-        ]
+        "required" : [ "effectiveAt", "toStatus" ]
       },
-      "CreateBucketTransactionRequest": {
-        "type": "object",
-        "properties": {
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+      "CreateBucketTransactionRequest" : {
+        "type" : "object",
+        "properties" : {
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "description": {
-            "type": "string",
-            "maxLength": 500,
-            "minLength": 0
+          "description" : {
+            "type" : "string",
+            "maxLength" : 500,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 1000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
           },
-          "effectiveDate": {
-            "type": "string",
-            "format": "date"
+          "effectiveDate" : {
+            "type" : "string",
+            "format" : "date"
           }
         },
-        "required": [
-          "amountMinor",
-          "effectiveDate"
-        ]
+        "required" : [ "amountMinor", "effectiveDate" ]
       },
-      "BucketTransactionResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+      "BucketTransactionResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "entryId": {
-            "type": "string",
-            "format": "uuid"
+          "entryId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "description": {
-            "type": "string"
+          "description" : {
+            "type" : "string"
           },
-          "notes": {
-            "type": "string"
+          "notes" : {
+            "type" : "string"
           },
-          "effectiveDate": {
-            "type": "string",
-            "format": "date"
+          "effectiveDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       },
-      "RegisterRequest": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "maxLength": 320,
-            "minLength": 0
+      "RegisterRequest" : {
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string",
+            "maxLength" : 320,
+            "minLength" : 0
           },
-          "password": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 12,
-            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).+$"
+          "password" : {
+            "type" : "string",
+            "maxLength" : 128,
+            "minLength" : 12,
+            "pattern" : "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).+$"
           },
-          "displayName": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 0
+          "displayName" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0
           }
         },
-        "required": [
-          "email",
-          "password"
-        ]
+        "required" : [ "email", "password" ]
       },
-      "AuthResponse": {
-        "type": "object",
-        "properties": {
-          "accessToken": {
-            "type": "string"
+      "AuthResponse" : {
+        "type" : "object",
+        "properties" : {
+          "accessToken" : {
+            "type" : "string"
           },
-          "tokenType": {
-            "type": "string"
+          "tokenType" : {
+            "type" : "string"
           },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time"
+          "expiresAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "refreshToken": {
-            "type": "string"
+          "refreshToken" : {
+            "type" : "string"
           },
-          "refreshExpiresAt": {
-            "type": "string",
-            "format": "date-time"
+          "refreshExpiresAt" : {
+            "type" : "string",
+            "format" : "date-time"
           }
         }
       },
-      "RefreshRequest": {
-        "type": "object",
-        "properties": {
-          "refreshToken": {
-            "type": "string",
-            "maxLength": 256,
-            "minLength": 0
+      "RefreshRequest" : {
+        "type" : "object",
+        "properties" : {
+          "refreshToken" : {
+            "type" : "string",
+            "maxLength" : 256,
+            "minLength" : 0
           }
         },
-        "required": [
-          "refreshToken"
-        ]
+        "required" : [ "refreshToken" ]
       },
-      "LogoutRequest": {
-        "type": "object",
-        "properties": {
-          "refreshToken": {
-            "type": "string",
-            "maxLength": 256,
-            "minLength": 0
+      "LogoutRequest" : {
+        "type" : "object",
+        "properties" : {
+          "refreshToken" : {
+            "type" : "string",
+            "maxLength" : 256,
+            "minLength" : 0
           }
         },
-        "required": [
-          "refreshToken"
-        ]
+        "required" : [ "refreshToken" ]
       },
-      "LoginRequest": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "maxLength": 320,
-            "minLength": 0
+      "LoginRequest" : {
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string",
+            "maxLength" : 320,
+            "minLength" : 0
           },
-          "password": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 8
+          "password" : {
+            "type" : "string",
+            "maxLength" : 128,
+            "minLength" : 8
           },
-          "totpCode": {
-            "type": "string",
-            "pattern": "^$|\\d{6}$"
+          "totpCode" : {
+            "type" : "string",
+            "pattern" : "^$|\\d{6}$"
           }
         },
-        "required": [
-          "email",
-          "password"
-        ]
+        "required" : [ "email", "password" ]
       },
-      "UpdateTemplateRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 0
+      "UpdateTemplateRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0
           },
-          "description": {
-            "type": "string",
-            "maxLength": 1000,
-            "minLength": 0
+          "description" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "name",
-          "version"
-        ]
+        "required" : [ "name", "version" ]
       },
-      "UpdatePaycheckRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 0
+      "UpdatePaycheckRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0
           },
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "incomeDate": {
-            "type": "string",
-            "format": "date"
+          "incomeDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "source": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "source" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "amountMinor",
-          "incomeDate",
-          "name",
-          "version"
-        ]
+        "required" : [ "amountMinor", "incomeDate", "name", "version" ]
       },
-      "UpdatePaybackRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+      "UpdatePaybackRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "originalAmountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "originalAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "openingRemainingAmountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "openingRemainingAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "borrowedDate": {
-            "type": "string",
-            "format": "date"
+          "borrowedDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "source": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "source" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "borrowedDate",
-          "name",
-          "openingRemainingAmountMinor",
-          "originalAmountMinor",
-          "version"
-        ]
+        "required" : [ "borrowedDate", "name", "openingRemainingAmountMinor", "originalAmountMinor", "version" ]
       },
-      "UpdateEntryRequest": {
-        "type": "object",
-        "properties": {
-          "entryType": {
-            "type": "string",
-            "enum": [
-              "BILL",
-              "SPENDING_BUCKET",
-              "SINKING_FUND"
-            ]
+      "UpdateEntryRequest" : {
+        "type" : "object",
+        "properties" : {
+          "entryType" : {
+            "type" : "string",
+            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
-          "name": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "dueDate": {
-            "type": "string",
-            "format": "date"
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "accountName": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "accountName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "payee": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 0
+          "payee" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
           },
-          "targetMinor": {
-            "type": "integer",
-            "format": "int64"
+          "targetMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "targetDate": {
-            "type": "string",
-            "format": "date"
+          "targetDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "paybackId": {
-            "type": "string",
-            "format": "uuid"
+          "paybackId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "amountMinor",
-          "entryType",
-          "name",
-          "version"
-        ]
+        "required" : [ "amountMinor", "entryType", "name", "version" ]
       },
-      "UpdateBucketTransactionRequest": {
-        "type": "object",
-        "properties": {
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+      "UpdateBucketTransactionRequest" : {
+        "type" : "object",
+        "properties" : {
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "description": {
-            "type": "string",
-            "maxLength": 500,
-            "minLength": 0
+          "description" : {
+            "type" : "string",
+            "maxLength" : 500,
+            "minLength" : 0
           },
-          "notes": {
-            "type": "string",
-            "maxLength": 1000,
-            "minLength": 0
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
           },
-          "effectiveDate": {
-            "type": "string",
-            "format": "date"
+          "effectiveDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         },
-        "required": [
-          "amountMinor",
-          "effectiveDate",
-          "version"
-        ]
+        "required" : [ "amountMinor", "effectiveDate", "version" ]
       },
-      "PageResponseTemplateResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TemplateResponse"
+      "SystemStatusResponse" : {
+        "type" : "object",
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        }
+      },
+      "HealthResponse" : {
+        "type" : "object",
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PageResponseTemplateResponse" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TemplateResponse"
             }
           },
-          "page": {
-            "type": "integer",
-            "format": "int32"
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "size": {
-            "type": "integer",
-            "format": "int32"
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "totalItems": {
-            "type": "integer",
-            "format": "int64"
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "totalPages": {
-            "type": "integer",
-            "format": "int32"
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "hasNext": {
-            "type": "boolean"
+          "hasNext" : {
+            "type" : "boolean"
           }
         }
       },
-      "AuditEventResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+      "AuditEventResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "entityType": {
-            "type": "string"
+          "entityType" : {
+            "type" : "string"
           },
-          "entityId": {
-            "type": "string",
-            "format": "uuid"
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "action": {
-            "type": "string"
+          "action" : {
+            "type" : "string"
           },
-          "effectiveAt": {
-            "type": "string",
-            "format": "date-time"
+          "effectiveAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "recordedAt": {
-            "type": "string",
-            "format": "date-time"
+          "recordedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "beforeData": {
-            "$ref": "#/components/schemas/JsonNode"
+          "beforeData" : {
+            "$ref" : "#/components/schemas/JsonNode"
           },
-          "afterData": {
-            "$ref": "#/components/schemas/JsonNode"
+          "afterData" : {
+            "$ref" : "#/components/schemas/JsonNode"
           },
-          "metadata": {
-            "$ref": "#/components/schemas/JsonNode"
+          "metadata" : {
+            "$ref" : "#/components/schemas/JsonNode"
           }
         }
       },
-      "JsonNode": {},
-      "PageResponseAuditEventResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AuditEventResponse"
+      "JsonNode" : { },
+      "PageResponseAuditEventResponse" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AuditEventResponse"
             }
           },
-          "page": {
-            "type": "integer",
-            "format": "int32"
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "size": {
-            "type": "integer",
-            "format": "int32"
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "totalItems": {
-            "type": "integer",
-            "format": "int64"
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "totalPages": {
-            "type": "integer",
-            "format": "int32"
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "hasNext": {
-            "type": "boolean"
+          "hasNext" : {
+            "type" : "boolean"
           }
         }
       },
-      "PageResponsePaycheckResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PaycheckResponse"
+      "PageResponsePaycheckResponse" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PaycheckResponse"
             }
           },
-          "page": {
-            "type": "integer",
-            "format": "int32"
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "size": {
-            "type": "integer",
-            "format": "int32"
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "totalItems": {
-            "type": "integer",
-            "format": "int64"
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "totalPages": {
-            "type": "integer",
-            "format": "int32"
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "hasNext": {
-            "type": "boolean"
+          "hasNext" : {
+            "type" : "boolean"
           }
         }
       },
-      "PaybackListResponse": {
-        "type": "object",
-        "properties": {
-          "summary": {
-            "$ref": "#/components/schemas/PaybackSummaryResponse"
+      "PaybackListResponse" : {
+        "type" : "object",
+        "properties" : {
+          "summary" : {
+            "$ref" : "#/components/schemas/PaybackSummaryResponse"
           },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PaybackResponse"
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PaybackResponse"
             }
           }
         }
       },
-      "PaybackSummaryResponse": {
-        "type": "object",
-        "properties": {
-          "totalRemainingMinor": {
-            "type": "integer",
-            "format": "int64"
+      "PaybackSummaryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "totalRemainingMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "totalOriginalMinor": {
-            "type": "integer",
-            "format": "int64"
+          "totalOriginalMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "totalRepaidMinor": {
-            "type": "integer",
-            "format": "int64"
+          "totalRepaidMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "activeCount": {
-            "type": "integer",
-            "format": "int32"
+          "activeCount" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
-      "PageResponsePaybackRepaymentResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PaybackRepaymentResponse"
+      "PageResponsePaybackRepaymentResponse" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PaybackRepaymentResponse"
             }
           },
-          "page": {
-            "type": "integer",
-            "format": "int32"
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "size": {
-            "type": "integer",
-            "format": "int32"
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "totalItems": {
-            "type": "integer",
-            "format": "int64"
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "totalPages": {
-            "type": "integer",
-            "format": "int32"
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "hasNext": {
-            "type": "boolean"
+          "hasNext" : {
+            "type" : "boolean"
           }
         }
       },
-      "PaybackRepaymentResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+      "PaybackRepaymentResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "paybackId": {
-            "type": "string",
-            "format": "uuid"
+          "paybackId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "entryId": {
-            "type": "string",
-            "format": "uuid"
+          "entryId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "amountMinor": {
-            "type": "integer",
-            "format": "int64"
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "paycheckName": {
-            "type": "string"
+          "paycheckName" : {
+            "type" : "string"
           },
-          "paycheckIncomeDate": {
-            "type": "string",
-            "format": "date"
+          "paycheckIncomeDate" : {
+            "type" : "string",
+            "format" : "date"
           },
-          "entryName": {
-            "type": "string"
+          "entryName" : {
+            "type" : "string"
           },
-          "entryStatus": {
-            "type": "string",
-            "enum": [
-              "NOT_PAID",
-              "PROCESSING",
-              "POSTED"
-            ]
+          "entryStatus" : {
+            "type" : "string",
+            "enum" : [ "NOT_PAID", "PROCESSING", "POSTED" ]
           },
-          "appliedAt": {
-            "type": "string",
-            "format": "date-time"
+          "appliedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "reversedAt": {
-            "type": "string",
-            "format": "date-time"
+          "reversedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "version": {
-            "type": "integer",
-            "format": "int64"
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       },
-      "MeResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+      "MeResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "email": {
-            "type": "string"
+          "email" : {
+            "type" : "string"
           },
-          "displayName": {
-            "type": "string"
+          "displayName" : {
+            "type" : "string"
           },
-          "currencyCode": {
-            "type": "string"
+          "currencyCode" : {
+            "type" : "string"
           },
-          "timezone": {
-            "type": "string"
+          "timezone" : {
+            "type" : "string"
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           }
         }
       },
-      "PageResponseStatusEventResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/StatusEventResponse"
+      "PageResponseStatusEventResponse" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/StatusEventResponse"
             }
           },
-          "page": {
-            "type": "integer",
-            "format": "int32"
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "size": {
-            "type": "integer",
-            "format": "int32"
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "totalItems": {
-            "type": "integer",
-            "format": "int64"
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "totalPages": {
-            "type": "integer",
-            "format": "int32"
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "hasNext": {
-            "type": "boolean"
+          "hasNext" : {
+            "type" : "boolean"
           }
         }
       },
-      "StatusEventResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+      "StatusEventResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "entryId": {
-            "type": "string",
-            "format": "uuid"
+          "entryId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
-          "fromStatus": {
-            "type": "string",
-            "enum": [
-              "NOT_PAID",
-              "PROCESSING",
-              "POSTED"
-            ]
+          "fromStatus" : {
+            "type" : "string",
+            "enum" : [ "NOT_PAID", "PROCESSING", "POSTED" ]
           },
-          "toStatus": {
-            "type": "string",
-            "enum": [
-              "NOT_PAID",
-              "PROCESSING",
-              "POSTED"
-            ]
+          "toStatus" : {
+            "type" : "string",
+            "enum" : [ "NOT_PAID", "PROCESSING", "POSTED" ]
           },
-          "effectiveAt": {
-            "type": "string",
-            "format": "date-time"
+          "effectiveAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "recordedAt": {
-            "type": "string",
-            "format": "date-time"
+          "recordedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "note": {
-            "type": "string"
+          "note" : {
+            "type" : "string"
           }
         }
       },
-      "PageResponseBucketTransactionResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BucketTransactionResponse"
+      "PageResponseBucketTransactionResponse" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BucketTransactionResponse"
             }
           },
-          "page": {
-            "type": "integer",
-            "format": "int32"
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "size": {
-            "type": "integer",
-            "format": "int32"
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "totalItems": {
-            "type": "integer",
-            "format": "int64"
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "totalPages": {
-            "type": "integer",
-            "format": "int32"
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "hasNext": {
-            "type": "boolean"
+          "hasNext" : {
+            "type" : "boolean"
           }
         }
       }
     },
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
+    "securitySchemes" : {
+      "bearerAuth" : {
+        "type" : "http",
+        "scheme" : "bearer",
+        "bearerFormat" : "JWT"
       }
     }
   }

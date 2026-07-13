@@ -51,6 +51,11 @@ cd backend && ./gradlew check pitest
 cd mobile && npm run format:check && npm run lint && npm run typecheck && npm run test:coverage
 ```
 
+CI runs those gates, Compose validation, Docker image build validation, Expo Doctor, Android export,
+and the critical Android Maestro flow for pull requests and pushes to `master`. Successful `master`
+pushes publish the next `vMAJOR.MINOR.PATCH` tag and GitHub Release. The running backend reports its
+packaged version at `/health/live`.
+
 See [testing](docs/testing.md) for reports and E2E commands.
 
 ## Deploy and recover

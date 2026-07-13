@@ -122,8 +122,30 @@ instead of embedding raw storage values in the message.
 
 ### Health
 
-- `GET /health`
-- `GET /health/ready`
+- `GET /health` returns liveness and the packaged backend version.
+- `GET /health/live` returns the same liveness contract explicitly for deployment checks.
+- `GET /health/ready` checks dependency readiness, including PostgreSQL.
+
+Liveness response:
+
+```json
+{
+  "status": "UP",
+  "version": "1.0.2"
+}
+```
+
+Readiness response:
+
+```json
+{
+  "status": "UP"
+}
+```
+
+Health endpoints are unauthenticated so Docker, local deployment scripts, and tailnet-only
+monitoring can check the process without API credentials. They must not expose environment
+variables, secrets, database URLs, hostnames, stack traces, or authentication configuration.
 
 ## Security requirements
 

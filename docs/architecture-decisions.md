@@ -36,6 +36,17 @@ Current Payback balances are derived from opening remaining amount minus active 
 opening remaining amount is accepted and creates a Paid Off Payback, which lets already-settled
 borrowed money be recorded without fake repayments.
 
+## Runtime version reporting
+
+Yuuka release tags are the version source of truth. CI converts a successful `master` release tag
+into a Gradle build property, Spring Boot writes that value to build metadata, and the packaged
+backend reports it through `/health/live` and `/health`. Local builds fall back to `0.0.0-dev`.
+
+Liveness only reports process status and safe build version metadata. Readiness remains separate at
+`/health/ready` and may check required dependencies such as PostgreSQL. Docker health checks
+continue to use readiness, while deployment verification should check both readiness and
+liveness/version.
+
 ## Authentication boundary
 
 The mobile app uses short-lived signed access JWTs and one-time rotating opaque refresh tokens. Only refresh-token hashes are stored. Replaying a rotated token revokes its family. Production is single-owner, registration-disabled, password-plus-TOTP, and private-network-first.

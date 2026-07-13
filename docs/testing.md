@@ -45,3 +45,48 @@ maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .ma
 ```
 
 Never run destructive E2E flows against production data. Flaky tests are failures and must be fixed, not disabled.
+
+## GitHub Actions
+
+CI runs on pull requests targeting `master`, pushes to `master`, and manual dispatches.
+
+Required validation jobs:
+
+- Backend: `./gradlew check`, `./gradlew pitest`, and `./gradlew bootJar` with CI build metadata.
+- Mobile: `npm ci`, formatting, lint, TypeScript, Jest coverage, Expo Doctor, Android export, and production dependency audit.
+- Infrastructure: `docker compose config --quiet` and a hardened backend image build.
+- Android E2E: disposable PostgreSQL, demo backend, Android debug build, and the critical Maestro flow.
+
+Pull-request and branch validation jobs use cancellable concurrency so newer commits replace stale
+runs. The release job is separate, waits for all required validation jobs, runs only after a
+successful push to `master`, and does not run for pull requests.
+
+Checks that remain local/manual:
+
+- Production homelab deployment verification.
+- Physical-device USB debugging.
+- Real Tailscale Serve reachability from the owner's phone.
+- Backup restore drills against a disposable production-like stack.
+
+Those checks require private infrastructure or physical devices and are intentionally not required
+for ordinary GitHub Actions CI.
+
+## Release Versioning
+
+Successful `master` builds publish semantic-version tags in the form `vMAJOR.MINOR.PATCH`. The
+first automated release is `v1.0.0` if no valid version tag exists. Later releases increment the
+patch number from the latest valid tag.
+
+The release job fetches full history and tags, checks whether the current commit is already tagged,
+and refuses to force-overwrite tags. Rerunning a workflow for an already tagged commit reuses that
+tag instead of creating a second version. The job also creates or refreshes the matching GitHub
+Release with the backend jar, committed OpenAPI snapshot, commit SHA, generation timestamp, and a
+short commit-derived changelog.
+
+The version source of truth is:
+
+```text
+Git tag -> CI release version -> Spring Boot build info -> packaged jar/Docker image -> /health/live
+```
+
+Local builds that are not created from a release tag report `0.0.0-dev`.

@@ -8,7 +8,8 @@ RUN chmod +x gradlew
 RUN ./gradlew dependencies --no-daemon
 
 COPY src ./src
-RUN ./gradlew bootJar --no-daemon
+ARG YUUKA_VERSION=0.0.0-dev
+RUN ./gradlew bootJar --no-daemon -PyuukaVersion=${YUUKA_VERSION}
 
 FROM eclipse-temurin:21-jre-alpine
 

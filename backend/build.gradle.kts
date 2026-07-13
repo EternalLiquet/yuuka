@@ -8,7 +8,12 @@ plugins {
 }
 
 group = "com.yuuka"
-version = "0.0.1-SNAPSHOT"
+version =
+  providers
+    .gradleProperty("yuukaVersion")
+    .orElse(providers.environmentVariable("YUUKA_BUILD_VERSION"))
+    .orElse("0.0.0-dev")
+    .get()
 description = "Project Yuuka backend"
 
 java {
@@ -48,6 +53,14 @@ spotless {
   }
   kotlinGradle {
     ktlint()
+  }
+}
+
+springBoot {
+  buildInfo {
+    properties {
+      version = project.version.toString()
+    }
   }
 }
 

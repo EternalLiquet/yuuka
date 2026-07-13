@@ -39,10 +39,20 @@ Keep `.env` readable only by the service administrator (`chmod 600 .env`). Do no
 docker compose pull
 docker compose up -d --build
 docker compose ps
+curl --fail http://127.0.0.1:8080/health/live
 curl --fail http://127.0.0.1:8080/health/ready
 ```
 
 Flyway runs before the application accepts requests. Production startup refuses default secrets, public registration, plaintext bootstrap passwords, missing TOTP, and localhost CORS entries.
+
+`/health/live` reports the backend version packaged into the running container, for example:
+
+```json
+{
+  "status": "UP",
+  "version": "1.0.2"
+}
+```
 
 ## Private Tailscale HTTPS
 
@@ -68,12 +78,20 @@ Use Tailscale ACLs/grants so only your user and intended phone can reach the hom
 ```sh
 ./ops/backup.sh
 docker compose pull
-docker compose build --pull backend
+tag="$(git describe --tags --exact-match 2>/dev/null || true)"
+YUUKA_VERSION="${tag#v}"
+YUUKA_VERSION="${YUUKA_VERSION:-0.0.0-dev}" docker compose build --pull backend
 docker compose up -d
+docker compose ps
+curl --fail http://127.0.0.1:8080/health/live
 curl --fail http://127.0.0.1:8080/health/ready
 ```
 
 Review migration notes before downgrading. Flyway migrations are forward-only; restore the pre-upgrade backup if a rollback is required.
+
+Yuuka release tags use `vMAJOR.MINOR.PATCH`. When deploying from a checked-out release tag, the
+`YUUKA_VERSION` build argument should be the tag without the leading `v`; the command above derives
+that value from Git when possible and falls back to the local development version.
 
 ## Android installation
 

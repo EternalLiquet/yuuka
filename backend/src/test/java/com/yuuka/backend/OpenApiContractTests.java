@@ -31,7 +31,8 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/paybacks",
           "/api/v1/paybacks/{paybackId}",
           "/api/v1/paybacks/{paybackId}/repayments",
-          "/api/v1/templates");
+          "/api/v1/templates",
+          "/health/live");
 
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;

@@ -2,6 +2,12 @@ name: Dependency Review
 
 on:
   pull_request:
+    branches:
+      - master
+
+concurrency:
+  group: yuuka-dependency-review-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
