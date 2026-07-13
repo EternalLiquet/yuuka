@@ -180,6 +180,15 @@ When replacing an existing text-field value, remember that Maestro `eraseText` s
 - inputText: "2026-07-16T12:00:00Z"
 ```
 
+For full-screen React Native modals, prefer `back` when the next assertion only needs the modal dismissed. In CI, tapping a small close icon can be reported as completed even when the screenshot still shows the modal. Follow the back action with a wait for the underlying screen:
+
+```yaml
+- back
+- extendedWaitUntil:
+    visible: "Close paycheck"
+    timeout: 10000
+```
+
 ## Debugging Failures Fast
 
 Use this order:
