@@ -66,6 +66,7 @@ display. Example:
 
 - `POST /paychecks/{paycheckId}/entries`
 - `paybackId` may be supplied on entry create/update to assign that entry to an Active Payback.
+- Bill entry create/update requests and responses include optional `paymentMethod` values of `AUTOPAY` or `MANUAL`; non-Bill entries must not carry a payment method.
 - `POST /paychecks/{paycheckId}/leftover-entry` creates a normal `BILL` named `LEFTOVER` for the exact current unallocated amount when the supplied paycheck version is current.
 - `PATCH /entries/{id}`
 - `DELETE /entries/{id}`
@@ -115,6 +116,10 @@ instead of embedding raw storage values in the message.
 - `POST /templates/{id}/restore`
 - CRUD for template entries
 - reorder template entries
+
+### Search
+
+- `GET /search/entries` searches owner-scoped live entries by case-insensitive partial text in entry or paycheck names, exact `amountMinor`, and optional `scope` of `ALL`, `ACTIVE`, or `HISTORY`.
 
 ### Audit
 
