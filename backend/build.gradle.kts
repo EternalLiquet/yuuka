@@ -8,12 +8,32 @@ plugins {
 }
 
 group = "com.yuuka"
+
+fun normalizeYuukaVersion(raw: String?): String? =
+  raw
+    ?.trim()
+    ?.takeIf { it.isNotBlank() }
+    ?.removePrefix("v")
+    ?.takeIf { Regex("""\d+\.\d+\.\d+([-.+][0-9A-Za-z.+-]+)?""").matches(it) }
+
+fun exactGitTagVersion(): String? =
+  try {
+    val process =
+      ProcessBuilder("git", "describe", "--tags", "--exact-match", "HEAD")
+        .directory(rootDir)
+        .redirectError(ProcessBuilder.Redirect.DISCARD)
+        .start()
+    val output = process.inputStream.bufferedReader().readText()
+    if (process.waitFor() == 0) normalizeYuukaVersion(output) else null
+  } catch (_: Exception) {
+    null
+  }
+
 version =
-  providers
-    .gradleProperty("yuukaVersion")
-    .orElse(providers.environmentVariable("YUUKA_BUILD_VERSION"))
-    .orElse("0.0.0-dev")
-    .get()
+  normalizeYuukaVersion(providers.gradleProperty("yuukaVersion").orNull)
+    ?: normalizeYuukaVersion(providers.environmentVariable("YUUKA_BUILD_VERSION").orNull)
+    ?: exactGitTagVersion()
+    ?: "0.0.0-dev"
 description = "Project Yuuka backend"
 
 java {
@@ -190,5 +210,27 @@ tasks.register<JavaExec>("printTotpSecret") {
   val email = providers.gradleProperty("email")
   if (email.isPresent) {
     args(email.get())
+  }
+}
+
+tasks.register("printYuukaVersion") {
+  group = "versioning"
+  description = "Prints the Yuuka backend build version resolved by Gradle."
+  outputs.upToDateWhen { false }
+  doLast {
+    println(project.version)
+  }
+}
+
+tasks.register("verifyYuukaVersion") {
+  group = "verification"
+  description = "Fails unless the resolved Yuuka backend build version matches -PexpectedYuukaVersion."
+  outputs.upToDateWhen { false }
+  doLast {
+    val expected = providers.gradleProperty("expectedYuukaVersion").orNull
+    require(!expected.isNullOrBlank()) { "Set -PexpectedYuukaVersion=..." }
+    check(project.version.toString() == expected) {
+      "Expected Yuuka version $expected, got ${project.version}"
+    }
   }
 }

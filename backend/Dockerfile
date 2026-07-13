@@ -1,15 +1,22 @@
 FROM eclipse-temurin:21-jdk-alpine AS build
 
+RUN apk add --no-cache git
+
 WORKDIR /workspace/app
 
-COPY gradlew build.gradle.kts settings.gradle.kts ./
-COPY gradle ./gradle
+COPY backend/gradlew backend/build.gradle.kts backend/settings.gradle.kts ./
+COPY backend/gradle ./gradle
 RUN chmod +x gradlew
 RUN ./gradlew dependencies --no-daemon
 
-COPY src ./src
-ARG YUUKA_VERSION=0.0.0-dev
-RUN ./gradlew bootJar --no-daemon -PyuukaVersion=${YUUKA_VERSION}
+COPY .git /workspace/.git
+COPY backend/src ./src
+ARG YUUKA_VERSION
+RUN if [ -n "${YUUKA_VERSION:-}" ]; then \
+      ./gradlew bootJar --no-daemon -PyuukaVersion="${YUUKA_VERSION}"; \
+    else \
+      ./gradlew bootJar --no-daemon; \
+    fi
 
 FROM eclipse-temurin:21-jre-alpine
 

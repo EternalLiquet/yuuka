@@ -78,9 +78,7 @@ Use Tailscale ACLs/grants so only your user and intended phone can reach the hom
 ```sh
 ./ops/backup.sh
 docker compose pull
-tag="$(git describe --tags --exact-match 2>/dev/null || true)"
-YUUKA_VERSION="${tag#v}"
-YUUKA_VERSION="${YUUKA_VERSION:-0.0.0-dev}" docker compose build --pull backend
+docker compose build --pull backend
 docker compose up -d
 docker compose ps
 curl --fail http://127.0.0.1:8080/health/live
@@ -89,9 +87,17 @@ curl --fail http://127.0.0.1:8080/health/ready
 
 Review migration notes before downgrading. Flyway migrations are forward-only; restore the pre-upgrade backup if a rollback is required.
 
-Yuuka release tags use `vMAJOR.MINOR.PATCH`. When deploying from a checked-out release tag, the
-`YUUKA_VERSION` build argument should be the tag without the leading `v`; the command above derives
-that value from Git when possible and falls back to the local development version.
+Yuuka release tags use `vMAJOR.MINOR.PATCH`. Backend builds resolve their packaged version in this
+order:
+
+1. explicit `-PyuukaVersion=...`,
+2. `YUUKA_BUILD_VERSION`,
+3. the exact checked-out Git tag, with a leading `v` removed,
+4. `0.0.0-dev`.
+
+When deploying from a checked-out release tag, `docker compose build backend` includes Git metadata
+in the build stage so Gradle can package that tag version automatically. Untagged `master` builds
+report `0.0.0-dev` unless `YUUKA_VERSION` is deliberately supplied for a CI or diagnostic build.
 
 ## Android installation
 

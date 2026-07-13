@@ -4,7 +4,7 @@
     "slug": "yuuka",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/yuuka-emblem.png",
+    "icon": "./assets/images/yuuka-icon.png",
     "scheme": "yuuka",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -15,21 +15,21 @@
       "package": "com.yuuka.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#090D12",
-        "foregroundImage": "./assets/images/yuuka-emblem.png"
+        "foregroundImage": "./assets/images/yuuka-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/yuuka-emblem.png"
+      "favicon": "./assets/images/yuuka-icon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/yuuka-emblem.png",
+          "image": "./assets/images/yuuka-icon.png",
           "resizeMode": "contain",
           "backgroundColor": "#090D12"
         }

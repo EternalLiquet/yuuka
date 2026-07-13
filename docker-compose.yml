@@ -22,9 +22,10 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
       args:
-        YUUKA_VERSION: ${YUUKA_VERSION:-0.0.0-dev}
+        YUUKA_VERSION: ${YUUKA_VERSION:-}
     depends_on:
       postgres:
         condition: service_healthy

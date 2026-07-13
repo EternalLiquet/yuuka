@@ -36,6 +36,7 @@ coverage/
 
 # typescript
 *.tsbuildinfo
+settings.json
 
 # generated native folders
 /ios

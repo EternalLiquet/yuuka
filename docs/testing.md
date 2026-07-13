@@ -99,4 +99,6 @@ The version source of truth is:
 Git tag -> CI release version -> Spring Boot build info -> packaged jar/Docker image -> /health/live
 ```
 
-Local builds that are not created from a release tag report `0.0.0-dev`.
+Gradle resolves versions from `-PyuukaVersion`, then `YUUKA_BUILD_VERSION`, then an exact
+checked-out Git release tag, then `0.0.0-dev`. Local builds that are not created from a release tag
+report `0.0.0-dev`.
