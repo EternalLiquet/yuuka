@@ -4,6 +4,7 @@ import { Search } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
+import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Screen } from '@/components/screen';
@@ -11,6 +12,7 @@ import { SegmentedControl } from '@/components/segmented-control';
 import { EmptyState, ErrorState, StaleBanner } from '@/components/states';
 import { TextField } from '@/components/text-field';
 import { PaycheckCard } from '@/features/paychecks/paycheck-card';
+import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 const sortOptions = [
@@ -22,6 +24,7 @@ export default function HistoryScreen() {
   const api = useYuukaApi();
   const router = useRouter();
   const { colors } = useAppTheme();
+  const { settings } = useSettings();
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -49,7 +52,14 @@ export default function HistoryScreen() {
           query.isPending ? (
             <ActivityIndicator color={colors.accent} size="large" style={styles.loader} />
           ) : query.isError && !query.data ? (
-            <ErrorState message={message(query.error)} retry={() => query.refetch()} />
+            <ErrorState
+              message={displayError(
+                query.error,
+                settings.currencyCode,
+                'Check the API connection and try again.',
+              )}
+              retry={() => query.refetch()}
+            />
           ) : (
             <EmptyState
               message="Closed and completed paychecks will appear here."
@@ -115,10 +125,6 @@ export default function HistoryScreen() {
       />
     </Screen>
   );
-}
-
-function message(error: unknown) {
-  return error instanceof Error ? error.message : 'Check the API connection and try again.';
 }
 
 const styles = StyleSheet.create({

@@ -1,5 +1,5 @@
 import { Redirect, Tabs } from 'expo-router';
-import { History, LayoutTemplate, Settings, WalletCards } from 'lucide-react-native';
+import { History, LayoutTemplate, RotateCcw, Settings, WalletCards } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { ColorValue } from 'react-native';
 
@@ -48,6 +48,13 @@ export default function TabLayout() {
         options={{
           title: 'History',
           tabBarIcon: ({ color }) => <TabIcon icon={History} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="paybacks"
+        options={{
+          title: 'Paybacks',
+          tabBarIcon: ({ color }) => <TabIcon icon={RotateCcw} color={color} />,
         }}
       />
       <Tabs.Screen

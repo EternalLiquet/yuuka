@@ -1,6 +1,7 @@
 package com.yuuka.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -143,7 +144,7 @@ class CriticalBudgetWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
-  void calculatesBucketTransactionsAndNegativeCorrections() throws Exception {
+  void recordsBucketPurchaseLedgerAndPreservesPaycheckAllocation() throws Exception {
     String token = register("bucket@yuuka.local");
     JsonNode paycheck = createPaycheck(token, "Buckets", 5000);
     String paycheckId = paycheck.path("id").asText();
@@ -158,16 +159,93 @@ class CriticalBudgetWorkflowTests extends AbstractIntegrationTest {
                     """),
             201);
     String entryId = bucket.path("id").asText();
-    addBucketTransaction(token, entryId, 1235);
-    addBucketTransaction(token, entryId, 910);
-    addBucketTransaction(token, entryId, -500);
 
+    JsonNode purchase = addBucketTransaction(token, entryId, 1235, "Lunch", "Cafe receipt");
     mockMvc
         .perform(get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", bearer(token)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.entries[0].spentMinor").value(1645))
-        .andExpect(jsonPath("$.entries[0].remainingMinor").value(3355))
+        .andExpect(jsonPath("$.allocatedMinor").value(5000))
+        .andExpect(jsonPath("$.unallocatedMinor").value(0))
+        .andExpect(jsonPath("$.entries[0].spentMinor").value(1235))
+        .andExpect(jsonPath("$.entries[0].remainingMinor").value(3765))
+        .andExpect(jsonPath("$.entries[0].overBudget").value(false))
+        .andExpect(jsonPath("$.entries[0].status").value("NOT_PAID"));
+    mockMvc
+        .perform(
+            get("/api/v1/entries/{id}/bucket-transactions", entryId)
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].description").value("Lunch"))
+        .andExpect(jsonPath("$.items[0].notes").value("Cafe receipt"));
+
+    purchase =
+        json(
+            patch("/api/v1/bucket-transactions/{id}", purchase.path("id").asText())
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"amountMinor":5100,"description":"Dinner","notes":"Over budget","effectiveDate":"2026-07-11","version":%d}
+                    """
+                        .formatted(purchase.path("version").asLong())),
+            200);
+    mockMvc
+        .perform(get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.allocatedMinor").value(5000))
+        .andExpect(jsonPath("$.unallocatedMinor").value(0))
+        .andExpect(jsonPath("$.entries[0].spentMinor").value(5100))
+        .andExpect(jsonPath("$.entries[0].remainingMinor").value(-100))
+        .andExpect(jsonPath("$.entries[0].overBudget").value(true));
+
+    mockMvc
+        .perform(
+            delete("/api/v1/bucket-transactions/{id}", purchase.path("id").asText())
+                .param("version", purchase.path("version").asText())
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isNoContent());
+    mockMvc
+        .perform(get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.allocatedMinor").value(5000))
+        .andExpect(jsonPath("$.entries[0].spentMinor").value(0))
+        .andExpect(jsonPath("$.entries[0].remainingMinor").value(5000))
         .andExpect(jsonPath("$.entries[0].overBudget").value(false));
+  }
+
+  @Test
+  void protectsBucketTransactionsWithOwnerScope() throws Exception {
+    String ownerToken = register("bucket-owner@yuuka.local");
+    String otherToken = register("bucket-other@yuuka.local");
+    JsonNode paycheck = createPaycheck(ownerToken, "Owner Bucket", 5000);
+    JsonNode bucket =
+        json(
+            post("/api/v1/paychecks/{id}/entries", paycheck.path("id").asText())
+                .header("Authorization", bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"entryType":"SPENDING_BUCKET","name":"Private","amountMinor":5000}
+                    """),
+            201);
+    JsonNode transaction =
+        addBucketTransaction(ownerToken, bucket.path("id").asText(), 1200, "Store", null);
+
+    mockMvc
+        .perform(
+            get("/api/v1/entries/{id}/bucket-transactions", bucket.path("id").asText())
+                .header("Authorization", bearer(otherToken)))
+        .andExpect(status().isNotFound());
+    mockMvc
+        .perform(
+            patch("/api/v1/bucket-transactions/{id}", transaction.path("id").asText())
+                .header("Authorization", bearer(otherToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"amountMinor":1300,"effectiveDate":"2026-07-11","version":0}
+                    """))
+        .andExpect(status().isNotFound());
   }
 
   @Test
@@ -196,6 +274,94 @@ class CriticalBudgetWorkflowTests extends AbstractIntegrationTest {
                 .content(update))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CONFLICT"));
+  }
+
+  @Test
+  void allocatesLeftoverAsVersionCheckedBillEntry() throws Exception {
+    String token = register("leftover@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Leftover Check", 10000);
+    String paycheckId = paycheck.path("id").asText();
+    json(
+        post("/api/v1/paychecks/{id}/entries", paycheckId)
+            .header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {"entryType":"BILL","name":"Rent","amountMinor":7500}
+                """),
+        201);
+    JsonNode detail = getPaycheck(token, paycheckId);
+
+    JsonNode leftover =
+        json(
+            post("/api/v1/paychecks/{id}/leftover-entry", paycheckId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"paycheckVersion\":" + detail.path("version").asLong() + "}"),
+            201);
+    assertThat(leftover.path("entryType").asText()).isEqualTo("BILL");
+    assertThat(leftover.path("name").asText()).isEqualTo("LEFTOVER");
+    assertThat(leftover.path("amountMinor").asLong()).isEqualTo(2500);
+    assertThat(leftover.path("status").asText()).isEqualTo("NOT_PAID");
+
+    mockMvc
+        .perform(get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.allocatedMinor").value(10000))
+        .andExpect(jsonPath("$.unallocatedMinor").value(0))
+        .andExpect(jsonPath("$.allocationPercent").value(100.0));
+  }
+
+  @Test
+  void rejectsZeroDuplicateAndStaleLeftoverAllocation() throws Exception {
+    String token = register("leftover-stale@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Leftover stale", 10000);
+    String paycheckId = paycheck.path("id").asText();
+    long originalVersion = paycheck.path("version").asLong();
+    json(
+        post("/api/v1/paychecks/{id}/entries", paycheckId)
+            .header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {"entryType":"BILL","name":"Rent","amountMinor":7500}
+                """),
+        201);
+
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/{id}/leftover-entry", paycheckId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"paycheckVersion\":" + originalVersion + "}"))
+        .andExpect(status().isConflict());
+
+    JsonNode detail = getPaycheck(token, paycheckId);
+    JsonNode leftover =
+        json(
+            post("/api/v1/paychecks/{id}/leftover-entry", paycheckId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"paycheckVersion\":" + detail.path("version").asLong() + "}"),
+            201);
+    assertThat(leftover.path("amountMinor").asLong()).isEqualTo(2500);
+
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/{id}/leftover-entry", paycheckId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"paycheckVersion\":" + detail.path("version").asLong() + "}"))
+        .andExpect(status().isConflict());
+
+    detail = getPaycheck(token, paycheckId);
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/{id}/leftover-entry", paycheckId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"paycheckVersion\":" + detail.path("version").asLong() + "}"))
+        .andExpect(status().isUnprocessableEntity());
   }
 
   private JsonNode createPaycheck(String token, String name, long amountMinor) throws Exception {
@@ -240,17 +406,28 @@ class CriticalBudgetWorkflowTests extends AbstractIntegrationTest {
         expectedStatus);
   }
 
-  private void addBucketTransaction(String token, String entryId, long amount) throws Exception {
-    json(
+  private JsonNode addBucketTransaction(String token, String entryId, long amount)
+      throws Exception {
+    return addBucketTransaction(token, entryId, amount, null, null);
+  }
+
+  private JsonNode addBucketTransaction(
+      String token, String entryId, long amount, String description, String notes)
+      throws Exception {
+    return json(
         post("/api/v1/entries/{id}/bucket-transactions", entryId)
             .header("Authorization", bearer(token))
             .contentType(MediaType.APPLICATION_JSON)
             .content(
                 """
-                {"amountMinor":%d,"effectiveDate":"2026-07-10"}
+                {"amountMinor":%d,"description":%s,"notes":%s,"effectiveDate":"2026-07-10"}
                 """
-                    .formatted(amount)),
+                    .formatted(amount, jsonString(description), jsonString(notes))),
         201);
+  }
+
+  private String jsonString(String value) {
+    return value == null ? "null" : "\"" + value + "\"";
   }
 
   private String register(String email) throws Exception {

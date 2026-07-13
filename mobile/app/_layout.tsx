@@ -1,7 +1,9 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, ThemeProvider } from 'expo-router';
-import { usePreventScreenCapture } from 'expo-screen-capture';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/auth/auth-provider';
 import { Screen } from '@/components/screen';
@@ -17,12 +19,14 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
-  usePreventScreenCapture();
-
   return (
-    <SettingsProvider>
-      <RootProviders />
-    </SettingsProvider>
+    <GestureHandlerRootView style={styles.root} testID="gesture-handler-root">
+      <SafeAreaProvider>
+        <SettingsProvider>
+          <RootProviders />
+        </SettingsProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -39,6 +43,10 @@ function RootProviders() {
     </QueryProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});
 
 function RootNavigation() {
   const { colorMode, colors } = useAppTheme();

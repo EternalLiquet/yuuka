@@ -7,6 +7,7 @@ const baseEntry = {
   entryType: 'BILL' as const,
   name: 'Electricity',
   notes: '',
+  paybackId: '',
   payee: '',
   target: '',
   targetDate: '',

@@ -221,6 +221,29 @@ The user changes a status today but sets the effective date to several days earl
 
 The user may move Posted back to Processing. A new transition is appended; history is not rewritten.
 
+## Paybacks tab
+
+The Paybacks tab focuses on the total amount still owed to the owner:
+
+- summary card: total left to pay back, total originally tracked, total repaid through Yuuka,
+- active Paybacks first,
+- paid-off Paybacks in a separate history section,
+- each card shows remaining, original amount, tracked-from amount, repaid amount, start date,
+  repayment count, state, and accessible progress.
+
+Create/edit fields:
+
+- name,
+- original amount owed,
+- amount currently left,
+- borrowed or start date,
+- source or reason,
+- notes.
+
+Helper text must explain the difference between original amount owed and amount currently left.
+Paycheck entry editing exposes an "Apply to Payback" selector. Repayment applies only when the
+linked entry reaches Posted status.
+
 ### Fully allocated but incomplete
 
 A paycheck with zero unallocated money and one Processing entry remains in Active.

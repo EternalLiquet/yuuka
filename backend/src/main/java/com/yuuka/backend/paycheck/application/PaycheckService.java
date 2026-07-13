@@ -9,6 +9,7 @@ import com.yuuka.backend.common.api.BusinessRuleException;
 import com.yuuka.backend.common.api.ConflictException;
 import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.api.ResourceNotFoundException;
+import com.yuuka.backend.payback.application.PaybackService;
 import com.yuuka.backend.paycheck.api.dto.CreateEntryRequest;
 import com.yuuka.backend.paycheck.api.dto.CreatePaycheckRequest;
 import com.yuuka.backend.paycheck.api.dto.EntryResponse;
@@ -58,6 +59,7 @@ public class PaycheckService {
   private final PaycheckVisibilityPolicy visibilityPolicy;
   private final StatusTransitionPolicy statusTransitionPolicy;
   private final BucketCalculator bucketCalculator;
+  private final PaybackService paybackService;
   private final AuditService auditService;
   private final Clock clock;
 
@@ -70,6 +72,7 @@ public class PaycheckService {
       PaycheckVisibilityPolicy visibilityPolicy,
       StatusTransitionPolicy statusTransitionPolicy,
       BucketCalculator bucketCalculator,
+      PaybackService paybackService,
       AuditService auditService,
       Clock clock) {
     this.paychecks = paychecks;
@@ -80,6 +83,7 @@ public class PaycheckService {
     this.visibilityPolicy = visibilityPolicy;
     this.statusTransitionPolicy = statusTransitionPolicy;
     this.bucketCalculator = bucketCalculator;
+    this.paybackService = paybackService;
     this.auditService = auditService;
     this.clock = clock;
   }
@@ -197,6 +201,57 @@ public class PaycheckService {
   }
 
   @Transactional
+  public EntryResponse allocateLeftover(UUID ownerId, UUID paycheckId, long paycheckVersion) {
+    Paycheck paycheck = requirePaycheckForUpdate(ownerId, paycheckId);
+    requireActive(paycheck);
+    assertVersion(paycheck.getVersion(), paycheckVersion);
+    List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
+    PaycheckMetrics metrics = calculate(paycheck, liveEntries);
+    if (metrics.unallocatedMinor() <= 0) {
+      throw new BusinessRuleException("There is no leftover money to allocate.");
+    }
+
+    PaycheckEntry entry =
+        entries.saveAndFlush(
+            new PaycheckEntry(
+                ownerId,
+                paycheckId,
+                EntryType.BILL,
+                "LEFTOVER",
+                metrics.unallocatedMinor(),
+                entries.findMaxLivePosition(paycheckId) + 1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null));
+    Instant recordedAt = clock.instant();
+    statusEvents.save(
+        new EntryStatusEvent(
+            ownerId,
+            entry.getId(),
+            null,
+            EntryStatus.NOT_PAID,
+            recordedAt,
+            recordedAt,
+            "Leftover allocated"));
+    paycheck.touch(recordedAt);
+    EntryResponse response = toEntryResponse(entry);
+    auditService.append(
+        ownerId,
+        "PAYCHECK_ENTRY",
+        entry.getId(),
+        "LEFTOVER_ALLOCATED",
+        null,
+        null,
+        response,
+        Map.of("paycheckId", paycheckId));
+    return response;
+  }
+
+  @Transactional
   public EntryResponse addEntry(UUID ownerId, UUID paycheckId, CreateEntryRequest request) {
     Paycheck paycheck = requirePaycheck(ownerId, paycheckId);
     requireActive(paycheck);
@@ -206,20 +261,22 @@ public class PaycheckService {
     assertNotOverAllocated(paycheckCalculator.calculate(paycheck.getAmountMinor(), proposed));
 
     PaycheckEntry entry =
-        entries.saveAndFlush(
-            new PaycheckEntry(
-                ownerId,
-                paycheckId,
-                request.entryType(),
-                request.name().trim(),
-                request.amountMinor(),
-                entries.findMaxLivePosition(paycheckId) + 1,
-                billValue(request.entryType(), request.dueDate()),
-                billValue(request.entryType(), normalizeOptional(request.accountName())),
-                billValue(request.entryType(), normalizeOptional(request.payee())),
-                normalizeOptional(request.notes()),
-                sinkingValue(request.entryType(), request.targetMinor()),
-                sinkingValue(request.entryType(), request.targetDate())));
+        new PaycheckEntry(
+            ownerId,
+            paycheckId,
+            request.entryType(),
+            request.name().trim(),
+            request.amountMinor(),
+            entries.findMaxLivePosition(paycheckId) + 1,
+            billValue(request.entryType(), request.dueDate()),
+            billValue(request.entryType(), normalizeOptional(request.accountName())),
+            billValue(request.entryType(), normalizeOptional(request.payee())),
+            normalizeOptional(request.notes()),
+            sinkingValue(request.entryType(), request.targetMinor()),
+            sinkingValue(request.entryType(), request.targetDate()),
+            request.paybackId());
+    paybackService.validateAssignment(ownerId, entry, request.paybackId());
+    entry = entries.saveAndFlush(entry);
     Instant recordedAt = clock.instant();
     statusEvents.save(
         new EntryStatusEvent(
@@ -257,6 +314,9 @@ public class PaycheckService {
             .toList();
     assertNotOverAllocated(paycheckCalculator.calculate(paycheck.getAmountMinor(), proposed));
     EntryResponse before = toEntryResponse(entry);
+    UUID previousPaybackId = entry.getPaybackId();
+    long previousAmountMinor = entry.getAmountMinor();
+    EntryStatus previousStatus = entry.getStatus();
     entry.update(
         request.entryType(),
         request.name().trim(),
@@ -266,8 +326,12 @@ public class PaycheckService {
         billValue(request.entryType(), normalizeOptional(request.payee())),
         normalizeOptional(request.notes()),
         sinkingValue(request.entryType(), request.targetMinor()),
-        sinkingValue(request.entryType(), request.targetDate()));
-    paycheck.touch(clock.instant());
+        sinkingValue(request.entryType(), request.targetDate()),
+        request.paybackId());
+    Instant recordedAt = clock.instant();
+    paybackService.syncAfterEntryUpdate(
+        ownerId, entry, previousPaybackId, previousAmountMinor, previousStatus, recordedAt);
+    paycheck.touch(recordedAt);
     entries.flush();
     EntryResponse after = toEntryResponse(entry);
     auditService.append(ownerId, "PAYCHECK_ENTRY", entryId, "UPDATED", null, before, after, null);
@@ -282,6 +346,9 @@ public class PaycheckService {
     assertVersion(entry.getVersion(), version);
     EntryResponse before = toEntryResponse(entry);
     Instant now = clock.instant();
+    if (entry.getStatus() == EntryStatus.POSTED) {
+      paybackService.reversePostedEntryRepayment(ownerId, entry.getId(), now);
+    }
     entry.delete(now);
     paycheck.touch(now);
     auditService.append(ownerId, "PAYCHECK_ENTRY", entryId, "DELETED", null, before, null, null);
@@ -300,6 +367,11 @@ public class PaycheckService {
     EntryResponse before = toEntryResponse(entry);
     EntryStatus previous = entry.transitionTo(request.toStatus());
     Instant recordedAt = clock.instant();
+    if (previous != EntryStatus.POSTED && request.toStatus() == EntryStatus.POSTED) {
+      paybackService.applyPostedEntryRepayment(ownerId, entry, recordedAt);
+    } else if (previous == EntryStatus.POSTED && request.toStatus() != EntryStatus.POSTED) {
+      paybackService.reversePostedEntryRepayment(ownerId, entry.getId(), recordedAt);
+    }
     statusEvents.save(
         new EntryStatusEvent(
             ownerId,
@@ -437,6 +509,12 @@ public class PaycheckService {
         .orElseThrow(ResourceNotFoundException::new);
   }
 
+  private Paycheck requirePaycheckForUpdate(UUID ownerId, UUID paycheckId) {
+    return paychecks
+        .findByIdAndOwnerIdForUpdate(paycheckId, ownerId)
+        .orElseThrow(ResourceNotFoundException::new);
+  }
+
   public PaycheckEntry requireEntry(UUID ownerId, UUID entryId) {
     return entries
         .findByIdAndOwnerIdAndDeletedAtIsNull(entryId, ownerId)
@@ -484,9 +562,9 @@ public class PaycheckService {
   private void assertNotOverAllocated(PaycheckMetrics metrics) {
     if (metrics.unallocatedMinor() < 0) {
       throw new BusinessRuleException(
-          "This change would over-allocate the paycheck by "
-              + Math.abs(metrics.unallocatedMinor())
-              + " minor units.");
+          "PAYCHECK_OVER_ALLOCATED",
+          "This would over-allocate the paycheck.",
+          Map.of("amountMinor", Math.abs(metrics.unallocatedMinor()), "currencyCode", "USD"));
     }
   }
 

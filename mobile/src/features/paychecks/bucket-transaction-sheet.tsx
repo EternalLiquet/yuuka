@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Save, Trash2, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { BucketTransaction, Entry } from '@/api/contracts';
+import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
@@ -31,6 +32,7 @@ export function BucketTransactionSheet({
   const [editing, setEditing] = useState<BucketTransaction | null>(null);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [notes, setNotes] = useState('');
   const [effectiveDate, setEffectiveDate] = useState(today());
   const [error, setError] = useState('');
   const query = useQuery({
@@ -43,10 +45,16 @@ export function BucketTransactionSheet({
       if (!entry) throw new Error('Choose a bucket.');
       if (action === 'delete' && editing)
         return api.deleteBucketTransaction(editing.id, editing.version);
-      const amountMinor = parseMoneyToMinor(amount, { allowNegative: true });
-      if (amountMinor === 0) throw new Error('Enter a non-zero amount.');
+
+      const amountMinor = parseMoneyToMinor(amount);
+      if (amountMinor <= 0) throw new Error('Enter a purchase amount greater than zero.');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) throw new Error('Use YYYY-MM-DD.');
-      const values = { amountMinor, description: description.trim(), effectiveDate };
+      const values = {
+        amountMinor,
+        description: description.trim(),
+        notes: notes.trim(),
+        effectiveDate,
+      };
       return editing
         ? api.updateBucketTransaction(editing.id, { ...values, version: editing.version })
         : api.addBucketTransaction(entry.id, values);
@@ -59,9 +67,7 @@ export function BucketTransactionSheet({
       await onChanged();
     },
     onError: (mutationError) =>
-      setError(
-        mutationError instanceof Error ? mutationError.message : 'The activity was not saved.',
-      ),
+      setError(displayError(mutationError, settings.currencyCode, 'The purchase was not saved.')),
   });
 
   useEffect(() => {
@@ -72,6 +78,7 @@ export function BucketTransactionSheet({
     setEditing(transaction);
     setAmount(minorToInput(transaction.amountMinor));
     setDescription(transaction.description ?? '');
+    setNotes(transaction.notes ?? '');
     setEffectiveDate(transaction.effectiveDate);
     setError('');
   }
@@ -80,22 +87,28 @@ export function BucketTransactionSheet({
     setEditing(null);
     setAmount('');
     setDescription('');
+    setNotes('');
     setEffectiveDate(today());
     setError('');
   }
+
+  const spentMinor = entry?.spentMinor ?? 0;
+  const remainingMinor = entry?.remainingMinor ?? entry?.amountMinor ?? 0;
+  const overBudget = Boolean(entry?.overBudget);
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} visible={Boolean(entry)}>
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={styles.headerText}>
-            <AppText variant="title">Bucket activity</AppText>
+            <AppText variant="title">Bucket ledger</AppText>
             <AppText style={{ color: colors.muted }} variant="caption">
               {entry?.name}
             </AppText>
           </View>
           <Pressable
-            accessibilityLabel="Close bucket activity"
+            accessibilityLabel="Close bucket ledger"
+            accessibilityRole="button"
             onPress={onClose}
             style={styles.close}
           >
@@ -103,28 +116,42 @@ export function BucketTransactionSheet({
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.metrics}>
+            <Metric
+              label="Budgeted"
+              value={formatMoney(entry?.amountMinor ?? 0, settings.currencyCode)}
+            />
+            <Metric label="Spent" value={formatMoney(spentMinor, settings.currencyCode)} />
+            <Metric
+              label={overBudget ? 'Over budget' : 'Remaining'}
+              tone={overBudget ? colors.danger : colors.posted}
+              value={formatMoney(Math.abs(remainingMinor), settings.currencyCode)}
+            />
+          </View>
+
           <View
             style={[styles.form, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <AppText variant="label">{editing ? 'Edit activity' : 'New activity'}</AppText>
+            <AppText variant="label">{editing ? 'Edit purchase' : 'Add purchase'}</AppText>
             <TextField
               keyboardType="decimal-pad"
               label="Amount"
               onChangeText={setAmount}
-              placeholder="12.35 or -5.00"
+              placeholder="12.35"
               value={amount}
             />
             <TextField
-              label="Effective date"
+              label="Transaction date"
               onChangeText={setEffectiveDate}
               placeholder="YYYY-MM-DD"
               value={effectiveDate}
             />
             <TextField
-              label="Description (optional)"
+              label="Merchant or description (optional)"
               onChangeText={setDescription}
               value={description}
             />
+            <TextField label="Notes (optional)" multiline onChangeText={setNotes} value={notes} />
             {error ? (
               <AppText style={{ color: colors.danger }} variant="error">
                 {error}
@@ -133,11 +160,11 @@ export function BucketTransactionSheet({
             <View style={styles.formActions}>
               <Button
                 icon={editing ? Save : Plus}
-                label={editing ? 'Save changes' : 'Add activity'}
+                label={editing ? 'Save purchase' : 'Add purchase'}
                 loading={mutation.isPending}
                 onPress={() => mutation.mutate('save')}
               />
-              {editing ? <Button label="Cancel edit" onPress={resetForm} variant="ghost" /> : null}
+              {editing ? <Button label="Cancel" onPress={resetForm} variant="ghost" /> : null}
               {editing ? (
                 <Button
                   icon={Trash2}
@@ -151,41 +178,42 @@ export function BucketTransactionSheet({
           </View>
 
           <View style={styles.list}>
-            <AppText variant="label">Recorded activity</AppText>
+            <AppText variant="label">Purchases</AppText>
+            {query.isPending ? <ActivityIndicator color={colors.accent} /> : null}
             {query.data?.items.map((transaction) => (
               <View
                 key={transaction.id}
                 style={[styles.transaction, { borderBottomColor: colors.border }]}
               >
                 <View style={styles.transactionText}>
-                  <AppText
-                    style={{ color: transaction.amountMinor < 0 ? colors.posted : colors.text }}
-                    variant="money"
-                  >
+                  <AppText variant="money">
                     {formatMoney(transaction.amountMinor, settings.currencyCode)}
                   </AppText>
                   <AppText style={{ color: colors.muted }} variant="caption">
-                    {transaction.effectiveDate}
-                    {transaction.description ? `  |  ${transaction.description}` : ''}
+                    {formatDate(transaction.effectiveDate)}
+                    {transaction.description ? ` | ${transaction.description}` : ''}
                   </AppText>
+                  {transaction.notes ? (
+                    <AppText style={{ color: colors.muted }} variant="caption">
+                      {transaction.notes}
+                    </AppText>
+                  ) : null}
                 </View>
                 <IconButton
                   icon={Pencil}
-                  label={`Edit ${formatMoney(transaction.amountMinor, settings.currencyCode)} activity`}
+                  label={`Edit ${formatMoney(transaction.amountMinor, settings.currencyCode)} purchase`}
                   onPress={() => edit(transaction)}
                 />
               </View>
             ))}
             {query.data?.items.length === 0 ? (
               <AppText style={{ color: colors.muted }} variant="caption">
-                No activity recorded.
+                No purchases recorded.
               </AppText>
             ) : null}
             {query.isError ? (
               <AppText style={{ color: colors.danger }} variant="error">
-                {query.error instanceof Error
-                  ? query.error.message
-                  : 'Activity could not be loaded.'}
+                {displayError(query.error, settings.currencyCode, 'Purchases could not be loaded.')}
               </AppText>
             ) : null}
           </View>
@@ -193,6 +221,28 @@ export function BucketTransactionSheet({
       </View>
     </Modal>
   );
+}
+
+function Metric({ label, tone, value }: { label: string; tone?: string; value: string }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={[styles.metric, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <AppText style={{ color: colors.muted }} variant="caption">
+        {label}
+      </AppText>
+      <AppText style={{ color: tone ?? colors.text, fontWeight: '700' }} variant="caption">
+        {value}
+      </AppText>
+    </View>
+  );
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(`${value}T12:00:00`));
 }
 
 const styles = StyleSheet.create({
@@ -209,6 +259,8 @@ const styles = StyleSheet.create({
   },
   headerText: { flex: 1, gap: 3 },
   list: { gap: 10 },
+  metric: { borderRadius: 8, borderWidth: 1, flex: 1, gap: 4, padding: 12 },
+  metrics: { flexDirection: 'row', gap: 8 },
   screen: { flex: 1 },
   transaction: {
     alignItems: 'center',

@@ -14,6 +14,7 @@ export type EntryType = z.infer<typeof entryTypeSchema>;
 export const entrySchema = z.object({
   id: uuid,
   paycheckId: uuid,
+  paybackId: uuid.nullable(),
   entryType: entryTypeSchema,
   name: z.string(),
   amountMinor: minor.nonnegative(),
@@ -64,6 +65,58 @@ export const paycheckSchema = z.object({
 });
 export type Paycheck = z.infer<typeof paycheckSchema>;
 
+export const paybackStateSchema = z.enum(['ACTIVE', 'PAID_OFF']);
+export type PaybackState = z.infer<typeof paybackStateSchema>;
+
+export const paybackSchema = z.object({
+  id: uuid,
+  name: z.string(),
+  originalAmountMinor: minor.positive(),
+  openingRemainingAmountMinor: minor.nonnegative(),
+  repaidMinor: minor.nonnegative(),
+  remainingMinor: minor.nonnegative(),
+  progressPercent: z.number(),
+  borrowedDate: date,
+  source: z.string().nullable(),
+  notes: z.string().nullable(),
+  state: paybackStateSchema,
+  position: z.number().int().nonnegative(),
+  repaymentCount: z.number().int().nonnegative(),
+  createdAt: instant,
+  updatedAt: instant,
+  version: z.number().int().nonnegative(),
+});
+export type Payback = z.infer<typeof paybackSchema>;
+
+export const paybackSummarySchema = z.object({
+  totalRemainingMinor: minor.nonnegative(),
+  totalOriginalMinor: minor.nonnegative(),
+  totalRepaidMinor: minor.nonnegative(),
+  activeCount: z.number().int().nonnegative(),
+});
+export type PaybackSummary = z.infer<typeof paybackSummarySchema>;
+
+export const paybackListSchema = z.object({
+  summary: paybackSummarySchema,
+  items: z.array(paybackSchema),
+});
+export type PaybackList = z.infer<typeof paybackListSchema>;
+
+export const paybackRepaymentSchema = z.object({
+  id: uuid,
+  paybackId: uuid,
+  entryId: uuid,
+  amountMinor: minor.positive(),
+  paycheckName: z.string(),
+  paycheckIncomeDate: date,
+  entryName: z.string(),
+  entryStatus: entryStatusSchema,
+  appliedAt: instant,
+  reversedAt: instant.nullable(),
+  version: z.number().int().nonnegative(),
+});
+export type PaybackRepayment = z.infer<typeof paybackRepaymentSchema>;
+
 export const templateEntrySchema = z.object({
   id: uuid,
   entryType: entryTypeSchema,
@@ -100,8 +153,9 @@ export type BudgetTemplate = z.infer<typeof templateSchema>;
 export const bucketTransactionSchema = z.object({
   id: uuid,
   entryId: uuid,
-  amountMinor: minor,
+  amountMinor: minor.positive(),
   description: z.string().nullable(),
+  notes: z.string().nullable(),
   effectiveDate: date,
   createdAt: instant,
   updatedAt: instant,
