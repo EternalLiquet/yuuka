@@ -58,7 +58,9 @@ Sorting by amount must not overwrite custom order. Clearing the sort restores cu
 
 ### Bucket transactions
 
-A $50.00 Work Food bucket with $12.35 and $9.10 spending has $28.55 remaining. A -$5.00 correction changes remaining to $33.55.
+A $50.00 Work Food bucket with $12.35 and $9.10 spending has $28.55 remaining.
+Editing those purchases updates spent and remaining totals. A $51.00 purchase against the same
+$50.00 bucket shows $51.00 spent and $1.00 over budget.
 
 ### History
 

@@ -3,7 +3,7 @@
 ## Repository layout
 
 ```text
-project-yuuka/
+yuuka/
 ├── backend/
 ├── mobile/
 ├── docs/
@@ -162,13 +162,15 @@ Append-only:
 - entry_id
 - amount_minor BIGINT
 - description nullable
+- notes nullable
 - effective_date
 - created_at
 - updated_at
 - deleted_at nullable
 - optimistic-lock version
 
-Positive values consume budget. Negative values represent corrections or refunds.
+Amounts are positive purchase records. Corrections are made by editing or deleting the original
+transaction; refund-style negative transactions are not part of the current contract.
 
 ### templates
 

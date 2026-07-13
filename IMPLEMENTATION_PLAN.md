@@ -72,11 +72,11 @@ Tests first: snapshot independence, exact-cent difference, atomic failure, order
 
 Behaviors:
 
-- Add, edit, and soft-delete positive spending and negative correction transactions.
+- Add, edit, and soft-delete positive purchase transactions.
 - Spent and remaining values are derived from live transactions.
 - Each transaction mutation appends an audit event atomically.
 
-Tests first: `5000 - 1235 - 910 + 500 = 3355`, entry-type validation, audit creation, rollback,
+Tests first: purchase totals, over-budget display, entry-type validation, audit creation, rollback,
 optimistic locking, and ownership.
 
 ### 6. Lifecycle, History, and audit
@@ -95,14 +95,16 @@ Behaviors:
 
 - Sign in, refresh expired sessions, sign out, and show an explicit session-expired state.
 - Active cards prioritize unallocated money and work remaining over charts.
-- Create from scratch or template, edit entries, use a compact status sheet, preserve failed forms,
-  transact against buckets, reorder accessibly, and browse History/audit.
+- Create paychecks from scratch, edit entries, use a compact status sheet, preserve failed forms,
+  transact against buckets, reorder accessibly, browse History, and manage Paybacks.
 - Settings expose API URL, connection, dark/light/system theme, timezone, currency, version, and
   sign out. Dark is the first-run default.
 - Cached reads remain visible on network errors with stale and retry affordances.
+- Mobile template management, create-from-template UI, and full audit browsing remain later-scope
+  screens even though backend contracts and service workflows exist.
 
-Tests first: money/validation/sort/filter utilities, cards and rows, forms, status sheet, template
-preview, bucket form, retry states, and accessibility labels.
+Tests first: money/validation/sort/filter utilities, cards and rows, forms, status sheet, bucket
+form, Payback flows, retry states, and accessibility labels.
 
 ## Data and Migrations
 

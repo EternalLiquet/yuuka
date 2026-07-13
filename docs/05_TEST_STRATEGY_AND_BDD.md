@@ -76,8 +76,8 @@ Use React Native Testing Library for:
 - status bottom sheet,
 - editable effective date,
 - create paycheck form,
-- template preview,
 - bucket transaction form,
+- Payback list, editor, detail, and repayment assignment behavior,
 - filter/sort controls,
 - retry states,
 - accessibility labels.
@@ -86,20 +86,25 @@ Use React Native Testing Library for:
 
 Use Maestro or an equivalent Android-capable tool.
 
-Automate at least:
+The current critical Android flows automate:
 
 1. Sign in.
 2. Create paycheck from scratch.
-3. Create paycheck from template.
-4. Add bill.
-5. Change Not Paid to Processing.
-6. Change Processing to Posted.
-7. Edit effective date.
-8. Add bucket transaction.
-9. Reorder entries.
-10. Close paycheck.
-11. View History.
-12. Reopen paycheck.
+3. Add bill.
+4. Change Not Paid to Processing.
+5. Change Processing to Posted.
+6. Edit effective date.
+7. Add bucket transaction.
+8. Reorder entries.
+9. Close paycheck.
+10. View History.
+11. Reopen paycheck.
+12. Create a Payback.
+13. Assign a paycheck entry to a Payback.
+14. Delete a Payback and verify live entry reassignment cleanup.
+
+Create-from-template and full audit-browsing flows should be added when those mobile screens leave
+placeholder status.
 
 ## Contract testing
 

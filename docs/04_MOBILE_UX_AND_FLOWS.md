@@ -6,8 +6,9 @@ Bottom tabs:
 
 1. Active
 2. History
-3. Templates
-4. Settings
+3. Paybacks
+4. Templates
+5. Settings
 
 A prominent create action is available from Active.
 
@@ -107,10 +108,8 @@ Support drag-and-drop in custom-order mode and accessible Move Up / Move Down co
 
 ## Create paycheck flow
 
-First choice:
-
-- Use a Template
-- Start from Scratch
+Current mobile implementation supports Start from Scratch. Backend template application exists, but
+the mobile create-from-template picker and preview are later-scope.
 
 ### From scratch
 
@@ -125,6 +124,8 @@ Collect:
 After save, open paycheck detail with zero entries and the full amount shown as unallocated.
 
 ### From template
+
+Later-scope mobile flow:
 
 1. Select template.
 2. Enter exact paycheck amount manually.
@@ -168,10 +169,15 @@ Support:
 - date filtering,
 - newest/oldest sorting,
 - full detail,
-- audit history,
 - reopen.
 
+Full paycheck audit browsing remains later-scope mobile UI. Status history is available from entry
+detail controls.
+
 ## Templates
+
+Current mobile template routes are placeholders. Backend template contracts support the actions
+below, and the mobile screens should expose them in a later slice.
 
 Template cards show:
 
