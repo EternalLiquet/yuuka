@@ -195,10 +195,6 @@ When a flow creates nested detail screens and then switches tabs, first navigate
 - back
 - back
 - extendedWaitUntil:
-    visible: "New Payback"
-    timeout: 10000
-- tapOn: "Active"
-- extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
 ```

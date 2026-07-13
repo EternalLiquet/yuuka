@@ -34,11 +34,6 @@ name: Payback delete unassigns entry
 - back
 - back
 - extendedWaitUntil:
-    visible: "New Payback"
-    timeout: 10000
-
-- tapOn: "Active"
-- extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
 - tapOn: "New paycheck"
