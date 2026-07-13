@@ -68,6 +68,7 @@ jobs:
       - name: Generate and build Android debug app
         working-directory: mobile
         env:
+          EXPO_PUBLIC_E2E: "1"
           EXPO_PUBLIC_API_BASE_URL: http://localhost:8080/api/v1
         run: |
           npx expo prebuild --platform android --no-install
@@ -80,12 +81,14 @@ jobs:
             --output maestro.zip
           unzip -q maestro.zip -d "$HOME/.maestro"
           echo "$HOME/.maestro/maestro/bin" >> "$GITHUB_PATH"
-      - name: Start Metro
-        working-directory: mobile
-        env:
-          CI: "1"
-          EXPO_PUBLIC_API_BASE_URL: http://localhost:8080/api/v1
-        run: nohup npx expo start --localhost > ../metro-e2e.log 2>&1 &
+      - name: Free disk before emulator
+        run: |
+          df -h
+          rm -rf ~/.gradle/caches ~/.gradle/daemon ~/.gradle/native
+          rm -rf mobile/android/.gradle mobile/android/build
+          find mobile/android/app/build -mindepth 1 -maxdepth 1 ! -name outputs -exec rm -rf {} +
+          sudo rm -rf /usr/local/lib/android/sdk/ndk || true
+          df -h
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -93,14 +96,24 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Run critical Maestro flows
         uses: reactivecircus/android-emulator-runner@v2.38.0
+        env:
+          CI: "1"
+          EXPO_UNSTABLE_HEADLESS: "1"
+          EXPO_PUBLIC_E2E: "1"
+          EXPO_PUBLIC_API_BASE_URL: http://localhost:8080/api/v1
         with:
           api-level: 35
           arch: x86_64
           profile: pixel_7
-          disable-animations: true
-          script: |
-            adb reverse tcp:8080 tcp:8080
-            adb reverse tcp:8081 tcp:8081
-            adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
-            maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/01-scratch-lifecycle.yaml
-            maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/02-payback-delete-reassign.yaml
+          disable-animations: false
+          script: bash .github/scripts/android-e2e.sh
+      - name: Upload Android E2E diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-e2e-diagnostics
+          if-no-files-found: ignore
+          path: |
+            backend-e2e.log
+            metro-e2e.log
+            .artifacts/android-e2e

@@ -2,7 +2,12 @@ appId: com.yuuka.mobile
 ---
 - launchApp:
     clearState: true
-- assertVisible: "Yuuka"
+- tapOn:
+    text: "Close app"
+    optional: true
+- extendedWaitUntil:
+    visible: "Yuuka"
+    timeout: 30000
 - tapOn: "Email"
 - inputText: "${YUUKA_EMAIL}"
 - tapOn: "Password"

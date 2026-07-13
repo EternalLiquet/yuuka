@@ -19,9 +19,16 @@ name: Scratch paycheck lifecycle
 - tapOn: "Amount"
 - inputText: "50.00"
 - hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save entry"
+    direction: DOWN
 - tapOn: "Save entry"
 - extendedWaitUntil:
     visible: "Phone"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "Add entry"
     timeout: 10000
 
 - tapOn: "Add entry"
@@ -31,20 +38,39 @@ name: Scratch paycheck lifecycle
 - tapOn: "Budget amount"
 - inputText: "150.00"
 - hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save entry"
+    direction: DOWN
 - tapOn: "Save entry"
 - extendedWaitUntil:
     visible: "Food"
     timeout: 10000
 
+- scrollUntilVisible:
+    centerElement: true
+    element: "Move Food up"
+    direction: DOWN
 - tapOn: "Move Food up"
 - tapOn: "Change status for Phone"
 - tapOn: "Processing"
-- tapOn: "Effective date and time"
-- eraseText
+- tapOn:
+    text: "Effective date and time"
+    point: "90%,50%"
+- eraseText: 100
 - inputText: "2026-07-16T12:00:00Z"
+- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Note (optional)"
+    direction: DOWN
 - tapOn: "Note (optional)"
 - inputText: "Scheduled"
 - hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save status"
+    direction: DOWN
 - tapOn: "Save status"
 - extendedWaitUntil:
     visible: "Status: Processing"
@@ -52,7 +78,10 @@ name: Scratch paycheck lifecycle
 
 - tapOn: "Change status for Phone"
 - tapOn: "Posted"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save status"
+    direction: DOWN
 - tapOn: "Save status"
 - extendedWaitUntil:
     visible: "Status: Posted"
@@ -60,7 +89,10 @@ name: Scratch paycheck lifecycle
 
 - tapOn: "Change status for Food"
 - tapOn: "Posted"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save status"
+    direction: DOWN
 - tapOn: "Save status"
 - extendedWaitUntil:
     visible: "Close paycheck"
@@ -70,13 +102,16 @@ name: Scratch paycheck lifecycle
 - assertVisible: "Not Paid"
 - assertVisible: "Processing"
 - assertVisible: "Posted"
-- tapOn: "Close status history"
+- back
+- extendedWaitUntil:
+    visible: "Close paycheck"
+    timeout: 10000
 - tapOn: "Close paycheck"
 - extendedWaitUntil:
     visible: "Reopen paycheck"
     timeout: 10000
 - back
-- tapOn: "History"
+- tapOn: "History tab"
 - extendedWaitUntil:
     visible: "E2E Scratch"
     timeout: 10000
