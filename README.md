@@ -13,6 +13,10 @@
 [![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Private self-hosted](https://img.shields.io/badge/private-self--hosted-7C3AED)](docs/deployment.md)
 
+<p align="center">
+  <img src="docs/assets/yuuka.gif" alt="Yuuka at a desk" width="360">
+</p>
+
 Yuuka is a paycheck-first budgeting app for bills, spending buckets, and sinking funds. It is a self-hosted, single-owner system with an Expo React Native client and a Spring Boot/PostgreSQL API.
 
 ## What is implemented
@@ -21,10 +25,14 @@ Yuuka is a paycheck-first budgeting app for bills, spending buckets, and sinking
 - Scratch paycheck creation, basic bill/spending-bucket/sinking-fund entries, filtering, sorting, and persistent custom order
 - Not Paid, Processing, and Posted transitions with immutable status history
 - Close, reopen, archive, owner isolation, optimistic locking, and backend audit recording
+- Paybacks with mobile list/detail/create/edit/delete/reorder flows, repayment history, and paycheck-entry repayment assignment
+- Spending-bucket purchase ledgers with derived spent, remaining, and over-budget display
 - Password plus optional/deployment-required TOTP, JWT access tokens, and rotating refresh tokens
 - Dark-first mobile UI with light/system preferences
 
-Templates, bucket activity editing, full audit-history UI, and advanced settings remain later-scope mobile features. Backend foundations and contracts exist where needed, but visible mobile screens for those areas are placeholders until the next specification slice.
+Template management and full audit-history UI remain later-scope mobile features. Backend
+foundations and contracts exist where needed, but visible mobile template screens are placeholders
+until the next specification slice.
 
 ## Repository
 

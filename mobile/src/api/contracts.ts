@@ -11,6 +11,12 @@ export type EntryStatus = z.infer<typeof entryStatusSchema>;
 export const entryTypeSchema = z.enum(['BILL', 'SPENDING_BUCKET', 'SINKING_FUND']);
 export type EntryType = z.infer<typeof entryTypeSchema>;
 
+export const searchScopeSchema = z.enum(['ALL', 'ACTIVE', 'HISTORY']);
+export type SearchScope = z.infer<typeof searchScopeSchema>;
+
+export const paycheckContextSchema = z.enum(['ACTIVE', 'HISTORY']);
+export type PaycheckContext = z.infer<typeof paycheckContextSchema>;
+
 export const entrySchema = z.object({
   id: uuid,
   paycheckId: uuid,
@@ -186,6 +192,20 @@ export const auditEventSchema = z.object({
   metadata: z.unknown().nullable(),
 });
 export type AuditEvent = z.infer<typeof auditEventSchema>;
+
+export const entrySearchResultSchema = z.object({
+  kind: z.literal('PAYCHECK_ENTRY'),
+  entryId: uuid,
+  paycheckId: uuid,
+  entryName: z.string(),
+  amountMinor: minor.nonnegative(),
+  entryType: entryTypeSchema,
+  status: entryStatusSchema,
+  paycheckName: z.string(),
+  paycheckIncomeDate: date,
+  paycheckContext: paycheckContextSchema,
+});
+export type EntrySearchResult = z.infer<typeof entrySearchResultSchema>;
 
 export const versionResponseSchema = z
   .object({

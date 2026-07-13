@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { PropsWithChildren, ReactElement, ReactNode } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,7 +11,16 @@ import PaycheckDetailScreen from '../../app/paychecks/[id]';
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+const mockScrollToIndex = jest.fn();
 let mockParams: Record<string, string> = {};
+let mockOnScrollBeginDrag: (() => void) | null = null;
+let mockOnScrollToIndexFailed:
+  | ((info: {
+      averageItemLength: number;
+      highestMeasuredFrameIndex: number;
+      index: number;
+    }) => void)
+  | null = null;
 
 const mockApi = {
   addBucketTransaction: jest.fn(),
@@ -53,18 +62,32 @@ jest.mock('expo-router', () => {
 jest.mock('react-native-draggable-flatlist', () => {
   const React = require('react');
   const { FlatList } = require('react-native');
-  function DraggableFlatList({
-    renderItem,
-    ...props
-  }: {
-    renderItem: (params: { drag: () => void; index: number; item: Entry }) => ReactNode;
-  }) {
+  const DraggableFlatList = React.forwardRef(function DraggableFlatList(
+    {
+      renderItem,
+      ...props
+    }: {
+      onScrollBeginDrag?: () => void;
+      onScrollToIndexFailed?: (info: {
+        averageItemLength: number;
+        highestMeasuredFrameIndex: number;
+        index: number;
+      }) => void;
+      renderItem: (params: { drag: () => void; index: number; item: Entry }) => ReactNode;
+    },
+    ref: unknown,
+  ) {
+    React.useImperativeHandle(ref, () => ({
+      scrollToIndex: mockScrollToIndex,
+    }));
+    mockOnScrollBeginDrag = props.onScrollBeginDrag ?? null;
+    mockOnScrollToIndexFailed = props.onScrollToIndexFailed ?? null;
     return React.createElement(FlatList, {
       ...props,
       renderItem: (params: { index: number; item: Entry }) =>
         renderItem({ ...params, drag: jest.fn() }),
     });
-  }
+  });
   return { __esModule: true, default: DraggableFlatList };
 });
 
@@ -164,6 +187,8 @@ describe('paycheck route regressions', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockParams = { id: paycheck.id };
+    mockOnScrollBeginDrag = null;
+    mockOnScrollToIndexFailed = null;
     mockApi.paybacks.mockResolvedValue({
       items: [],
       summary: {
@@ -204,6 +229,84 @@ describe('paycheck route regressions', () => {
       totalPages: 1,
     });
   });
+
+  it('scrolls to a highlighted entry after loading the paycheck', async () => {
+    mockParams = { highlightEntryId: entries[2].id, id: paycheck.id };
+
+    const view = await renderRoute(<PaycheckDetailScreen />);
+
+    expect(await view.findByText('Tires', {}, { timeout: 5000 })).toBeTruthy();
+    await waitFor(() =>
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        animated: true,
+        index: 2,
+        viewPosition: 0.35,
+      }),
+    );
+  }, 10000);
+
+  it('retries a failed highlight scroll after list measurement catches up', async () => {
+    mockParams = { highlightEntryId: entries[2].id, id: paycheck.id };
+
+    const view = await renderRoute(<PaycheckDetailScreen />);
+
+    expect(await view.findByText('Tires', {}, { timeout: 5000 })).toBeTruthy();
+    await waitFor(() => expect(mockScrollToIndex).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      mockOnScrollToIndexFailed?.({
+        averageItemLength: 60,
+        highestMeasuredFrameIndex: 0,
+        index: 2,
+      });
+      await waitForHighlightRetry();
+    });
+
+    expect(mockScrollToIndex).toHaveBeenCalledTimes(2);
+    expect(mockScrollToIndex).toHaveBeenLastCalledWith({
+      animated: true,
+      index: 2,
+      viewPosition: 0.35,
+    });
+  }, 10000);
+
+  it('cancels highlight retry after user scroll interaction and resets for a new highlight', async () => {
+    mockParams = { highlightEntryId: entries[0].id, id: paycheck.id };
+
+    const view = await renderRoute(<PaycheckDetailScreen />);
+
+    expect(await view.findByText('Electricity', {}, { timeout: 5000 })).toBeTruthy();
+    await waitFor(() =>
+      expect(mockScrollToIndex).toHaveBeenLastCalledWith({
+        animated: true,
+        index: 0,
+        viewPosition: 0.35,
+      }),
+    );
+
+    await act(async () => {
+      mockOnScrollToIndexFailed?.({
+        averageItemLength: 60,
+        highestMeasuredFrameIndex: 0,
+        index: 0,
+      });
+      mockOnScrollBeginDrag?.();
+      await waitForHighlightRetry();
+    });
+
+    expect(mockScrollToIndex).toHaveBeenCalledTimes(1);
+
+    mockParams = { highlightEntryId: entries[2].id, id: paycheck.id };
+    view.rerender(<PaycheckDetailScreen />);
+
+    await waitFor(() =>
+      expect(mockScrollToIndex).toHaveBeenLastCalledWith({
+        animated: true,
+        index: 2,
+        viewPosition: 0.35,
+      }),
+    );
+  }, 10000);
 
   it('opens an existing paycheck detail with draggable entries without crashing', async () => {
     const view = await renderRoute(<PaycheckDetailScreen />);
@@ -264,8 +367,8 @@ describe('paycheck route regressions', () => {
     expect(view.getByText('Budgeted')).toBeTruthy();
     expect(view.getByText('Spent')).toBeTruthy();
     expect(view.getByText('Remaining')).toBeTruthy();
-    expect(view.getByText(/Cafe/)).toBeTruthy();
-    expect(view.getByText('Lunch receipt')).toBeTruthy();
+    expect(await view.findByText(/Cafe/)).toBeTruthy();
+    expect(await view.findByText('Lunch receipt')).toBeTruthy();
 
     fireEvent.changeText(view.getAllByLabelText('Amount').at(-1)!, '-1.00');
     fireEvent.press(view.getByLabelText('Add purchase'));
@@ -304,4 +407,8 @@ function entry(overrides: Partial<Entry>): Entry {
 
 function paycheckId() {
   return '11111111-1111-4111-8111-111111111110';
+}
+
+async function waitForHighlightRetry() {
+  await new Promise((resolve) => setTimeout(resolve, 100));
 }

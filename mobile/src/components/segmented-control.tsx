@@ -34,6 +34,7 @@ export function SegmentedControl<T extends string>({
             accessibilityState={{ checked: selected }}
             key={option.value}
             onPress={() => onChange(option.value)}
+            testID={`segmented-${label}-${option.value}`}
             style={({ pressed }) => [
               styles.option,
               {

@@ -7,6 +7,7 @@ import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
+import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
 import {
@@ -90,6 +91,12 @@ export default function HistoryScreen() {
                 {query.data?.totalItems ?? 0} result{query.data?.totalItems === 1 ? '' : 's'}
               </AppText>
             </View>
+            <Button
+              icon={Search}
+              label="Find entry"
+              onPress={() => router.push('/search/entries?scope=HISTORY')}
+              variant="secondary"
+            />
             <View style={styles.searchBlock}>
               <Search color={colors.muted} size={19} style={styles.searchIcon} />
               <TextField

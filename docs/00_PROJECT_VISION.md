@@ -4,8 +4,8 @@
 
 - Internal project name: **Project Yuuka**
 - User-facing application name: **Yuuka**
-- Suggested repository name: `project-yuuka`
-- Suggested structure:
+- Repository name: `yuuka`
+- Structure:
   - `backend/`
   - `mobile/`
   - `docs/`
