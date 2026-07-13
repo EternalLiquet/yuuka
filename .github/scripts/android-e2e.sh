@@ -29,7 +29,7 @@ if [ "$metro_ready" -ne 1 ]; then
 fi
 
 curl --fail --silent --show-error --connect-timeout 2 --max-time 180 \
-  "http://localhost:8081/node_modules/expo-router/entry.bundle?platform=android&dev=true&minify=false" \
+  "http://localhost:8081/.expo/.virtual-metro-entry.bundle?platform=android&dev=true&lazy=true&minify=false&app=com.yuuka.mobile&modulesOnly=false&runModule=true&excludeSource=true&sourcePaths=url-server" \
   > /dev/null
 
 adb logcat -c
