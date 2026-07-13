@@ -90,7 +90,9 @@ Filters:
 - Posted,
 - Bill,
 - Spending Bucket,
-- Sinking Fund.
+- Sinking Fund,
+- Autopay bills,
+- Manual Pay bills.
 
 Sort:
 
@@ -101,6 +103,13 @@ Sort:
 - last edited.
 
 Clearly indicate active filters or non-default sorting.
+
+## Entry search
+
+The global entry search screen supports name search, exact amount search, and an automatic mode
+that treats valid money text as an amount and other text as a name. Search can be scoped to all
+paychecks, Active only, or History only. Results open the owning paycheck with the matching entry
+highlighted.
 
 ## Reordering
 
@@ -148,7 +157,8 @@ Bill:
 
 - due date,
 - account,
-- payee.
+- payee,
+- Autopay or Manual Pay.
 
 Spending Bucket:
 

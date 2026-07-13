@@ -275,6 +275,26 @@ class EntrySearchWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void normalizesNegativePageAndOversizedPageSize() throws Exception {
+    String token = registerAndGetAccessToken("entry-search-page-bounds@yuuka.local");
+    String paycheck = createPaycheck(token, "Pagination Bounds", 100000, "2026-07-12");
+    addEntry(token, paycheck, "Bounded Search Result", "BILL", 1399);
+
+    mockMvc
+        .perform(
+            get("/api/v1/search/entries")
+                .param("query", "bounded")
+                .param("page", "-3")
+                .param("size", "250")
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.page").value(0))
+        .andExpect(jsonPath("$.size").value(100))
+        .andExpect(jsonPath("$.totalItems").value(1))
+        .andExpect(jsonPath("$.items[0].entryName").value("Bounded Search Result"));
+  }
+
+  @Test
   void migrationAddsEntrySearchIndexes() {
     Integer count =
         jdbcTemplate.queryForObject(

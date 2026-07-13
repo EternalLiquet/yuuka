@@ -84,6 +84,9 @@ Applying a template copies its entries into a new paycheck. The resulting entrie
 
 A specific obligation, such as rent, utilities, insurance, subscriptions, loans, or credit-card payments.
 
+Bills may be marked as **Autopay** or **Manual Pay**. This is informational and filterable; it
+does not automate payment, change status transitions, or affect allocation math.
+
 ### Spending Bucket
 
 A spending allowance intended to be consumed through one or more purchases, such as groceries, work food, gas, or Misc/Life.
@@ -146,6 +149,12 @@ Accidental over-allocation should be blocked. If an override is supported, it mu
 ## Ordering
 
 Default order is the user’s custom order. Temporary sorting must never destroy the saved custom order.
+
+## Entry search
+
+Global entry search supports case-insensitive partial text matching against entry and paycheck
+names plus exact amount matching. Search results are owner-scoped, exclude soft-deleted entries,
+and may be scoped to Active, History, or both.
 
 ## Dates and auditing
 

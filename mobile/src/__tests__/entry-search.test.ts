@@ -10,9 +10,20 @@ describe('entry search criteria', () => {
     expect(buildEntrySearchCriteria('13.99', 'ALL')).toEqual({ amountMinor: 1399 });
   });
 
+  it('keeps numeric-looking text as a name when name mode is explicit', () => {
+    expect(buildEntrySearchCriteria(' 13.99 plan ', 'NAME')).toEqual({ query: '13.99 plan' });
+    expect(buildEntrySearchCriteria('13.99 plan', 'ALL')).toEqual({ query: '13.99 plan' });
+  });
+
   it('returns validation instead of a bad amount request', () => {
     expect(buildEntrySearchCriteria('$13.999', 'AMOUNT')).toMatchObject({
       error: expect.stringContaining('valid money'),
+    });
+    expect(buildEntrySearchCriteria('Netflix', 'AMOUNT')).toMatchObject({
+      error: expect.stringContaining('valid money'),
+    });
+    expect(buildEntrySearchCriteria('-13.99', 'ALL')).toMatchObject({
+      error: expect.stringContaining('cannot be negative'),
     });
   });
 
