@@ -3,7 +3,7 @@ plugins {
   jacoco
   id("org.springframework.boot") version "3.5.3"
   id("io.spring.dependency-management") version "1.1.7"
-  id("com.diffplug.spotless") version "6.25.0"
+  id("com.diffplug.spotless") version "8.8.0"
   id("info.solidsoft.pitest") version "1.19.0"
 }
 
