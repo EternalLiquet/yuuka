@@ -1,0 +1,108 @@
+name: Android E2E
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yuuka-android-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-e2e:
+    name: Android E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: yuuka_e2e
+          POSTGRES_USER: yuuka
+          POSTGRES_PASSWORD: e2e_database_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yuuka -d yuuka_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-java@v5.2.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22.13.0"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Start disposable demo API
+        working-directory: backend
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/yuuka_e2e
+          SPRING_DATASOURCE_USERNAME: yuuka
+          SPRING_DATASOURCE_PASSWORD: e2e_database_password
+          SPRING_PROFILES_ACTIVE: demo
+          YUUKA_AUTH_REGISTRATION_ENABLED: "false"
+          YUUKA_JWT_SECRET: e2e-only-jwt-secret-with-at-least-32-bytes
+          YUUKA_OWNER_EMAIL: e2e@yuuka.local
+          YUUKA_OWNER_BOOTSTRAP_PASSWORD: E2ePassword123
+        run: |
+          chmod +x gradlew
+          nohup ./gradlew bootRun --no-daemon > ../backend-e2e.log 2>&1 &
+          for attempt in {1..60}; do
+            curl --fail --silent http://127.0.0.1:8080/health/ready && exit 0
+            sleep 2
+          done
+          cat ../backend-e2e.log
+          exit 1
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci
+      - name: Generate and build Android debug app
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_API_BASE_URL: http://localhost:8080/api/v1
+        run: |
+          npx expo prebuild --platform android --no-install
+          cd android
+          ./gradlew assembleDebug --no-daemon
+      - name: Install Maestro 2.6.1
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.6.1/maestro.zip \
+            --output maestro.zip
+          unzip -q maestro.zip -d "$HOME/.maestro"
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: Start Metro
+        working-directory: mobile
+        env:
+          CI: "1"
+          EXPO_PUBLIC_API_BASE_URL: http://localhost:8080/api/v1
+        run: nohup npx expo start --localhost > ../metro-e2e.log 2>&1 &
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run critical Maestro flows
+        uses: reactivecircus/android-emulator-runner@v2.37.0
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          script: |
+            adb reverse tcp:8080 tcp:8080
+            adb reverse tcp:8081 tcp:8081
+            adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            maestro test \
+              -e YUUKA_EMAIL=e2e@yuuka.local \
+              -e YUUKA_PASSWORD=E2ePassword123 \
+              .maestro/01-scratch-lifecycle.yaml

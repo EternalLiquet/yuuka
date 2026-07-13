@@ -1,5 +1,18 @@
 # Yuuka
 
+[![CI](https://github.com/EternalLiquet/yuuka/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/EternalLiquet/yuuka/actions/workflows/ci.yml)
+[![Android E2E](https://github.com/EternalLiquet/yuuka/actions/workflows/android-e2e.yml/badge.svg?branch=master)](https://github.com/EternalLiquet/yuuka/actions/workflows/android-e2e.yml)
+[![Version](https://img.shields.io/github/v/tag/EternalLiquet/yuuka?label=version&sort=semver)](https://github.com/EternalLiquet/yuuka/tags)
+[![Release](https://img.shields.io/github/v/release/EternalLiquet/yuuka?display_name=tag&sort=semver)](https://github.com/EternalLiquet/yuuka/releases)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Java 21](https://img.shields.io/badge/Java-21-f89820?logo=openjdk&logoColor=white)](backend)
+[![Spring Boot 3](https://img.shields.io/badge/Spring%20Boot-3-6DB33F?logo=springboot&logoColor=white)](backend)
+[![Expo](https://img.shields.io/badge/Expo-React%20Native-000020?logo=expo&logoColor=white)](mobile)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](mobile)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](docker-compose.yml)
+[![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![Private self-hosted](https://img.shields.io/badge/private-self--hosted-7C3AED)](docs/deployment.md)
+
 Yuuka is a paycheck-first budgeting app for bills, spending buckets, and sinking funds. It is a self-hosted, single-owner system with an Expo React Native client and a Spring Boot/PostgreSQL API.
 
 ## What is implemented
@@ -51,9 +64,10 @@ cd backend && ./gradlew check pitest
 cd mobile && npm run format:check && npm run lint && npm run typecheck && npm run test:coverage
 ```
 
-CI runs those gates, Compose validation, Docker image build validation, Expo Doctor, Android export,
-and the critical Android Maestro flow for pull requests and pushes to `master`. Successful `master`
-pushes publish the next `vMAJOR.MINOR.PATCH` tag and GitHub Release. The running backend reports its
+CI runs those gates, Compose validation, Docker image build validation, Expo Doctor, and Android
+export for pull requests and pushes to `master`. The critical Android Maestro flow runs nightly and
+can be started manually when a mobile change needs emulator coverage. Successful `master` pushes
+publish the next `vMAJOR.MINOR.PATCH` tag and GitHub Release. The running backend reports its
 packaged version at `/health/live`.
 
 See [testing](docs/testing.md) for reports and E2E commands.

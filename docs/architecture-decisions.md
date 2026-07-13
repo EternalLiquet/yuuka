@@ -47,6 +47,14 @@ Liveness only reports process status and safe build version metadata. Readiness 
 continue to use readiness, while deployment verification should check both readiness and
 liveness/version.
 
+## Android E2E cadence
+
+Backend, mobile unit/component, contract, Docker, and export checks gate pull requests and `master`
+push releases. Android emulator/Maestro E2E runs in a separate nightly workflow with manual dispatch
+because it is slower and depends on shared-runner emulator stability. A failed nightly E2E run must
+still be treated as a product quality issue, but it does not block release tagging for unrelated
+backend or documentation changes.
+
 ## Authentication boundary
 
 The mobile app uses short-lived signed access JWTs and one-time rotating opaque refresh tokens. Only refresh-token hashes are stored. Replaying a rotated token revokes its family. Production is single-owner, registration-disabled, password-plus-TOTP, and private-network-first.

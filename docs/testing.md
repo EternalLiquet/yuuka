@@ -55,11 +55,15 @@ Required validation jobs:
 - Backend: `./gradlew check`, `./gradlew pitest`, and `./gradlew bootJar` with CI build metadata.
 - Mobile: `npm ci`, formatting, lint, TypeScript, Jest coverage, Expo Doctor, Android export, and production dependency audit.
 - Infrastructure: `docker compose config --quiet` and a hardened backend image build.
-- Android E2E: disposable PostgreSQL, demo backend, Android debug build, and the critical Maestro flow.
 
 Pull-request and branch validation jobs use cancellable concurrency so newer commits replace stale
 runs. The release job is separate, waits for all required validation jobs, runs only after a
 successful push to `master`, and does not run for pull requests.
+
+Android E2E is intentionally not part of every pull-request or push run because emulator jobs are
+slow and comparatively flaky on shared GitHub-hosted runners. The separate `Android E2E` workflow
+runs every night at 07:00 UTC and can also be started manually. It provisions disposable PostgreSQL,
+starts the demo backend, builds an Android debug app, and runs the critical Maestro flow.
 
 Checks that remain local/manual:
 
