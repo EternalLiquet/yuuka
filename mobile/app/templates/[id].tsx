@@ -7,11 +7,12 @@ import {
   GripVertical,
   Pencil,
   Plus,
+  Copy,
   Save,
   Trash2,
   X,
 } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Alert, Modal, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
@@ -57,6 +58,12 @@ export default function EditTemplateScreen() {
   const [editingEntry, setEditingEntry] = useState<TemplateEntry | null>(null);
   const [entryEditorVisible, setEntryEditorVisible] = useState(false);
   const [templateEditorVisible, setTemplateEditorVisible] = useState(false);
+  const archiveInFlight = useRef(false);
+  const duplicateInFlight = useRef(false);
+  const restoreInFlight = useRef(false);
+  const [archiveLocked, setArchiveLocked] = useState(false);
+  const [duplicateLocked, setDuplicateLocked] = useState(false);
+  const [restoreLocked, setRestoreLocked] = useState(false);
 
   const invalidate = async () => {
     await Promise.all([
@@ -74,9 +81,32 @@ export default function EditTemplateScreen() {
       if (!query.data) throw new Error('Refresh the template first.');
       return api.archiveTemplate(id, query.data.version);
     },
-    onSuccess: async () => {
+    onSuccess: invalidate,
+    onSettled: () => {
+      archiveInFlight.current = false;
+      setArchiveLocked(false);
+    },
+  });
+  const restoreMutation = useMutation({
+    mutationFn: () => {
+      if (!query.data) throw new Error('Refresh the template first.');
+      return api.restoreTemplate(id, query.data.version);
+    },
+    onSuccess: invalidate,
+    onSettled: () => {
+      restoreInFlight.current = false;
+      setRestoreLocked(false);
+    },
+  });
+  const duplicateMutation = useMutation({
+    mutationFn: () => api.duplicateTemplate(id),
+    onSuccess: async (template) => {
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
-      router.replace('/templates');
+      router.replace(`/templates/${template.id}`);
+    },
+    onSettled: () => {
+      duplicateInFlight.current = false;
+      setDuplicateLocked(false);
     },
   });
   const entryMutation = useMutation({
@@ -136,16 +166,37 @@ export default function EditTemplateScreen() {
     reorderMutation.mutate(ids);
   }
 
-  function confirmDeleteTemplate() {
+  function archiveTemplate() {
+    if (archiveInFlight.current || archiveLocked || archiveMutation.isPending) return;
+    archiveInFlight.current = true;
+    setArchiveLocked(true);
+    archiveMutation.mutate();
+  }
+
+  function restoreTemplate() {
+    if (restoreInFlight.current || restoreLocked || restoreMutation.isPending) return;
+    restoreInFlight.current = true;
+    setRestoreLocked(true);
+    restoreMutation.mutate();
+  }
+
+  function duplicateTemplate() {
+    if (duplicateInFlight.current || duplicateLocked || duplicateMutation.isPending) return;
+    duplicateInFlight.current = true;
+    setDuplicateLocked(true);
+    duplicateMutation.mutate();
+  }
+
+  function confirmArchiveTemplate() {
     Alert.alert(
-      'Delete template?',
-      'This removes the template from future use. Existing paychecks created from it stay unchanged.',
+      'Archive template?',
+      'Archive this template so it cannot be used for new paychecks until restored. Existing paychecks created from it stay unchanged.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Archive',
           style: 'destructive',
-          onPress: () => archiveMutation.mutate(),
+          onPress: archiveTemplate,
         },
       ],
     );
@@ -169,14 +220,16 @@ export default function EditTemplateScreen() {
           ListEmptyComponent={
             <EmptyState
               action={
-                <Button
-                  icon={Plus}
-                  label="Add entry"
-                  onPress={() => {
-                    setEditingEntry(null);
-                    setEntryEditorVisible(true);
-                  }}
-                />
+                template.archived ? undefined : (
+                  <Button
+                    icon={Plus}
+                    label="Add entry"
+                    onPress={() => {
+                      setEditingEntry(null);
+                      setEntryEditorVisible(true);
+                    }}
+                  />
+                )
               }
               mascot="clipboard"
               message="Add bills, spending buckets, or sinking funds to this template."
@@ -186,21 +239,29 @@ export default function EditTemplateScreen() {
           ListHeaderComponent={
             <DetailHeader
               archiveError={archiveMutation.error}
-              archiving={archiveMutation.isPending}
+              archiving={archiveLocked || archiveMutation.isPending}
+              duplicateError={duplicateMutation.error}
+              duplicating={duplicateLocked || duplicateMutation.isPending}
               onAdd={() => {
                 setEditingEntry(null);
                 setEntryEditorVisible(true);
               }}
-              onDelete={confirmDeleteTemplate}
+              onArchive={confirmArchiveTemplate}
+              onDuplicate={duplicateTemplate}
               onEdit={() => setTemplateEditorVisible(true)}
+              onRestore={restoreTemplate}
               refreshing={query.isFetching && Boolean(query.data)}
               reorderError={reorderMutation.error}
+              restoreError={restoreMutation.error}
+              restoring={restoreLocked || restoreMutation.isPending}
               stale={query.isError}
               template={template}
             />
           }
           onDragEnd={({ data }) => {
-            if (!reorderMutation.isPending) reorderMutation.mutate(data.map((entry) => entry.id));
+            if (!template.archived && !reorderMutation.isPending) {
+              reorderMutation.mutate(data.map((entry) => entry.id));
+            }
           }}
           refreshControl={
             <RefreshControl
@@ -219,15 +280,17 @@ export default function EditTemplateScreen() {
               <TemplateEntryRow
                 drag={params.drag}
                 entry={params.item}
+                editable={!template.archived}
                 isFirst={index === 0}
                 isLast={index === entries.length - 1}
+                position={index + 1}
                 onEdit={() => {
                   setEditingEntry(params.item);
                   setEntryEditorVisible(true);
                 }}
                 onMoveDown={() => moveEntry(index, 1)}
                 onMoveUp={() => moveEntry(index, -1)}
-                reorderDisabled={reorderMutation.isPending}
+                reorderDisabled={template.archived || reorderMutation.isPending}
               />
             );
           }}
@@ -237,26 +300,28 @@ export default function EditTemplateScreen() {
         onClose={() => setTemplateEditorVisible(false)}
         onSubmit={(values) => templateMutation.mutateAsync(values).then(() => undefined)}
         template={template}
-        visible={templateEditorVisible}
+        visible={templateEditorVisible && !template.archived}
       />
-      <TemplateEntryEditor
-        entry={editingEntry}
-        onClose={() => setEntryEditorVisible(false)}
-        onDelete={
-          editingEntry
-            ? () =>
-                entryMutation
-                  .mutateAsync({ type: 'delete', entry: editingEntry })
-                  .then(() => undefined)
-            : undefined
-        }
-        onSubmit={(payload) =>
-          entryMutation
-            .mutateAsync({ type: editingEntry ? 'update' : 'add', entry: editingEntry, payload })
-            .then(() => undefined)
-        }
-        visible={entryEditorVisible}
-      />
+      {!template.archived ? (
+        <TemplateEntryEditor
+          entry={editingEntry}
+          onClose={() => setEntryEditorVisible(false)}
+          onDelete={
+            editingEntry
+              ? () =>
+                  entryMutation
+                    .mutateAsync({ type: 'delete', entry: editingEntry })
+                    .then(() => undefined)
+              : undefined
+          }
+          onSubmit={(payload) =>
+            entryMutation
+              .mutateAsync({ type: editingEntry ? 'update' : 'add', entry: editingEntry, payload })
+              .then(() => undefined)
+          }
+          visible={entryEditorVisible}
+        />
+      ) : null}
     </>
   );
 }
@@ -264,21 +329,33 @@ export default function EditTemplateScreen() {
 function DetailHeader({
   archiveError,
   archiving,
+  duplicateError,
+  duplicating,
   onAdd,
-  onDelete,
+  onArchive,
+  onDuplicate,
   onEdit,
+  onRestore,
   refreshing,
   reorderError,
+  restoreError,
+  restoring,
   stale,
   template,
 }: {
   archiveError: Error | null;
   archiving: boolean;
+  duplicateError: Error | null;
+  duplicating: boolean;
   onAdd: () => void;
-  onDelete: () => void;
+  onArchive: () => void;
+  onDuplicate: () => void;
   onEdit: () => void;
+  onRestore: () => void;
   refreshing: boolean;
   reorderError: Error | null;
+  restoreError: Error | null;
+  restoring: boolean;
   stale: boolean;
   template: BudgetTemplate;
 }) {
@@ -294,6 +371,7 @@ function DetailHeader({
           <AppText style={{ color: colors.muted }} variant="caption">
             {template.entryCount} {template.entryCount === 1 ? 'entry' : 'entries'} | Updated{' '}
             {formatDate(template.updatedAt)}
+            {template.archived ? ' | Archived' : ''}
           </AppText>
         </View>
         <AppText variant="money">
@@ -306,15 +384,35 @@ function DetailHeader({
         </AppText>
       ) : null}
       <View style={styles.actions}>
-        <Button icon={Pencil} label="Edit template" onPress={onEdit} variant="secondary" />
-        <Button icon={Plus} label="Add entry" onPress={onAdd} />
+        {template.archived ? null : (
+          <>
+            <Button icon={Pencil} label="Edit template" onPress={onEdit} variant="secondary" />
+            <Button icon={Plus} label="Add entry" onPress={onAdd} />
+          </>
+        )}
         <Button
-          icon={Trash2}
-          label="Delete template"
-          loading={archiving}
-          onPress={onDelete}
-          variant="danger"
+          icon={Copy}
+          label="Duplicate template"
+          loading={duplicating}
+          onPress={onDuplicate}
+          variant="secondary"
         />
+        {template.archived ? (
+          <Button
+            label="Restore template"
+            loading={restoring}
+            onPress={onRestore}
+            variant="primary"
+          />
+        ) : (
+          <Button
+            icon={Trash2}
+            label="Archive template"
+            loading={archiving}
+            onPress={onArchive}
+            variant="danger"
+          />
+        )}
       </View>
       {reorderError ? (
         <AppText style={{ color: colors.danger }} variant="error">
@@ -323,7 +421,17 @@ function DetailHeader({
       ) : null}
       {archiveError ? (
         <AppText style={{ color: colors.danger }} variant="error">
-          {displayError(archiveError, settings.currencyCode, 'The template was not deleted.')}
+          {displayError(archiveError, settings.currencyCode, 'The template was not archived.')}
+        </AppText>
+      ) : null}
+      {restoreError ? (
+        <AppText style={{ color: colors.danger }} variant="error">
+          {displayError(restoreError, settings.currencyCode, 'The template was not restored.')}
+        </AppText>
+      ) : null}
+      {duplicateError ? (
+        <AppText style={{ color: colors.danger }} variant="error">
+          {displayError(duplicateError, settings.currencyCode, 'The template was not duplicated.')}
         </AppText>
       ) : null}
     </View>
@@ -332,28 +440,37 @@ function DetailHeader({
 
 function TemplateEntryRow({
   drag,
+  editable,
   entry,
   isFirst,
   isLast,
   onEdit,
   onMoveDown,
   onMoveUp,
+  position,
   reorderDisabled,
 }: {
   drag?: () => void;
+  editable: boolean;
   entry: TemplateEntry;
   isFirst: boolean;
   isLast: boolean;
   onEdit: () => void;
   onMoveDown: () => void;
   onMoveUp: () => void;
+  position: number;
   reorderDisabled: boolean;
 }) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const amount = formatMoney(entry.defaultAmountMinor, settings.currencyCode);
   return (
     <View style={[styles.entryRow, { borderBottomColor: colors.border }]}>
-      <View style={styles.entryMain}>
+      <View
+        accessible
+        accessibilityLabel={`Template entry ${position}: ${entry.name}, ${amount}, ${typeLabels[entry.entryType]}`}
+        style={styles.entryMain}
+      >
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
             <AppText numberOfLines={2} variant="label">
@@ -369,31 +486,34 @@ function TemplateEntryRow({
                 : ` | Due ${entry.defaultDueOffsetDays} days from income`}
             </AppText>
           </View>
-          <AppText variant="money">
-            {formatMoney(entry.defaultAmountMinor, settings.currencyCode)}
-          </AppText>
+          <AppText variant="money">{amount}</AppText>
         </View>
       </View>
       <View style={styles.rowActions}>
-        <IconButton
-          disabled={isFirst || reorderDisabled}
-          icon={ArrowUp}
-          label={`Move ${entry.name} up`}
-          onPress={onMoveUp}
-        />
-        <IconButton
-          disabled={isLast || reorderDisabled}
-          icon={ArrowDown}
-          label={`Move ${entry.name} down`}
-          onPress={onMoveDown}
-        />
-        <IconButton
-          icon={GripVertical}
-          label={`Drag ${entry.name}`}
-          onLongPress={drag}
-          onPress={drag ?? (() => undefined)}
-        />
-        <IconButton icon={Pencil} label={`Edit ${entry.name}`} onPress={onEdit} />
+        {editable ? (
+          <>
+            <IconButton
+              disabled={isFirst || reorderDisabled}
+              icon={ArrowUp}
+              label={`Move ${entry.name} up`}
+              onPress={onMoveUp}
+            />
+            <IconButton
+              disabled={isLast || reorderDisabled}
+              icon={ArrowDown}
+              label={`Move ${entry.name} down`}
+              onPress={onMoveDown}
+            />
+            <IconButton
+              disabled={reorderDisabled}
+              icon={GripVertical}
+              label={`Drag ${entry.name}`}
+              onLongPress={drag}
+              onPress={drag ?? (() => undefined)}
+            />
+            <IconButton icon={Pencil} label={`Edit ${entry.name}`} onPress={onEdit} />
+          </>
+        ) : null}
       </View>
     </View>
   );

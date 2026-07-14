@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';
 import { Save } from 'lucide-react-native';
+import { useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
@@ -21,6 +22,8 @@ export default function NewTemplateScreen() {
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const submitInFlight = useRef(false);
+  const [submitLocked, setSubmitLocked] = useState(false);
   const {
     control,
     formState: { errors, isSubmitting },
@@ -42,12 +45,23 @@ export default function NewTemplateScreen() {
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
       router.replace(`/templates/${template.id}`);
     },
+    onSettled: () => {
+      submitInFlight.current = false;
+      setSubmitLocked(false);
+    },
   });
 
   async function submit(values: TemplateFormValues) {
+    if (submitInFlight.current || submitLocked || mutation.isPending) return;
+
+    submitInFlight.current = true;
+    setSubmitLocked(true);
+
     try {
       await mutation.mutateAsync(values);
     } catch (error) {
+      submitInFlight.current = false;
+      setSubmitLocked(false);
       setError('root', {
         message: displayError(error, settings.currencyCode, 'The template was not created.'),
       });
@@ -78,7 +92,8 @@ export default function NewTemplateScreen() {
         <Button
           icon={Save}
           label="Create template"
-          loading={isSubmitting || mutation.isPending}
+          loading={isSubmitting || submitLocked || mutation.isPending}
+          // eslint-disable-next-line react-hooks/refs
           onPress={handleSubmit(submit)}
         />
       </ScrollScreen>

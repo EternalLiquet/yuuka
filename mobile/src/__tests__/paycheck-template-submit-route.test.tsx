@@ -143,7 +143,7 @@ const createdPaycheck: Paycheck = {
   version: 0,
 };
 
-describe('new paycheck from template route', () => {
+describe('new paycheck from template submission route', () => {
   afterEach(() => {
     cleanup();
   });
@@ -161,66 +161,60 @@ describe('new paycheck from template route', () => {
     });
   });
 
-  it('switching templates replaces the local draft', async () => {
-    mockApi.templates.mockResolvedValueOnce({
-      hasNext: false,
-      items: [
-        template(),
-        template({
-          defaultTotalMinor: 50000,
-          entries: [
-            {
-              accountName: null,
-              createdAt: '2026-07-12T12:00:00Z',
-              defaultAmountMinor: 50000,
-              defaultDueOffsetDays: null,
-              entryType: 'BILL',
-              id: '11111111-1111-4111-8111-111111111203',
-              name: 'Utilities',
-              notes: null,
-              payee: null,
-              paymentMethod: 'AUTOPAY',
-              position: 0,
-              targetDate: null,
-              targetMinor: null,
-              updatedAt: '2026-07-13T12:00:00Z',
-              version: 1,
-            },
-          ],
-          entryCount: 1,
-          id: '11111111-1111-4111-8111-111111111300',
-          name: 'Utilities',
-        }),
-      ],
-      page: 0,
-      size: 2,
-      totalItems: 2,
-      totalPages: 1,
-    });
-    const view = await renderRoute();
-
-    fireEvent.press(view.getByText('Use a template'));
-    await waitFor(() => expect(view.getByText('Rent')).toBeTruthy());
-    fireEvent.press(view.getByLabelText('Select template Utilities'));
-
-    await waitFor(() => expect(view.getByText('Utilities')).toBeTruthy());
-    expect(view.queryByText('Rent')).toBeNull();
-  });
-
-  it('blocks creation while the template draft is over-allocated', async () => {
+  it('submits the local template draft before creating the paycheck', async () => {
     const view = await renderRoute();
 
     fireEvent.press(view.getByText('Use a template'));
     await waitFor(() => expect(view.getByText('Rent 1')).toBeTruthy());
     await waitFor(() => expect(view.getByText('Template draft')).toBeTruthy());
+    expect(view.getByText('Bill | Manual Pay')).toBeTruthy();
 
+    fireEvent.changeText(view.getByLabelText('Exact paycheck amount'), '1200.00');
     fireEvent.changeText(view.getByLabelText('Name'), 'Rent 1');
-    fireEvent.changeText(view.getByLabelText('Exact paycheck amount'), '1125.00');
     fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-17');
-    await waitFor(() => expect(view.getByText('$75.00 over-allocated.')).toBeTruthy());
-    fireEvent.press(view.getByLabelText('Create paycheck'));
+    await waitFor(() => expect(view.getByText('Fully allocated.')).toBeTruthy());
 
-    expect(mockApi.createPaycheckFromTemplate).not.toHaveBeenCalled();
+    fireEvent.press(view.getByText('Create paycheck'));
+    fireEvent.press(view.getByText('Create paycheck'));
+
+    await waitFor(() =>
+      expect(mockApi.createPaycheckFromTemplate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amountMinor: 120000,
+          incomeDate: '2026-07-17',
+          name: 'Rent 1',
+          templateId: '11111111-1111-4111-8111-111111111200',
+        }),
+      ),
+    );
+    expect(mockApi.createPaycheckFromTemplate).toHaveBeenCalledTimes(1);
+    expect(mockApi.createPaycheckFromTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountMinor: 120000,
+        entries: [
+          expect.objectContaining({
+            amountMinor: 110000,
+            dueDate: null,
+            entryType: 'BILL',
+            name: 'Rent',
+            paymentMethod: 'MANUAL',
+          }),
+          expect.objectContaining({
+            amountMinor: 10000,
+            entryType: 'SPENDING_BUCKET',
+            name: 'Groceries',
+            paymentMethod: null,
+          }),
+        ],
+      }),
+    );
+    expect(mockApi.addTemplateEntry).not.toHaveBeenCalled();
+    expect(mockApi.updateTemplateEntry).not.toHaveBeenCalled();
+    expect(mockApi.deleteTemplateEntry).not.toHaveBeenCalled();
+    expect(mockApi.reorderTemplateEntries).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/paychecks/11111111-1111-4111-8111-111111111120'),
+    );
   });
 });
 

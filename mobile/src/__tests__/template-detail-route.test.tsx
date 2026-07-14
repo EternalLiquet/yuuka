@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
+import { Alert } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { BudgetTemplate, TemplateEntry } from '@/api/contracts';
-import { TemplateEntryEditor } from '@/features/templates/template-entry-editor';
 
 import EditTemplateScreen from '../../app/templates/[id]';
 
@@ -53,7 +53,9 @@ const mockApi = {
   addTemplateEntry: jest.fn(),
   archiveTemplate: jest.fn(),
   deleteTemplateEntry: jest.fn(),
+  duplicateTemplate: jest.fn(),
   reorderTemplateEntries: jest.fn(),
+  restoreTemplate: jest.fn(),
   template: jest.fn(),
   updateTemplate: jest.fn(),
   updateTemplateEntry: jest.fn(),
@@ -118,7 +120,7 @@ function client() {
   return new QueryClient({
     defaultOptions: {
       mutations: { gcTime: Infinity, retry: false },
-      queries: { gcTime: Infinity, retry: false },
+      queries: { gcTime: Infinity, retry: false, staleTime: Infinity },
     },
   });
 }
@@ -137,63 +139,105 @@ describe('Template detail route', () => {
     mockApi.updateTemplate.mockResolvedValue(template({ name: 'Renamed' }));
     mockApi.updateTemplateEntry.mockResolvedValue(entry({ name: 'Updated rent' }));
     mockApi.deleteTemplateEntry.mockResolvedValue(undefined);
+    mockApi.duplicateTemplate.mockResolvedValue(
+      template({ id: '11111111-1111-4111-8111-111111111300', name: 'Rent 1 Copy' }),
+    );
     mockApi.reorderTemplateEntries.mockResolvedValue(template());
+    mockApi.restoreTemplate.mockResolvedValue(template());
     mockApi.archiveTemplate.mockResolvedValue(template({ archived: true }));
   });
 
-  it('adds a Manual Pay bill template entry', async () => {
+  it('shows archived templates as read-only and restores with the current version', async () => {
+    const archived = template({ archived: true, archivedAt: '2026-07-13T12:00:00Z', version: 9 });
+    mockApi.template.mockResolvedValue(archived);
+    const queryClient = client();
+    queryClient.setQueryData(['template', templateId], archived);
+    const view = await render(<EditTemplateScreen />, { wrapper: wrapper(queryClient) });
+    await waitFor(() => expect(view.getByText(/Archived/)).toBeTruthy());
+
+    expect(view.queryByLabelText('Add entry')).toBeNull();
+    expect(view.queryByLabelText('Edit Rent')).toBeNull();
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Restore template'));
+    });
+
+    await waitFor(() => expect(mockApi.restoreTemplate).toHaveBeenCalledWith(templateId, 9));
+    await waitFor(() =>
+      expect(view.getByLabelText('Restore template').props.accessibilityState.busy).toBe(false),
+    );
+    queryClient.clear();
+  });
+
+  it('duplicates a template once and opens the copy', async () => {
+    mockApi.duplicateTemplate.mockResolvedValue(
+      template({ id: '11111111-1111-4111-8111-111111111300' }),
+    );
     const queryClient = client();
     queryClient.setQueryData(['template', templateId], template());
     const view = await render(<EditTemplateScreen />, { wrapper: wrapper(queryClient) });
     await waitFor(() => expect(view.getByText('Rent 1')).toBeTruthy());
 
-    await fireEvent.press(view.getByLabelText('Add entry'));
-    fireEvent.changeText(await view.findByLabelText('Name'), 'Internet');
-    fireEvent.changeText(await view.findByLabelText('Amount'), '89.99');
-    await fireEvent.press(view.getByLabelText('I need to pay this manually'));
-    await fireEvent.press(view.getByLabelText('Save template entry'));
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Duplicate template'));
+      fireEvent.press(view.getByLabelText('Duplicate template'));
+    });
+    await waitFor(() => expect(mockApi.duplicateTemplate).toHaveBeenCalledTimes(1));
+    expect(mockApi.duplicateTemplate).toHaveBeenCalledWith(templateId);
 
-    await waitFor(() => expect(mockApi.addTemplateEntry).toHaveBeenCalled());
-    expect(mockApi.addTemplateEntry).toHaveBeenCalledWith(
-      templateId,
-      expect.objectContaining({
-        defaultAmountMinor: 8999,
-        entryType: 'BILL',
-        name: 'Internet',
-        paymentMethod: 'MANUAL',
-      }),
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/templates/11111111-1111-4111-8111-111111111300'),
     );
     queryClient.clear();
   });
 
-  it('edits and deletes template entries through the editor controls', async () => {
-    const onSubmit = jest.fn().mockResolvedValue(undefined);
-    const onDelete = jest.fn().mockResolvedValue(undefined);
-    const view = await render(
-      <TemplateEntryEditor
-        entry={entry()}
-        onClose={jest.fn()}
-        onDelete={onDelete}
-        onSubmit={onSubmit}
-        visible
-      />,
+  it('keeps stale lifecycle errors visible', async () => {
+    mockApi.restoreTemplate.mockRejectedValue(
+      new Error('This record changed since it was loaded.'),
     );
+    const archived = template({ archived: true, archivedAt: '2026-07-13T12:00:00Z', version: 9 });
+    mockApi.template.mockResolvedValue(archived);
+    const queryClient = client();
+    queryClient.setQueryData(['template', templateId], archived);
+    const view = await render(<EditTemplateScreen />, { wrapper: wrapper(queryClient) });
+    await waitFor(() => expect(view.getByText(/Archived/)).toBeTruthy());
 
-    fireEvent.changeText(await view.findByLabelText('Name'), 'Rent Updated');
-    fireEvent.changeText(await view.findByLabelText('Amount'), '1150.00');
-    await fireEvent.press(view.getByLabelText('Save template entry'));
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Restore template'));
+    });
 
-    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(onSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        defaultAmountMinor: 115000,
-        name: 'Rent Updated',
-        paymentMethod: 'MANUAL',
-      }),
+    await waitFor(() =>
+      expect(view.getByText('This record changed since it was loaded.')).toBeTruthy(),
     );
+    await waitFor(() =>
+      expect(view.getByLabelText('Restore template').props.accessibilityState.busy).toBe(false),
+    );
+    queryClient.clear();
+  });
 
-    await fireEvent.press(view.getByLabelText('Delete template entry'));
-    await waitFor(() => expect(onDelete).toHaveBeenCalled());
+  it('archives only after confirmation and guards duplicate archive actions', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    mockApi.archiveTemplate.mockResolvedValue(template({ archived: true }));
+    const queryClient = client();
+    queryClient.setQueryData(['template', templateId], template());
+    const view = await render(<EditTemplateScreen />, { wrapper: wrapper(queryClient) });
+    await waitFor(() => expect(view.getByText('Rent 1')).toBeTruthy());
+
+    fireEvent.press(view.getByLabelText('Archive template'));
+    expect(mockApi.archiveTemplate).not.toHaveBeenCalled();
+    const actions = alert.mock.calls[0][2] as { onPress?: () => void; text: string }[];
+    actions.find((action) => action.text === 'Cancel')?.onPress?.();
+    expect(mockApi.archiveTemplate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      actions.find((action) => action.text === 'Archive')?.onPress?.();
+      actions.find((action) => action.text === 'Archive')?.onPress?.();
+    });
+    await waitFor(() => expect(mockApi.archiveTemplate).toHaveBeenCalledTimes(1));
+    expect(mockApi.archiveTemplate).toHaveBeenCalledWith(templateId, 7);
+
+    await waitFor(() => expect(mockApi.archiveTemplate).toHaveBeenCalledTimes(1));
+    alert.mockRestore();
+    queryClient.clear();
   });
 });
 

@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';
-import { Check, Save } from 'lucide-react-native';
-import { useMemo, useRef, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { ArrowDown, ArrowUp, Check, Pencil, Plus, Save, Trash2 } from 'lucide-react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { BudgetTemplate } from '@/api/contracts';
@@ -17,6 +17,14 @@ import { EmptyState, ErrorState, YuukaLoadingState } from '@/components/states';
 import { TextField } from '@/components/text-field';
 import { formatMoney, parseMoneyToMinor } from '@/domain/money';
 import { PaycheckFormValues, paycheckFormSchema, today } from '@/features/paychecks/form-schemas';
+import {
+  applicationEntriesFromDraft,
+  draftEntriesFromTemplate,
+  draftTotalMinor,
+  TemplateApplicationDraftEntry,
+} from '@/features/templates/application-draft';
+import { TemplateEntryEditor } from '@/features/templates/template-entry-editor';
+import type { TemplateEntryEditorEntry } from '@/features/templates/template-entry-editor';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
@@ -33,10 +41,16 @@ export default function NewPaycheckScreen() {
   const { settings } = useSettings();
   const [mode, setMode] = useState<'scratch' | 'template'>('scratch');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [draftTemplateId, setDraftTemplateId] = useState('');
+  const [draftEntries, setDraftEntries] = useState<TemplateApplicationDraftEntry[]>([]);
+  const [editingDraftEntry, setEditingDraftEntry] = useState<TemplateApplicationDraftEntry | null>(
+    null,
+  );
+  const [draftEditorVisible, setDraftEditorVisible] = useState(false);
   const submitInFlight = useRef(false);
   const [submitLocked, setSubmitLocked] = useState(false);
   const templatesQuery = useQuery({
-    queryKey: ['templates', 'paycheck-create'],
+    queryKey: ['templates'],
     queryFn: () => api.templates(false),
     enabled: mode === 'template',
   });
@@ -49,6 +63,7 @@ export default function NewPaycheckScreen() {
     resolver: zodResolver(paycheckFormSchema),
     defaultValues: { name: '', amount: '', incomeDate: today(), source: '', notes: '' },
   });
+  const amountValue = useWatch({ control, name: 'amount' });
   const effectiveSelectedTemplateId =
     mode === 'template' ? selectedTemplateId || templatesQuery.data?.items[0]?.id || '' : '';
   const selectedTemplate = useMemo(
@@ -57,6 +72,18 @@ export default function NewPaycheckScreen() {
       null,
     [effectiveSelectedTemplateId, templatesQuery.data?.items],
   );
+  const selectedTemplateIdentity = selectedTemplate?.id ?? '';
+  useEffect(() => {
+    if (mode !== 'template' || !selectedTemplate || draftTemplateId === selectedTemplate.id) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDraftEntries(draftEntriesFromTemplate(selectedTemplate));
+    setDraftTemplateId(selectedTemplate.id);
+  }, [draftTemplateId, mode, selectedTemplate, selectedTemplateIdentity]);
+
+  const draftTotal = draftTotalMinor(draftEntries);
+  const parsedAmount = parseAmountOrNull(amountValue);
+  const differenceMinor = parsedAmount == null ? null : parsedAmount - draftTotal;
+  const overAllocated = differenceMinor != null && differenceMinor < 0;
 
   const scratchMutation = useMutation({
     mutationFn: (values: PaycheckFormValues) =>
@@ -86,6 +113,7 @@ export default function NewPaycheckScreen() {
         incomeDate: values.incomeDate,
         source: values.source.trim() || null,
         notes: values.notes.trim() || null,
+        entries: applicationEntriesFromDraft(values.incomeDate, draftEntries),
       });
     },
     onSuccess: async (paycheck) => {
@@ -110,6 +138,15 @@ export default function NewPaycheckScreen() {
     setSubmitLocked(true);
     try {
       if (mode === 'template') {
+        const amountMinor = parseMoneyToMinor(values.amount);
+        if (draftTotal > amountMinor) {
+          throw new Error(
+            `Template draft is over-allocated by ${formatMoney(
+              draftTotal - amountMinor,
+              settings.currencyCode,
+            )}.`,
+          );
+        }
         await templateMutation.mutateAsync(values);
       } else {
         await scratchMutation.mutateAsync(values);
@@ -187,7 +224,29 @@ export default function NewPaycheckScreen() {
         </View>
 
         {mode === 'template' && selectedTemplate ? (
-          <TemplatePreview template={selectedTemplate} />
+          <TemplateDraft
+            differenceMinor={differenceMinor}
+            draftEntries={draftEntries}
+            onAdd={() => {
+              setEditingDraftEntry(null);
+              setDraftEditorVisible(true);
+            }}
+            onEdit={(entry) => {
+              setEditingDraftEntry(entry);
+              setDraftEditorVisible(true);
+            }}
+            onMove={(index, offset) => {
+              setDraftEntries((current) => moveDraftEntry(current, index, offset));
+            }}
+            onRemove={(clientId) => {
+              setDraftEntries((current) => current.filter((entry) => entry.clientId !== clientId));
+            }}
+            onReset={() => {
+              setDraftEntries(draftEntriesFromTemplate(selectedTemplate));
+              setDraftTemplateId(selectedTemplate.id);
+            }}
+            totalMinor={draftTotal}
+          />
         ) : null}
 
         {errors.root?.message ? (
@@ -196,7 +255,7 @@ export default function NewPaycheckScreen() {
           </AppText>
         ) : null}
         <Button
-          disabled={mode === 'template' && !selectedTemplate}
+          disabled={(mode === 'template' && !selectedTemplate) || overAllocated}
           icon={Save}
           label="Create paycheck"
           loading={loading}
@@ -204,6 +263,35 @@ export default function NewPaycheckScreen() {
           onPress={handleSubmit(submit)}
         />
       </ScrollScreen>
+      <TemplateEntryEditor
+        entry={editingDraftEntry ? editorEntryFromDraft(editingDraftEntry) : null}
+        onClose={() => setDraftEditorVisible(false)}
+        onSubmit={(payload) => {
+          const next: TemplateApplicationDraftEntry = {
+            accountName: payload.accountName,
+            amountMinor: payload.defaultAmountMinor,
+            clientId: editingDraftEntry?.clientId ?? newDraftClientId(),
+            defaultDueOffsetDays: payload.defaultDueOffsetDays,
+            entryType: payload.entryType,
+            name: payload.name,
+            notes: payload.notes,
+            payee: payload.payee,
+            paymentMethod: payload.paymentMethod,
+            targetDate: payload.targetDate,
+            targetMinor: payload.targetMinor,
+          };
+          setDraftEntries((current) =>
+            editingDraftEntry
+              ? current.map((entry) =>
+                  entry.clientId === editingDraftEntry.clientId ? next : entry,
+                )
+              : [...current, next],
+          );
+          return Promise.resolve();
+        }}
+        title={editingDraftEntry ? 'Edit draft entry' : 'New draft entry'}
+        visible={draftEditorVisible}
+      />
     </>
   );
 }
@@ -273,26 +361,68 @@ function TemplatePicker({
   );
 }
 
-function TemplatePreview({ template }: { template: BudgetTemplate }) {
+function TemplateDraft({
+  differenceMinor,
+  draftEntries,
+  onAdd,
+  onEdit,
+  onMove,
+  onRemove,
+  onReset,
+  totalMinor,
+}: {
+  differenceMinor: number | null;
+  draftEntries: TemplateApplicationDraftEntry[];
+  onAdd: () => void;
+  onEdit: (entry: TemplateApplicationDraftEntry) => void;
+  onMove: (index: number, offset: number) => void;
+  onRemove: (clientId: string) => void;
+  onReset: () => void;
+  totalMinor: number;
+}) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
-  const entries = [...template.entries].sort((left, right) => left.position - right.position);
+  const allocationMessage =
+    differenceMinor == null
+      ? 'Enter a paycheck amount to check allocation.'
+      : differenceMinor === 0
+        ? 'Fully allocated.'
+        : differenceMinor > 0
+          ? `${formatMoney(differenceMinor, settings.currencyCode)} left unallocated.`
+          : `${formatMoney(Math.abs(differenceMinor), settings.currencyCode)} over-allocated.`;
   return (
     <View style={[styles.preview, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.previewHeader}>
         <View>
-          <AppText variant="label">Template preview</AppText>
+          <AppText variant="label">Template draft</AppText>
           <AppText style={{ color: colors.muted }} variant="caption">
-            {template.entryCount} entries copied as independent snapshots
+            {draftEntries.length} entries copied locally before creation
           </AppText>
         </View>
-        <AppText variant="money">
-          {formatMoney(template.defaultTotalMinor, settings.currencyCode)}
-        </AppText>
+        <AppText variant="money">{formatMoney(totalMinor, settings.currencyCode)}</AppText>
       </View>
-      {entries.map((entry) => (
-        <View key={entry.id} style={[styles.previewEntry, { borderTopColor: colors.border }]}>
-          <View style={styles.templateOptionText}>
+      <AppText
+        style={{
+          color: differenceMinor != null && differenceMinor < 0 ? colors.danger : colors.muted,
+        }}
+        variant="caption"
+      >
+        {allocationMessage}
+      </AppText>
+      <View style={styles.actions}>
+        <Button icon={Plus} label="Add draft entry" onPress={onAdd} variant="secondary" />
+        <Button label="Reset from template" onPress={onReset} variant="ghost" />
+      </View>
+      {draftEntries.map((entry, index) => (
+        <View key={entry.clientId} style={[styles.previewEntry, { borderTopColor: colors.border }]}>
+          <View
+            accessible
+            accessibilityLabel={`Draft entry ${index + 1}: ${entry.name}, ${formatMoney(
+              entry.amountMinor,
+              settings.currencyCode,
+            )}`}
+            style={styles.templateOptionText}
+          >
             <AppText numberOfLines={1} variant="caption">
               {entry.name}
             </AppText>
@@ -307,8 +437,40 @@ function TemplatePreview({ template }: { template: BudgetTemplate }) {
             </AppText>
           </View>
           <AppText variant="caption">
-            {formatMoney(entry.defaultAmountMinor, settings.currencyCode)}
+            {formatMoney(entry.amountMinor, settings.currencyCode)}
           </AppText>
+          <View style={styles.draftActions}>
+            <Button
+              accessibilityLabel={`Move ${entry.name} up`}
+              disabled={index === 0}
+              icon={ArrowUp}
+              label={`Move ${entry.name} up`}
+              onPress={() => onMove(index, -1)}
+              variant="ghost"
+            />
+            <Button
+              accessibilityLabel={`Move ${entry.name} down`}
+              disabled={index === draftEntries.length - 1}
+              icon={ArrowDown}
+              label={`Move ${entry.name} down`}
+              onPress={() => onMove(index, 1)}
+              variant="ghost"
+            />
+            <Button
+              accessibilityLabel={`Edit ${entry.name}`}
+              icon={Pencil}
+              label={`Edit ${entry.name}`}
+              onPress={() => onEdit(entry)}
+              variant="ghost"
+            />
+            <Button
+              accessibilityLabel={`Remove ${entry.name}`}
+              icon={Trash2}
+              label={`Remove ${entry.name}`}
+              onPress={() => onRemove(entry.clientId)}
+              variant="ghost"
+            />
+          </View>
         </View>
       ))}
     </View>
@@ -353,7 +515,9 @@ function FormField({
 }
 
 const styles = StyleSheet.create({
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   content: { gap: 20, paddingBottom: 36 },
+  draftActions: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   fieldGroup: { gap: 10 },
   form: { gap: 16 },
   pressed: { opacity: 0.74 },
@@ -385,3 +549,39 @@ const styles = StyleSheet.create({
   },
   templateOptionText: { flex: 1, gap: 3 },
 });
+
+function parseAmountOrNull(value: string) {
+  try {
+    return parseMoneyToMinor(value);
+  } catch {
+    return null;
+  }
+}
+
+function moveDraftEntry(entries: TemplateApplicationDraftEntry[], index: number, offset: number) {
+  const target = index + offset;
+  if (target < 0 || target >= entries.length) return entries;
+  const next = [...entries];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}
+
+function editorEntryFromDraft(entry: TemplateApplicationDraftEntry): TemplateEntryEditorEntry {
+  return {
+    accountName: entry.accountName,
+    defaultAmountMinor: entry.amountMinor,
+    defaultDueOffsetDays: entry.defaultDueOffsetDays,
+    entryType: entry.entryType,
+    id: entry.clientId,
+    name: entry.name,
+    notes: entry.notes,
+    payee: entry.payee,
+    paymentMethod: entry.paymentMethod,
+    targetDate: entry.targetDate,
+    targetMinor: entry.targetMinor,
+  };
+}
+
+function newDraftClientId() {
+  return `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
@@ -86,6 +87,7 @@ describe('Templates tab', () => {
     expect(view.getByText('Loading templates...')).toBeTruthy();
     await waitFor(() => expect(view.getByText('Rent 1')).toBeTruthy());
     expect(view.getByText('$1,200.00')).toBeTruthy();
+    expect(mockApi.templates).toHaveBeenCalledWith(true);
 
     await fireEvent(view.getByTestId('templates-refresh-control'), 'refresh');
     expect(mockApi.templates).toHaveBeenCalledTimes(2);
@@ -93,6 +95,30 @@ describe('Templates tab', () => {
 
     fireEvent.press(view.getByLabelText('Open template Rent 1'));
     expect(mockPush).toHaveBeenCalledWith('/templates/11111111-1111-4111-8111-111111111201');
+    queryClient.clear();
+  });
+
+  it('filters active and archived templates', async () => {
+    mockApi.templates.mockResolvedValueOnce(
+      templatePage([
+        template({ id: '11111111-1111-4111-8111-111111111201', name: 'Active rent' }),
+        template({
+          archived: true,
+          archivedAt: '2026-07-13T12:00:00Z',
+          id: '11111111-1111-4111-8111-111111111202',
+          name: 'Archived rent',
+        }),
+      ]),
+    );
+    const queryClient = client();
+    const view = await render(<TemplatesScreen />, { wrapper: wrapper(queryClient) });
+
+    await waitFor(() => expect(view.getByText('Active rent')).toBeTruthy());
+    expect(view.queryByText('Archived rent')).toBeNull();
+
+    fireEvent.press(view.getByLabelText('Archived'));
+    await waitFor(() => expect(view.getByText('Archived rent')).toBeTruthy());
+    expect(view.queryByText('Active rent')).toBeNull();
     queryClient.clear();
   });
 
@@ -119,7 +145,7 @@ describe('Templates tab', () => {
     queryClient.clear();
 
     const staleClient = client();
-    staleClient.setQueryData(['templates'], templatePage([template()]));
+    staleClient.setQueryData(['templates', { includeArchived: true }], templatePage([template()]));
     mockApi.templates.mockRejectedValueOnce(new Error('Offline'));
     const staleView = await render(<TemplatesScreen />, { wrapper: wrapper(staleClient) });
 

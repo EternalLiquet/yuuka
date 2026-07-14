@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Plus } from 'lucide-react-native';
+import { useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { BudgetTemplate } from '@/api/contracts';
@@ -9,6 +10,7 @@ import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
+import { SegmentedControl } from '@/components/segmented-control';
 import {
   EmptyState,
   ErrorState,
@@ -21,13 +23,26 @@ import { useMinimumVisibleDuration } from '@/hooks/use-minimum-visible-duration'
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
+const filterOptions = [
+  { label: 'Active', value: 'active' },
+  { label: 'Archived', value: 'archived' },
+] as const;
+
 export default function TemplatesScreen() {
   const api = useYuukaApi();
   const router = useRouter();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
-  const query = useQuery({ queryKey: ['templates'], queryFn: () => api.templates(false) });
+  const [filter, setFilter] = useState<'active' | 'archived'>('active');
+  const query = useQuery({
+    queryKey: ['templates', { includeArchived: true }],
+    queryFn: () => api.templates(true),
+  });
   const showColdLoader = useMinimumVisibleDuration(query.isPending && !query.data, 1000);
+  const templates =
+    query.data?.items.filter((template) =>
+      filter === 'archived' ? template.archived : !template.archived,
+    ) ?? [];
 
   if (showColdLoader) {
     return (
@@ -41,7 +56,7 @@ export default function TemplatesScreen() {
     <Screen>
       <FlatList
         contentContainerStyle={styles.content}
-        data={query.data?.items ?? []}
+        data={templates}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
           query.isError && !query.data ? (
@@ -63,8 +78,12 @@ export default function TemplatesScreen() {
                 />
               }
               mascot="clipboard"
-              message="Create reusable ordered allocations for repeat paychecks."
-              title="No templates yet"
+              message={
+                filter === 'archived'
+                  ? 'Archived templates can be restored from their detail screen.'
+                  : 'Create reusable ordered allocations for repeat paychecks.'
+              }
+              title={filter === 'archived' ? 'No archived templates' : 'No templates yet'}
             />
           )
         }
@@ -74,15 +93,23 @@ export default function TemplatesScreen() {
               <View style={styles.titleBlock}>
                 <AppText variant="title">Templates</AppText>
                 <AppText style={{ color: colors.muted }} variant="caption">
-                  {query.data?.totalItems ?? 0} saved
+                  {templates.length} {filter}
                 </AppText>
               </View>
-              <Button
-                icon={Plus}
-                label="New template"
-                onPress={() => router.push('/templates/new')}
-              />
+              {filter === 'active' ? (
+                <Button
+                  icon={Plus}
+                  label="New template"
+                  onPress={() => router.push('/templates/new')}
+                />
+              ) : null}
             </View>
+            <SegmentedControl
+              label="Template archive filter"
+              onChange={setFilter}
+              options={filterOptions}
+              value={filter}
+            />
             <YuukaRefreshIndicator visible={query.isFetching && Boolean(query.data)} />
             {query.isError && query.data ? <StaleBanner /> : null}
           </View>
@@ -128,6 +155,7 @@ function TemplateCard({ onPress, template }: { onPress: () => void; template: Bu
           <AppText style={{ color: colors.muted }} variant="caption">
             {template.entryCount} {template.entryCount === 1 ? 'entry' : 'entries'} | Updated{' '}
             {formatDate(template.updatedAt)}
+            {template.archived ? ' | Archived' : ''}
           </AppText>
         </View>
         <AppText variant="money">

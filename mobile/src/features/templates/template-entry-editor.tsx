@@ -1,8 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Check, Save, Trash2, X } from 'lucide-react-native';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
 import { EntryPaymentMethod, TemplateEntry } from '@/api/contracts';
@@ -16,6 +16,21 @@ import { useAppTheme } from '@/theme/use-app-theme';
 
 import { TemplateEntryFormValues, templateEntryFormSchema } from './form-schemas';
 
+export type TemplateEntryEditorEntry = Pick<
+  TemplateEntry,
+  | 'accountName'
+  | 'defaultAmountMinor'
+  | 'defaultDueOffsetDays'
+  | 'entryType'
+  | 'id'
+  | 'name'
+  | 'notes'
+  | 'payee'
+  | 'paymentMethod'
+  | 'targetDate'
+  | 'targetMinor'
+>;
+
 const typeOptions = [
   { label: 'Bill', value: 'BILL' },
   { label: 'Spending Bucket', value: 'SPENDING_BUCKET' },
@@ -27,9 +42,10 @@ export function TemplateEntryEditor({
   onClose,
   onDelete,
   onSubmit,
+  title,
   visible,
 }: {
-  entry?: TemplateEntry | null;
+  entry?: TemplateEntryEditorEntry | null;
   onClose: () => void;
   onDelete?: () => Promise<void>;
   onSubmit: (values: {
@@ -44,10 +60,13 @@ export function TemplateEntryEditor({
     targetDate: string | null;
     targetMinor: number | null;
   }) => Promise<void>;
+  title?: string;
   visible: boolean;
 }) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const deleteInFlight = useRef(false);
+  const [deletePending, setDeletePending] = useState(false);
   const {
     control,
     formState: { errors, isSubmitting },
@@ -105,8 +124,29 @@ export function TemplateEntryEditor({
     }
   }
 
+  function confirmDelete() {
+    if (!entry) return;
+    Alert.alert(
+      'Delete template entry?',
+      `Remove "${entry.name}" from this template? Existing paychecks created from this template will not change.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void remove();
+          },
+        },
+      ],
+    );
+  }
+
   async function remove() {
-    if (!onDelete) return;
+    if (!onDelete || deleteInFlight.current || deletePending) return;
+
+    deleteInFlight.current = true;
+    setDeletePending(true);
     try {
       await onDelete();
       onClose();
@@ -114,6 +154,9 @@ export function TemplateEntryEditor({
       setError('root', {
         message: displayError(error, settings.currencyCode, 'The template entry was not deleted.'),
       });
+    } finally {
+      deleteInFlight.current = false;
+      setDeletePending(false);
     }
   }
 
@@ -123,7 +166,7 @@ export function TemplateEntryEditor({
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View>
             <AppText variant="title">
-              {entry ? 'Edit template entry' : 'New template entry'}
+              {title ?? (entry ? 'Edit template entry' : 'New template entry')}
             </AppText>
             <AppText style={{ color: colors.muted }} variant="caption">
               {entry?.name ?? 'Reusable allocation'}
@@ -240,7 +283,13 @@ export function TemplateEntryEditor({
             onPress={handleSubmit(submit)}
           />
           {entry && onDelete ? (
-            <Button icon={Trash2} label="Delete template entry" onPress={remove} variant="danger" />
+            <Button
+              icon={Trash2}
+              label="Delete template entry"
+              loading={deletePending}
+              onPress={confirmDelete}
+              variant="danger"
+            />
           ) : null}
         </ScrollView>
       </View>
@@ -285,7 +334,7 @@ function ControlledField({
   );
 }
 
-function defaults(entry?: TemplateEntry | null): TemplateEntryFormValues {
+function defaults(entry?: TemplateEntryEditorEntry | null): TemplateEntryFormValues {
   return {
     entryType: entry?.entryType ?? 'BILL',
     name: entry?.name ?? '',

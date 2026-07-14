@@ -34,6 +34,7 @@ type EntryRowProps = {
   onMoveUp?: () => void;
   onStatusPress: () => void;
   highlighted?: boolean;
+  position?: number;
   reorderEnabled?: boolean;
 };
 
@@ -49,11 +50,13 @@ export function EntryRow({
   onMoveUp,
   onStatusPress,
   highlighted,
+  position,
   reorderEnabled,
 }: EntryRowProps) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const opensBucket = entry.entryType === 'SPENDING_BUCKET' && Boolean(onBucketActivity);
+  const amount = formatMoney(entry.amountMinor, settings.currencyCode);
   return (
     <Pressable
       accessibilityLabel={opensBucket ? `Open bucket ledger for ${entry.name}` : undefined}
@@ -69,7 +72,11 @@ export function EntryRow({
         pressed && styles.pressed,
       ]}
     >
-      <View style={styles.main}>
+      <View
+        accessible
+        accessibilityLabel={entryAccessibilityLabel(entry, amount, position)}
+        style={styles.main}
+      >
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
             <AppText numberOfLines={2} variant="label">
@@ -83,7 +90,7 @@ export function EntryRow({
               {entry.dueDate ? `  |  Due ${formatDate(entry.dueDate)}` : ''}
             </AppText>
           </View>
-          <AppText variant="money">{formatMoney(entry.amountMinor, settings.currencyCode)}</AppText>
+          <AppText variant="money">{amount}</AppText>
         </View>
 
         <View style={styles.detailRow}>
@@ -176,6 +183,15 @@ function BucketSummary({ entry }: { entry: Entry }) {
 
 function paymentMethodLabel(value: NonNullable<Entry['paymentMethod']>) {
   return value === 'MANUAL' ? 'Manual Pay' : 'Autopay';
+}
+
+function entryAccessibilityLabel(entry: Entry, amount: string, position?: number) {
+  const prefix = position == null ? 'Entry' : `Entry ${position}`;
+  const paymentMethod =
+    entry.entryType === 'BILL' && entry.paymentMethod
+      ? `, ${paymentMethodLabel(entry.paymentMethod)}`
+      : '';
+  return `${prefix}: ${entry.name}, ${amount}, ${typeLabels[entry.entryType]}${paymentMethod}`;
 }
 
 function formatDate(value: string) {

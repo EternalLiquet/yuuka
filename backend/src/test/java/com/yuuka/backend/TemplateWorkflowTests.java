@@ -1,6 +1,7 @@
 package com.yuuka.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -258,6 +259,59 @@ class TemplateWorkflowTests extends AbstractIntegrationTest {
     JsonNode refreshedTemplate = getTemplate(token, templateId);
     assertThat(refreshedTemplate.path("entries").get(0).path("name").asText())
         .isEqualTo("Rent Changed");
+  }
+
+  @Test
+  void appliesTemplateWithOrderedOverridesWithoutMutatingSourceTemplate() throws Exception {
+    String token = registerAndGetAccessToken("templates-overrides@yuuka.local");
+    JsonNode template = createTemplate(token, "Override Source", 120000);
+    String templateId = template.path("id").asText();
+
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/from-template")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "templateId":"%s",
+                      "name":"Edited Paycheck",
+                      "amountMinor":95000,
+                      "incomeDate":"2026-07-17",
+                      "entries":[
+                        {
+                          "entryType":"SPENDING_BUCKET",
+                          "name":"Fuel",
+                          "amountMinor":5000
+                        },
+                        {
+                          "entryType":"BILL",
+                          "name":"Rent Adjusted",
+                          "amountMinor":90000,
+                          "paymentMethod":"AUTOPAY",
+                          "dueDate":"2026-07-19",
+                          "accountName":"Checking",
+                          "payee":"Landlord"
+                        }
+                      ]
+                    }
+                    """
+                        .formatted(templateId)))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.templateSourceId").value(templateId))
+        .andExpect(jsonPath("$.entries", hasSize(2)))
+        .andExpect(jsonPath("$.entries[0].name").value("Fuel"))
+        .andExpect(jsonPath("$.entries[0].paymentMethod").value(nullValue()))
+        .andExpect(jsonPath("$.entries[1].name").value("Rent Adjusted"))
+        .andExpect(jsonPath("$.entries[1].paymentMethod").value("AUTOPAY"))
+        .andExpect(jsonPath("$.entries[1].dueDate").value("2026-07-19"));
+
+    JsonNode refreshedTemplate = getTemplate(token, templateId);
+    assertThat(refreshedTemplate.path("entries").get(0).path("name").asText()).isEqualTo("Rent");
+    assertThat(refreshedTemplate.path("entries").get(0).path("defaultAmountMinor").asLong())
+        .isEqualTo(110000);
+    assertThat(refreshedTemplate.path("entries")).hasSize(2);
   }
 
   private JsonNode createTemplate(String token, String name, long totalMinor) throws Exception {

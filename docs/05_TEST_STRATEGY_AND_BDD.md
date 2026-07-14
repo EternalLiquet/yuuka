@@ -78,6 +78,8 @@ Use React Native Testing Library for:
 - create paycheck form,
 - bucket transaction form,
 - Payback list, editor, detail, and repayment assignment behavior,
+- template list, create/edit/detail, entry CRUD, archive/restore/duplicate, and create-from-template
+  draft behavior,
 - filter/sort controls,
 - retry states,
 - accessibility labels.
@@ -102,9 +104,13 @@ The current critical Android flows automate:
 12. Create a Payback.
 13. Assign a paycheck entry to a Payback.
 14. Delete a Payback and verify live entry reassignment cleanup.
+15. Create a template with Bill and Spending Bucket entries.
+16. Preserve Manual Pay metadata on template application.
+17. Edit and reorder the local create-from-template draft.
+18. Create the paycheck from the edited draft and verify source-template independence.
 
-Create-from-template and full audit-browsing flows should be added when those mobile screens leave
-placeholder status.
+Full audit-browsing E2E coverage should be added when full audit browsing leaves later-scope mobile
+status.
 
 ## Contract testing
 

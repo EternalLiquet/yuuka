@@ -29,12 +29,13 @@ Yuuka is a paycheck-first budgeting app for bills, spending buckets, and sinking
 - Paybacks with mobile list/detail/create/edit/delete/reorder flows, repayment history, and paycheck-entry repayment assignment
 - Spending-bucket purchase ledgers with derived spent, remaining, and over-budget display
 - Bill entries can be marked Autopay or Manual Pay and filtered in paycheck detail
+- Template list/detail/create/edit flows with ordered entries, duplicate/archive/restore lifecycle,
+  and create-paycheck-from-template using an editable local draft
 - Password plus optional/deployment-required TOTP, JWT access tokens, and rotating refresh tokens
 - Dark-first mobile UI with light/system preferences
 
-Template management and full audit-history UI remain later-scope mobile features. Backend
-foundations and contracts exist where needed, but visible mobile template screens are placeholders
-until the next specification slice.
+Full audit-history browsing remains later-scope mobile UI. Backend audit recording and status
+history viewing are implemented where needed for current workflows.
 
 ## Repository
 
@@ -75,7 +76,7 @@ cd mobile && npm run format:check && npm run lint && npm run typecheck && npm ru
 ```
 
 CI runs those gates, Compose validation, Docker image build validation, Expo Doctor, and Android
-export for pull requests and pushes to `master`. The critical Android Maestro flow runs nightly and
+export for pull requests and pushes to `master`. Critical Android Maestro flows run nightly and
 can be started manually when a mobile change needs emulator coverage. Successful `master` pushes
 publish the next `vMAJOR.MINOR.PATCH` tag and GitHub Release. The running backend reports its
 packaged version at `/health/live`.
