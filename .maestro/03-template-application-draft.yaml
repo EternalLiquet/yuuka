@@ -75,7 +75,7 @@ name: Template application draft
     direction: DOWN
 - tapOn: "Edit E2E Rent"
 - extendedWaitUntil:
-    visible: "Edit draft entry"
+    visible: "Due offset days (optional)"
     timeout: 10000
 - tapOn: "Name"
 - eraseText: 100

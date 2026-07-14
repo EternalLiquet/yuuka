@@ -223,6 +223,15 @@ For full-screen React Native modals, prefer `back` when the next assertion only 
     timeout: 10000
 ```
 
+Do not rely on a full-screen modal title as the only readiness assertion when it sits under the Android status bar. The title can appear in the screenshot but fail a Maestro visibility assertion if it is clipped at the top edge. Wait for a stable in-form field or action instead:
+
+```yaml
+- tapOn: "Edit E2E Rent"
+- extendedWaitUntil:
+    visible: "Due offset days (optional)"
+    timeout: 10000
+```
+
 When a flow creates nested detail screens and then switches tabs, first navigate back to a stable list landmark. Generic labels such as `Active` can also appear as status text in paychecks or paybacks, so use the tab-specific accessibility labels instead of the raw tab title:
 
 ```yaml
