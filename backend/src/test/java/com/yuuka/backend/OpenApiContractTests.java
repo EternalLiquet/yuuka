@@ -27,6 +27,7 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/paychecks/active",
           "/api/v1/paychecks/history",
           "/api/v1/paychecks",
+          "/api/v1/spending-buckets/performance/rolling-90-days",
           "/api/v1/paychecks/from-template",
           "/api/v1/search/entries",
           "/api/v1/paybacks",
@@ -74,6 +75,15 @@ class OpenApiContractTests extends AbstractIntegrationTest {
         .isEqualTo("string");
     assertThat(versionResponse.path("properties").path("version").path("minLength").asInt())
         .isEqualTo(1);
+    JsonNode rollingParameters =
+        generated
+            .path("paths")
+            .path("/api/v1/spending-buckets/performance/rolling-90-days")
+            .path("get")
+            .path("parameters");
+    assertThat(rollingParameters.size()).isEqualTo(1);
+    assertThat(rollingParameters.get(0).path("name").asText()).isEqualTo("asOfDate");
+    assertThat(rollingParameters.get(0).path("required").asBoolean()).isFalse();
 
     Path generatedPath = Path.of("build", "generated", "openapi.json");
     Files.createDirectories(generatedPath.getParent());

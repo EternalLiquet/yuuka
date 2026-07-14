@@ -62,6 +62,11 @@ const paycheck: Paycheck = {
   processingCount: 1,
   notPaidCount: 4,
   requiresAttention: true,
+  spendingBucketPerformance: {
+    budgetedMinor: 5000,
+    netMinor: 2855,
+    spentMinor: 2145,
+  },
   entries: [entry],
   createdAt: '2026-07-10T12:00:00Z',
   updatedAt: '2026-07-10T13:00:00Z',

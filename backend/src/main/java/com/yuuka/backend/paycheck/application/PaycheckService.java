@@ -1,6 +1,8 @@
 package com.yuuka.backend.paycheck.application;
 
 import com.yuuka.backend.audit.application.AuditService;
+import com.yuuka.backend.auth.application.OwnerLocalDateService;
+import com.yuuka.backend.bucket.application.SpendingBucketPerformanceService;
 import com.yuuka.backend.bucket.domain.BucketCalculator;
 import com.yuuka.backend.bucket.domain.BucketMetrics;
 import com.yuuka.backend.bucket.domain.BucketTransaction;
@@ -60,6 +62,8 @@ public class PaycheckService {
   private final PaycheckVisibilityPolicy visibilityPolicy;
   private final StatusTransitionPolicy statusTransitionPolicy;
   private final BucketCalculator bucketCalculator;
+  private final SpendingBucketPerformanceService spendingBucketPerformanceService;
+  private final OwnerLocalDateService ownerLocalDateService;
   private final PaybackService paybackService;
   private final AuditService auditService;
   private final Clock clock;
@@ -73,6 +77,8 @@ public class PaycheckService {
       PaycheckVisibilityPolicy visibilityPolicy,
       StatusTransitionPolicy statusTransitionPolicy,
       BucketCalculator bucketCalculator,
+      SpendingBucketPerformanceService spendingBucketPerformanceService,
+      OwnerLocalDateService ownerLocalDateService,
       PaybackService paybackService,
       AuditService auditService,
       Clock clock) {
@@ -84,6 +90,8 @@ public class PaycheckService {
     this.visibilityPolicy = visibilityPolicy;
     this.statusTransitionPolicy = statusTransitionPolicy;
     this.bucketCalculator = bucketCalculator;
+    this.spendingBucketPerformanceService = spendingBucketPerformanceService;
+    this.ownerLocalDateService = ownerLocalDateService;
     this.paybackService = paybackService;
     this.auditService = auditService;
     this.clock = clock;
@@ -101,7 +109,8 @@ public class PaycheckService {
                 request.incomeDate(),
                 normalizeOptional(request.notes()),
                 null));
-    PaycheckResponse response = toResponse(paycheck, List.of());
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
+    PaycheckResponse response = toResponse(paycheck, List.of(), asOfDate);
     auditService.append(
         ownerId, "PAYCHECK", paycheck.getId(), "CREATED", null, null, response, null);
     return response;
@@ -116,6 +125,7 @@ public class PaycheckService {
       String sort,
       boolean ascending) {
     Paycheck paycheck = requirePaycheck(ownerId, paycheckId);
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
     List<EntryResponse> responses =
         liveEntries.stream()
@@ -124,17 +134,22 @@ public class PaycheckService {
             .map(this::toEntryResponse)
             .sorted(entryComparator(sort, ascending))
             .toList();
-    return PaycheckResponse.from(paycheck, calculate(paycheck, liveEntries), responses);
+    return PaycheckResponse.from(
+        paycheck,
+        calculate(paycheck, liveEntries),
+        spendingBucketPerformanceService.paycheckSummary(ownerId, paycheckId, asOfDate),
+        responses);
   }
 
   @Transactional(readOnly = true)
   public PageResponse<PaycheckResponse> active(UUID ownerId, int page, int size) {
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
     List<PaycheckResponse> results =
         paychecks
             .findAllByOwnerIdAndStateOrderByIncomeDateDescUpdatedAtDesc(
                 ownerId, PaycheckState.ACTIVE)
             .stream()
-            .map(paycheck -> toResponse(paycheck, findEntries(ownerId, paycheck.getId())))
+            .map(paycheck -> toResponse(paycheck, findEntries(ownerId, paycheck.getId()), asOfDate))
             .filter(
                 paycheck ->
                     visibilityPolicy.belongsInActive(
@@ -153,6 +168,7 @@ public class PaycheckService {
       int page,
       int size) {
     String term = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
     Comparator<Paycheck> comparator =
         Comparator.comparing(Paycheck::getIncomeDate).thenComparing(Paycheck::getUpdatedAt);
     if (!oldestFirst) {
@@ -170,7 +186,7 @@ public class PaycheckService {
             .filter(paycheck -> from == null || !paycheck.getIncomeDate().isBefore(from))
             .filter(paycheck -> to == null || !paycheck.getIncomeDate().isAfter(to))
             .sorted(comparator)
-            .map(paycheck -> toResponse(paycheck, findEntries(ownerId, paycheck.getId())))
+            .map(paycheck -> toResponse(paycheck, findEntries(ownerId, paycheck.getId()), asOfDate))
             .filter(
                 paycheck ->
                     visibilityPolicy.belongsInHistory(
@@ -188,7 +204,8 @@ public class PaycheckService {
     PaycheckMetrics proposed =
         paycheckCalculator.calculate(request.amountMinor(), allocationLines(liveEntries));
     assertNotOverAllocated(proposed);
-    PaycheckResponse before = toResponse(paycheck, liveEntries);
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
+    PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
     paycheck.update(
         request.name().trim(),
         normalizeOptional(request.source()),
@@ -196,7 +213,7 @@ public class PaycheckService {
         request.incomeDate(),
         normalizeOptional(request.notes()));
     paychecks.flush();
-    PaycheckResponse after = toResponse(paycheck, liveEntries);
+    PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
     auditService.append(ownerId, "PAYCHECK", paycheckId, "UPDATED", null, before, after, null);
     return after;
   }
@@ -456,7 +473,8 @@ public class PaycheckService {
         before,
         request.entryIds(),
         null);
-    return toResponse(paycheck, findEntries(ownerId, paycheckId));
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
+    return toResponse(paycheck, findEntries(ownerId, paycheckId), asOfDate);
   }
 
   @Transactional
@@ -470,10 +488,11 @@ public class PaycheckService {
       throw new BusinessRuleException(
           "A paycheck can be closed only when fully allocated and fully Posted.");
     }
-    PaycheckResponse before = toResponse(paycheck, liveEntries);
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
+    PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
     paycheck.close(clock.instant());
     paychecks.flush();
-    PaycheckResponse after = toResponse(paycheck, liveEntries);
+    PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
     auditService.append(ownerId, "PAYCHECK", paycheckId, "CLOSED", null, before, after, null);
     return after;
   }
@@ -486,10 +505,11 @@ public class PaycheckService {
       throw new BusinessRuleException("The paycheck is already active.");
     }
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
-    PaycheckResponse before = toResponse(paycheck, liveEntries);
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
+    PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
     paycheck.reopen(clock.instant());
     paychecks.flush();
-    PaycheckResponse after = toResponse(paycheck, liveEntries);
+    PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
     auditService.append(ownerId, "PAYCHECK", paycheckId, "REOPENED", null, before, after, null);
     return after;
   }
@@ -499,10 +519,11 @@ public class PaycheckService {
     Paycheck paycheck = requirePaycheck(ownerId, paycheckId);
     assertVersion(paycheck.getVersion(), version);
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
-    PaycheckResponse before = toResponse(paycheck, liveEntries);
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
+    PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
     paycheck.archive(clock.instant());
     paychecks.flush();
-    PaycheckResponse after = toResponse(paycheck, liveEntries);
+    PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
     auditService.append(ownerId, "PAYCHECK", paycheckId, "ARCHIVED", null, before, after, null);
     return after;
   }
@@ -526,9 +547,17 @@ public class PaycheckService {
   }
 
   public PaycheckResponse toResponse(Paycheck paycheck, List<PaycheckEntry> liveEntries) {
+    return toResponse(
+        paycheck, liveEntries, ownerLocalDateService.currentDate(paycheck.getOwnerId()));
+  }
+
+  private PaycheckResponse toResponse(
+      Paycheck paycheck, List<PaycheckEntry> liveEntries, LocalDate asOfDate) {
     return PaycheckResponse.from(
         paycheck,
         calculate(paycheck, liveEntries),
+        spendingBucketPerformanceService.paycheckSummary(
+            paycheck.getOwnerId(), paycheck.getId(), asOfDate),
         liveEntries.stream().map(this::toEntryResponse).toList());
   }
 

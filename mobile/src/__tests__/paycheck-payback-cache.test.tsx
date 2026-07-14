@@ -153,6 +153,7 @@ const paycheck: Paycheck = {
   processingMinor: 0,
   reopenedAt: null,
   requiresAttention: false,
+  spendingBucketPerformance: null,
   source: null,
   state: 'ACTIVE',
   templateSourceId: null,
