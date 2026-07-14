@@ -1,6 +1,7 @@
 package com.yuuka.backend.template.application;
 
 import com.yuuka.backend.audit.application.AuditService;
+import com.yuuka.backend.auth.application.OwnerLocalDateService;
 import com.yuuka.backend.bucket.application.SpendingBucketPerformanceService;
 import com.yuuka.backend.common.api.BusinessRuleException;
 import com.yuuka.backend.common.api.ConflictException;
@@ -54,6 +55,7 @@ public class TemplateService {
   private final JpaEntryStatusEventRepository statusEvents;
   private final PaycheckCalculator calculator;
   private final SpendingBucketPerformanceService spendingBucketPerformanceService;
+  private final OwnerLocalDateService ownerLocalDateService;
   private final AuditService auditService;
   private final Clock clock;
 
@@ -65,6 +67,7 @@ public class TemplateService {
       JpaEntryStatusEventRepository statusEvents,
       PaycheckCalculator calculator,
       SpendingBucketPerformanceService spendingBucketPerformanceService,
+      OwnerLocalDateService ownerLocalDateService,
       AuditService auditService,
       Clock clock) {
     this.templates = templates;
@@ -74,6 +77,7 @@ public class TemplateService {
     this.statusEvents = statusEvents;
     this.calculator = calculator;
     this.spendingBucketPerformanceService = spendingBucketPerformanceService;
+    this.ownerLocalDateService = ownerLocalDateService;
     this.auditService = auditService;
     this.clock = clock;
   }
@@ -353,12 +357,12 @@ public class TemplateService {
               now,
               "Copied from template"));
     }
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
     PaycheckResponse response =
         PaycheckResponse.from(
             paycheck,
             proposed,
-            spendingBucketPerformanceService.paycheckSummary(
-                ownerId, paycheck.getId(), LocalDate.now(clock)),
+            spendingBucketPerformanceService.paycheckSummary(ownerId, paycheck.getId(), asOfDate),
             copied.stream()
                 .map(
                     entry ->

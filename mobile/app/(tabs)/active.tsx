@@ -1,9 +1,9 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Plus, Search } from 'lucide-react-native';
-import { useMemo } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { AppState, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import type { RollingSpendingBucketPerformance } from '@/api/contracts';
 import { displayError } from '@/api/display-error';
@@ -30,7 +30,11 @@ export default function ActiveScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
-  const asOfDate = useMemo(() => yuukaDateInTimezone(settings.timezone), [settings.timezone]);
+  const currentAsOfDate = useCallback(
+    () => yuukaDateInTimezone(settings.timezone),
+    [settings.timezone],
+  );
+  const [asOfDate, setAsOfDate] = useState(currentAsOfDate);
   const query = useQuery({
     queryKey: ['paychecks', 'active'],
     queryFn: api.activePaychecks,
@@ -41,6 +45,40 @@ export default function ActiveScreen() {
     placeholderData: keepPreviousData,
   });
   const showColdLoader = useMinimumVisibleDuration(query.isPending && !query.data, 1000);
+
+  const refreshAsOfDate = useCallback(() => {
+    const next = currentAsOfDate();
+    setAsOfDate((current) => (current === next ? current : next));
+    return next;
+  }, [currentAsOfDate]);
+
+  useEffect(() => {
+    const handle = setTimeout(refreshAsOfDate, 0);
+    return () => clearTimeout(handle);
+  }, [refreshAsOfDate]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshAsOfDate();
+    }, [refreshAsOfDate]),
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        refreshAsOfDate();
+      }
+    });
+    return () => subscription.remove();
+  }, [refreshAsOfDate]);
+
+  const refresh = useCallback(() => {
+    const next = refreshAsOfDate();
+    void query.refetch();
+    if (next === asOfDate) {
+      void bucketPerformanceQuery.refetch();
+    }
+  }, [asOfDate, bucketPerformanceQuery, query, refreshAsOfDate]);
 
   if (showColdLoader) {
     return (
@@ -103,10 +141,7 @@ export default function ActiveScreen() {
         refreshControl={
           <RefreshControl
             colors={['transparent']}
-            onRefresh={() => {
-              void query.refetch();
-              void bucketPerformanceQuery.refetch();
-            }}
+            onRefresh={refresh}
             progressBackgroundColor="transparent"
             refreshing={query.isRefetching}
             tintColor="transparent"
@@ -185,6 +220,11 @@ function RollingSpendingBucketPerformanceCard({
       {query.isError ? (
         <AppText style={{ color: colors.processing }} variant="caption">
           Summary may be stale
+        </AppText>
+      ) : null}
+      {query.isPlaceholderData ? (
+        <AppText style={{ color: colors.muted }} variant="caption">
+          Updating summary...
         </AppText>
       ) : null}
     </View>

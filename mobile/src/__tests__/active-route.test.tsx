@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
+import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { Paycheck, RollingSpendingBucketPerformance } from '@/api/contracts';
@@ -8,15 +10,40 @@ import type { Paycheck, RollingSpendingBucketPerformance } from '@/api/contracts
 import ActiveScreen from '../../app/(tabs)/active';
 
 const mockPush = jest.fn();
+const mockYuukaDateInTimezone = jest.fn();
+let mockCurrentDate = '2026-07-14';
+let mockFocusCallback: (() => void) | null = null;
+let mockAppStateListener: ((state: string) => void) | null = null;
+let mockTimezone = 'America/Indianapolis';
 const mockApi = {
   activePaychecks: jest.fn(),
   rollingSpendingBucketPerformance: jest.fn(),
 };
 const queryClients: QueryClient[] = [];
 
-jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
+jest.mock('expo-router', () => {
+  const React = require('react');
+  return {
+    useFocusEffect: (callback: () => void) => {
+      mockFocusCallback = callback;
+      React.useEffect(() => callback(), [callback]);
+    },
+    useRouter: () => ({ push: mockPush }),
+  };
+});
+
+jest.mock('react-native/Libraries/Components/RefreshControl/RefreshControl', () => {
+  const React = require('react');
+  const { Pressable } = require('react-native');
+  return {
+    __esModule: true,
+    default: ({ onRefresh }: { onRefresh: () => void }) =>
+      React.createElement(Pressable, {
+        accessibilityLabel: 'Refresh active paychecks',
+        onPress: onRefresh,
+      }),
+  };
+});
 
 jest.mock('@/api/use-yuuka-api', () => ({
   useYuukaApi: () => mockApi,
@@ -26,13 +53,17 @@ jest.mock('@/hooks/use-minimum-visible-duration', () => ({
   useMinimumVisibleDuration: () => false,
 }));
 
+jest.mock('@/domain/date', () => ({
+  yuukaDateInTimezone: (timezone: string) => mockYuukaDateInTimezone(timezone),
+}));
+
 jest.mock('@/settings/settings-provider', () => ({
   useSettings: () => ({
     settings: {
       apiBaseUrl: 'http://localhost:8080/api/v1',
       currencyCode: 'USD',
       theme: 'dark',
-      timezone: 'America/Indianapolis',
+      timezone: mockTimezone,
     },
   }),
 }));
@@ -120,12 +151,22 @@ const rollingSummary: RollingSpendingBucketPerformance = {
 describe('active route bucket performance', () => {
   afterEach(() => {
     cleanup();
+    jest.restoreAllMocks();
     queryClients.forEach((queryClient) => queryClient.clear());
     queryClients.length = 0;
   });
 
   beforeEach(() => {
     jest.resetAllMocks();
+    mockCurrentDate = '2026-07-14';
+    mockTimezone = 'America/Indianapolis';
+    mockFocusCallback = null;
+    mockAppStateListener = null;
+    mockYuukaDateInTimezone.mockImplementation(() => mockCurrentDate);
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+      mockAppStateListener = listener as (state: string) => void;
+      return { remove: jest.fn() };
+    });
     mockApi.activePaychecks.mockResolvedValue(page);
     mockApi.rollingSpendingBucketPerformance.mockResolvedValue(rollingSummary);
   });
@@ -140,12 +181,81 @@ describe('active route bucket performance', () => {
     expect(view.getByText('Loading bucket summary...')).toBeTruthy();
   });
 
+  it('requests the rolling summary for the configured timezone date', async () => {
+    await renderRoute();
+
+    await waitFor(() =>
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledWith('2026-07-14'),
+    );
+    expect(mockYuukaDateInTimezone).toHaveBeenCalledWith('America/Indianapolis');
+  });
+
   it('renders the rolling summary when bucket data exists', async () => {
     const { view } = await renderRoute();
 
     expect(await view.findByText('Net under by $25.00')).toBeTruthy();
     expect(view.getByText('$100.00')).toBeTruthy();
     expect(view.getByText('$75.00')).toBeTruthy();
+  });
+
+  it('requests a new date when the screen refocuses on a later local day', async () => {
+    const { view } = await renderRoute();
+    expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+
+    mockCurrentDate = '2026-07-15';
+    await act(async () => {
+      mockFocusCallback?.();
+    });
+
+    await waitFor(() =>
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledWith('2026-07-15'),
+    );
+  });
+
+  it('requests a new date when the configured timezone changes', async () => {
+    const { view } = await renderRoute();
+    expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+
+    mockTimezone = 'America/Los_Angeles';
+    mockCurrentDate = '2026-07-13';
+    await act(async () => {
+      view.rerender(<ActiveScreen />);
+    });
+
+    await waitFor(() =>
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledWith('2026-07-13'),
+    );
+    expect(mockYuukaDateInTimezone).toHaveBeenCalledWith('America/Los_Angeles');
+  });
+
+  it('requests a new date when the app returns to the foreground', async () => {
+    const { view } = await renderRoute();
+    expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+
+    mockCurrentDate = '2026-07-15';
+    await act(async () => {
+      mockAppStateListener?.('active');
+    });
+
+    await waitFor(() =>
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledWith('2026-07-15'),
+    );
+  });
+
+  it('recalculates the date before pull-to-refresh requests the rolling summary', async () => {
+    const { view } = await renderRoute();
+    expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+
+    mockCurrentDate = '2026-07-15';
+    fireEvent.press(view.getByLabelText('Refresh active paychecks'));
+
+    await waitFor(() =>
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledWith('2026-07-15'),
+    );
+    expect(mockApi.rollingSpendingBucketPerformance.mock.calls.map((call) => call[0])).toEqual([
+      '2026-07-14',
+      '2026-07-15',
+    ]);
   });
 
   it('hides the card when the rolling summary has no qualifying bucket data', async () => {

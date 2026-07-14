@@ -11,9 +11,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuuka.backend.support.AbstractIntegrationTest;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -22,6 +30,12 @@ import org.springframework.test.web.servlet.MvcResult;
 class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private MutableClock clock;
+
+  @BeforeEach
+  void resetClock() {
+    clock.setInstant(Instant.parse("2026-07-15T02:00:00Z"));
+  }
 
   @Test
   void returnsPerPaycheckSummaryForUnderOverExactMixedAndNoBucketCases() throws Exception {
@@ -88,6 +102,53 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
                 .header("Authorization", bearer(token)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.spendingBucketPerformance").doesNotExist());
+  }
+
+  @Test
+  void usesOwnerLocalDateForPerPaycheckSummaryAtUtcBoundary() throws Exception {
+    String token = register("bucket-performance-local-date@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Local Date", 2000, "2026-07-14");
+    String paycheckId = paycheck.path("id").asText();
+    JsonNode bucket = addEntry(token, paycheckId, "SPENDING_BUCKET", "Boundary Bucket", 2000);
+    String bucketId = bucket.path("id").asText();
+    addBucketTransaction(token, bucketId, 500, "2026-07-14");
+    addBucketTransaction(token, bucketId, 700, "2026-07-15");
+    changeStatus(token, bucketId, 0);
+    close(token, paycheckId, getPaycheck(token, paycheckId));
+
+    mockMvc
+        .perform(get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.spendingBucketPerformance.budgetedMinor").value(2000))
+        .andExpect(jsonPath("$.spendingBucketPerformance.spentMinor").value(500))
+        .andExpect(jsonPath("$.spendingBucketPerformance.netMinor").value(1500));
+    mockMvc
+        .perform(
+            get("/api/v1/spending-buckets/performance/rolling-90-days")
+                .param("asOfDate", "2026-07-14")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.summary.budgetedMinor").value(2000))
+        .andExpect(jsonPath("$.summary.spentMinor").value(500))
+        .andExpect(jsonPath("$.summary.netMinor").value(1500));
+
+    clock.setInstant(Instant.parse("2026-07-15T13:00:00Z"));
+
+    mockMvc
+        .perform(get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.spendingBucketPerformance.budgetedMinor").value(2000))
+        .andExpect(jsonPath("$.spendingBucketPerformance.spentMinor").value(1200))
+        .andExpect(jsonPath("$.spendingBucketPerformance.netMinor").value(800));
+    mockMvc
+        .perform(
+            get("/api/v1/spending-buckets/performance/rolling-90-days")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.summary.budgetedMinor").value(2000))
+        .andExpect(jsonPath("$.summary.spentMinor").value(1200))
+        .andExpect(jsonPath("$.summary.netMinor").value(800));
   }
 
   @Test
@@ -376,5 +437,41 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
 
   private String bearer(String token) {
     return "Bearer " + token;
+  }
+
+  @TestConfiguration
+  static class ClockConfiguration {
+    @Bean
+    @Primary
+    MutableClock testClock() {
+      return new MutableClock(Instant.parse("2026-07-15T02:00:00Z"));
+    }
+  }
+
+  static class MutableClock extends Clock {
+    private Instant instant;
+
+    MutableClock(Instant instant) {
+      this.instant = instant;
+    }
+
+    void setInstant(Instant instant) {
+      this.instant = instant;
+    }
+
+    @Override
+    public ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      return Clock.fixed(instant, zone);
+    }
+
+    @Override
+    public Instant instant() {
+      return instant;
+    }
   }
 }
