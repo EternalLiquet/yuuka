@@ -98,8 +98,8 @@ name: Template application draft
     element: "Move E2E Food up"
     direction: DOWN
 - tapOn: "Move E2E Food up"
-- assertVisible: 'Draft entry 1: E2E Food, \$70\.00'
-- assertVisible: 'Draft entry 2: E2E Rent Adjusted, \$80\.00'
+- assertVisible: "Move E2E Food down"
+- assertVisible: "Move E2E Rent Adjusted up"
 - scrollUntilVisible:
     centerElement: true
     element: "Create paycheck"

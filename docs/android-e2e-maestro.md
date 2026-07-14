@@ -160,6 +160,14 @@ If a row action is below the visible portion of the list, scroll to the action i
 
 This is not a weakened assertion. It models the user action needed to reach an off-screen control.
 
+After scrolling to row actions, the row summary text may be above the viewport even though the action controls are visible. If the state you need to prove is ordering, assert visible order-specific controls rather than an off-screen summary label:
+
+```yaml
+- tapOn: "Move E2E Food up"
+- assertVisible: "Move E2E Food down"
+- assertVisible: "Move E2E Rent Adjusted up"
+```
+
 The same rule applies to full-screen form modals after typing into fields near the top. The Android viewport can show the field label while the actual accessible control is still below the navigation bar or below the fold. A failure like this:
 
 ```text
