@@ -148,6 +148,19 @@ Risky:
 - assertVisible: "Food"
 ```
 
+After saving an entry on a detail screen with filter controls, the saved row may be below the current viewport even though the save succeeded. First wait for a stable detail action such as `Add entry`, then scroll to the row action you intend to use:
+
+```yaml
+- tapOn: "Save entry"
+- extendedWaitUntil:
+    visible: "Add entry"
+    timeout: 10000
+- scrollUntilVisible:
+    centerElement: true
+    element: "Move Food up"
+    direction: DOWN
+```
+
 If a row action is below the visible portion of the list, scroll to the action itself:
 
 ```yaml
