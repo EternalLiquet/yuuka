@@ -80,7 +80,9 @@ bash .github/scripts/android-e2e.sh scratch artifacts/android-e2e-apk/app-e2e.ap
 
 Do not add `adb reverse tcp:8081 tcp:8081`, Metro status polling, or bundle prewarming back to the flow jobs. If the APK hangs on startup, verify the `build-e2e-apk` job built `assembleRelease` and that the APK contains `assets/index.android.bundle` or an `assets/*.hbc` bundle entry, not only a `.meta` file.
 
-`EXPO_PUBLIC_E2E=1` is compiled into the E2E APK and tells the app to hide React Native LogBox overlays. This is for test hygiene only; it must not weaken product behavior or hide failed app assertions.
+`EXPO_PUBLIC_E2E=1` is compiled into the E2E APK and tells the app to hide React Native LogBox overlays. This is for test hygiene only; it must not hide failed app assertions.
+
+Because the E2E APK is a release build, the app keeps the normal release requirement that API URLs use HTTPS. The E2E flag adds one narrow exception for the disposable CI backend: release builds with `EXPO_PUBLIC_E2E=1` may use HTTP only for explicit loopback hosts, `localhost` or `127.0.0.1`. Arbitrary production HTTP endpoints remain rejected, including in E2E mode.
 
 ## Emulator and Disk Pitfalls
 
