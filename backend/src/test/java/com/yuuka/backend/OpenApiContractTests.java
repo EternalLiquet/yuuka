@@ -27,6 +27,7 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/paychecks/active",
           "/api/v1/paychecks/history",
           "/api/v1/paychecks",
+          "/api/v1/spending-buckets/performance/rolling-90-days",
           "/api/v1/paychecks/from-template",
           "/api/v1/search/entries",
           "/api/v1/paybacks",

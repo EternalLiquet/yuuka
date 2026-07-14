@@ -1463,6 +1463,33 @@
         }
       }
     },
+    "/api/v1/spending-buckets/performance/rolling-90-days" : {
+      "get" : {
+        "tags" : [ "spending-bucket-performance-controller" ],
+        "operationId" : "rolling90Days",
+        "parameters" : [ {
+          "name" : "asOfDate",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RollingSpendingBucketPerformanceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/paybacks/{paybackId}/repayments" : {
       "get" : {
         "tags" : [ "payback-controller" ],
@@ -2016,6 +2043,47 @@
           }
         }
       },
+      "RollingSpendingBucketPerformanceResponse" : {
+        "type" : "object",
+        "properties" : {
+          "asOfDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "windowStartDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "windowEndDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "paycheckCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "summary" : {
+            "$ref" : "#/components/schemas/SpendingBucketPerformanceSummaryResponse"
+          }
+        }
+      },
+      "SpendingBucketPerformanceSummaryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "budgetedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "spentMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "netMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "PaycheckResponse" : {
         "type" : "object",
         "properties" : {
@@ -2088,6 +2156,9 @@
           },
           "requiresAttention" : {
             "type" : "boolean"
+          },
+          "spendingBucketPerformance" : {
+            "$ref" : "#/components/schemas/SpendingBucketPerformanceSummaryResponse"
           },
           "entries" : {
             "type" : "array",

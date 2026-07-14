@@ -1,6 +1,7 @@
 package com.yuuka.backend.template.application;
 
 import com.yuuka.backend.audit.application.AuditService;
+import com.yuuka.backend.bucket.application.SpendingBucketPerformanceService;
 import com.yuuka.backend.common.api.BusinessRuleException;
 import com.yuuka.backend.common.api.ConflictException;
 import com.yuuka.backend.common.api.ResourceNotFoundException;
@@ -52,6 +53,7 @@ public class TemplateService {
   private final JpaPaycheckEntryRepository paycheckEntries;
   private final JpaEntryStatusEventRepository statusEvents;
   private final PaycheckCalculator calculator;
+  private final SpendingBucketPerformanceService spendingBucketPerformanceService;
   private final AuditService auditService;
   private final Clock clock;
 
@@ -62,6 +64,7 @@ public class TemplateService {
       JpaPaycheckEntryRepository paycheckEntries,
       JpaEntryStatusEventRepository statusEvents,
       PaycheckCalculator calculator,
+      SpendingBucketPerformanceService spendingBucketPerformanceService,
       AuditService auditService,
       Clock clock) {
     this.templates = templates;
@@ -70,6 +73,7 @@ public class TemplateService {
     this.paycheckEntries = paycheckEntries;
     this.statusEvents = statusEvents;
     this.calculator = calculator;
+    this.spendingBucketPerformanceService = spendingBucketPerformanceService;
     this.auditService = auditService;
     this.clock = clock;
   }
@@ -353,6 +357,8 @@ public class TemplateService {
         PaycheckResponse.from(
             paycheck,
             proposed,
+            spendingBucketPerformanceService.paycheckSummary(
+                ownerId, paycheck.getId(), LocalDate.now(clock)),
             copied.stream()
                 .map(
                     entry ->

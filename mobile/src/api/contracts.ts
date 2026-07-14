@@ -20,6 +20,15 @@ export type SearchScope = z.infer<typeof searchScopeSchema>;
 export const paycheckContextSchema = z.enum(['ACTIVE', 'HISTORY']);
 export type PaycheckContext = z.infer<typeof paycheckContextSchema>;
 
+export const spendingBucketPerformanceSummarySchema = z.object({
+  budgetedMinor: minor.nonnegative(),
+  spentMinor: minor.nonnegative(),
+  netMinor: minor,
+});
+export type SpendingBucketPerformanceSummary = z.infer<
+  typeof spendingBucketPerformanceSummarySchema
+>;
+
 export const entrySchema = z.object({
   id: uuid,
   paycheckId: uuid,
@@ -65,6 +74,7 @@ export const paycheckSchema = z.object({
   processingCount: z.number().int().nonnegative(),
   notPaidCount: z.number().int().nonnegative(),
   requiresAttention: z.boolean(),
+  spendingBucketPerformance: spendingBucketPerformanceSummarySchema.nullable(),
   entries: z.array(entrySchema),
   createdAt: instant,
   updatedAt: instant,
@@ -74,6 +84,17 @@ export const paycheckSchema = z.object({
   version: z.number().int().nonnegative(),
 });
 export type Paycheck = z.infer<typeof paycheckSchema>;
+
+export const rollingSpendingBucketPerformanceSchema = z.object({
+  asOfDate: date,
+  windowStartDate: date,
+  windowEndDate: date,
+  paycheckCount: z.number().int().nonnegative(),
+  summary: spendingBucketPerformanceSummarySchema.nullable(),
+});
+export type RollingSpendingBucketPerformance = z.infer<
+  typeof rollingSpendingBucketPerformanceSchema
+>;
 
 export const paybackStateSchema = z.enum(['ACTIVE', 'PAID_OFF']);
 export type PaybackState = z.infer<typeof paybackStateSchema>;

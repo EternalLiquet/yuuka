@@ -1,6 +1,7 @@
 package com.yuuka.backend.paycheck.application;
 
 import com.yuuka.backend.audit.application.AuditService;
+import com.yuuka.backend.bucket.application.SpendingBucketPerformanceService;
 import com.yuuka.backend.bucket.domain.BucketCalculator;
 import com.yuuka.backend.bucket.domain.BucketMetrics;
 import com.yuuka.backend.bucket.domain.BucketTransaction;
@@ -60,6 +61,7 @@ public class PaycheckService {
   private final PaycheckVisibilityPolicy visibilityPolicy;
   private final StatusTransitionPolicy statusTransitionPolicy;
   private final BucketCalculator bucketCalculator;
+  private final SpendingBucketPerformanceService spendingBucketPerformanceService;
   private final PaybackService paybackService;
   private final AuditService auditService;
   private final Clock clock;
@@ -73,6 +75,7 @@ public class PaycheckService {
       PaycheckVisibilityPolicy visibilityPolicy,
       StatusTransitionPolicy statusTransitionPolicy,
       BucketCalculator bucketCalculator,
+      SpendingBucketPerformanceService spendingBucketPerformanceService,
       PaybackService paybackService,
       AuditService auditService,
       Clock clock) {
@@ -84,6 +87,7 @@ public class PaycheckService {
     this.visibilityPolicy = visibilityPolicy;
     this.statusTransitionPolicy = statusTransitionPolicy;
     this.bucketCalculator = bucketCalculator;
+    this.spendingBucketPerformanceService = spendingBucketPerformanceService;
     this.paybackService = paybackService;
     this.auditService = auditService;
     this.clock = clock;
@@ -124,7 +128,11 @@ public class PaycheckService {
             .map(this::toEntryResponse)
             .sorted(entryComparator(sort, ascending))
             .toList();
-    return PaycheckResponse.from(paycheck, calculate(paycheck, liveEntries), responses);
+    return PaycheckResponse.from(
+        paycheck,
+        calculate(paycheck, liveEntries),
+        spendingBucketPerformanceService.paycheckSummary(ownerId, paycheckId, LocalDate.now(clock)),
+        responses);
   }
 
   @Transactional(readOnly = true)
@@ -529,6 +537,8 @@ public class PaycheckService {
     return PaycheckResponse.from(
         paycheck,
         calculate(paycheck, liveEntries),
+        spendingBucketPerformanceService.paycheckSummary(
+            paycheck.getOwnerId(), paycheck.getId(), LocalDate.now(clock)),
         liveEntries.stream().map(this::toEntryResponse).toList());
   }
 

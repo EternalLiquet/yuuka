@@ -135,6 +135,7 @@ const createdPaycheck: Paycheck = {
   processingMinor: 0,
   reopenedAt: null,
   requiresAttention: false,
+  spendingBucketPerformance: null,
   source: null,
   state: 'ACTIVE',
   templateSourceId: '11111111-1111-4111-8111-111111111200',
