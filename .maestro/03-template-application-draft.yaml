@@ -109,6 +109,10 @@ name: Template application draft
     visible: "E2E From Template"
     timeout: 10000
 - assertVisible: 'Entry 1: E2E Food, \$70\.00, Spending Bucket'
+- scrollUntilVisible:
+    centerElement: true
+    element: 'Entry 2: E2E Rent Adjusted, \$80\.00, Bill, Manual Pay'
+    direction: DOWN
 - assertVisible: 'Entry 2: E2E Rent Adjusted, \$80\.00, Bill, Manual Pay'
 
 - tapOn: "Back"
@@ -121,5 +125,9 @@ name: Template application draft
     visible: "E2E Template Draft"
     timeout: 10000
 - assertVisible: 'Template entry 1: E2E Rent, \$130\.00, Bill'
+- scrollUntilVisible:
+    centerElement: true
+    element: 'Template entry 2: E2E Food, \$70\.00, Spending Bucket'
+    direction: DOWN
 - assertVisible: 'Template entry 2: E2E Food, \$70\.00, Spending Bucket'
 - assertNotVisible: "E2E Rent Adjusted"

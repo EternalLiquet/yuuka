@@ -181,6 +181,17 @@ After scrolling to row actions, the row summary text may be above the viewport e
 - assertVisible: "Move E2E Rent Adjusted up"
 ```
 
+Consecutive detail-list summary assertions can have the opposite problem: the first row is visible, but the second row summary is just below the Android viewport. Scroll to the second summary before asserting it, especially after a detail screen with filters or action buttons above the list:
+
+```yaml
+- assertVisible: 'Entry 1: E2E Food, \$70\.00, Spending Bucket'
+- scrollUntilVisible:
+    centerElement: true
+    element: 'Entry 2: E2E Rent Adjusted, \$80\.00, Bill, Manual Pay'
+    direction: DOWN
+- assertVisible: 'Entry 2: E2E Rent Adjusted, \$80\.00, Bill, Manual Pay'
+```
+
 The same rule applies to full-screen form modals after typing into fields near the top. The Android viewport can show the field label while the actual accessible control is still below the navigation bar or below the fold. A failure like this:
 
 ```text
