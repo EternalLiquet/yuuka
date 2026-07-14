@@ -52,6 +52,10 @@ name: Payback delete unassigns entry
 - tapOn: "Amount"
 - inputText: "10.00"
 - hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Apply to Payback, selected No Payback"
+    direction: DOWN
 - tapOn: "Apply to Payback, selected No Payback"
 - tapOn: "E2E Delete Source"
 - scrollUntilVisible:
@@ -82,6 +86,10 @@ name: Payback delete unassigns entry
 - tapOn: 'E2E Payback Assign, \$40\.00, \$30\.00 unallocated'
 - tapOn: "Edit Repay Payback"
 - assertVisible: "No Payback"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Apply to Payback, selected No Payback"
+    direction: DOWN
 - tapOn: "Apply to Payback, selected No Payback"
 - tapOn: "E2E Delete Target"
 - scrollUntilVisible:
