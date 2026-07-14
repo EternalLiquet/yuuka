@@ -13,6 +13,7 @@ backups/
 mobile/android/
 mobile/ios/
 .artifacts/
+artifacts/
 
 backend/.gradle/
 backend/build/

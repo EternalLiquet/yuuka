@@ -1,69 +1,63 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p .artifacts/android-e2e
+flow="${1:-}"
+apk="${2:-artifacts/android-e2e-apk/app-e2e.apk}"
 
-cd mobile
-nohup ./node_modules/.bin/expo start --localhost > ../metro-e2e.log 2>&1 &
-metro_pid=$!
-cd ..
+case "$flow" in
+  scratch)
+    flow=".maestro/01-scratch-lifecycle.yaml"
+    ;;
+  paybacks)
+    flow=".maestro/02-payback-delete-reassign.yaml"
+    ;;
+  templates)
+    flow=".maestro/03-template-application-draft.yaml"
+    ;;
+esac
 
-cleanup() {
-  kill "$metro_pid" || true
-}
-trap cleanup EXIT
-
-metro_ready=0
-for attempt in {1..120}; do
-  if curl --fail --silent --show-error --connect-timeout 2 --max-time 30 \
-    "http://localhost:8081/status" | grep -q "packager-status:running"; then
-    metro_ready=1
-    break
-  fi
-  sleep 2
-done
-
-if [ "$metro_ready" -ne 1 ]; then
-  cat metro-e2e.log
-  exit 1
+if [ -z "$flow" ]; then
+  echo "Usage: $0 <flow-id-or-path> [apk-path]" >&2
+  exit 64
 fi
 
-curl --fail --silent --show-error --connect-timeout 2 --max-time 180 \
-  "http://localhost:8081/.expo/.virtual-metro-entry.bundle?platform=android&dev=true&lazy=true&minify=false&app=com.yuuka.mobile&modulesOnly=false&runModule=true&excludeSource=true&sourcePaths=url-server" \
-  > /dev/null
+if [ ! -f "$flow" ]; then
+  echo "Maestro flow not found: $flow" >&2
+  exit 66
+fi
+
+if [ ! -f "$apk" ]; then
+  echo "APK not found: $apk" >&2
+  exit 66
+fi
+
+flow_id="$(basename "$flow" .yaml)"
+flow_id="${flow_id#??-}"
+diagnostics_dir="artifacts/android-e2e/$flow_id"
+mkdir -p "$diagnostics_dir"
+
+collect_diagnostics() {
+  adb logcat -d > "$diagnostics_dir/logcat.txt" || true
+  adb devices -l > "$diagnostics_dir/adb-devices.txt" || true
+  adb shell dumpsys activity activities > "$diagnostics_dir/activity.txt" || true
+  adb shell dumpsys window windows > "$diagnostics_dir/window.txt" || true
+  cp -R "$HOME/.maestro/tests" "$diagnostics_dir/maestro-tests" || true
+}
+trap collect_diagnostics EXIT
 
 adb logcat -c
 adb reverse tcp:8080 tcp:8080
-adb reverse tcp:8081 tcp:8081
-adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+adb install -r "$apk"
 adb shell am force-stop com.android.launcher3 || true
 sleep 5
 
 set +e
-maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/01-scratch-lifecycle.yaml
-first_status=$?
-if [ "$first_status" -eq 0 ]; then
-  maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/02-payback-delete-reassign.yaml
-  second_status=$?
-else
-  second_status=0
-fi
-if [ "$first_status" -eq 0 ] && [ "$second_status" -eq 0 ]; then
-  maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/03-template-application-draft.yaml
-  third_status=$?
-else
-  third_status=0
-fi
+maestro test \
+  -e YUUKA_EMAIL=e2e@yuuka.local \
+  -e YUUKA_PASSWORD=E2ePassword123 \
+  "$flow" \
+  2>&1 | tee "$diagnostics_dir/maestro-output.txt"
+status=${PIPESTATUS[0]}
 set -e
 
-adb logcat -d > .artifacts/android-e2e/logcat.txt || true
-cp -R "$HOME/.maestro/tests" .artifacts/android-e2e/maestro-tests || true
-
-if [ "$first_status" -ne 0 ]; then
-  exit "$first_status"
-fi
-if [ "$second_status" -ne 0 ]; then
-  exit "$second_status"
-fi
-
-exit "$third_status"
+exit "$status"
