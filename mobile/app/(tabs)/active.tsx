@@ -203,11 +203,6 @@ function RollingSpendingBucketPerformanceCard({
           Summary may be stale
         </AppText>
       ) : null}
-      {query.isPlaceholderData ? (
-        <AppText style={{ color: colors.muted }} variant="caption">
-          Updating summary...
-        </AppText>
-      ) : null}
     </View>
   );
 }
