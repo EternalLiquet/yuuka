@@ -61,6 +61,10 @@ name: Template application draft
 - tapOn: "Exact paycheck amount"
 - inputText: "150.00"
 - hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: '\$50\.00 over-allocated\.'
+    direction: DOWN
 - extendedWaitUntil:
     visible: '\$50\.00 over-allocated\.'
     timeout: 10000

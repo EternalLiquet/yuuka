@@ -177,6 +177,19 @@ can still mean the selector exists. Check the failed screenshot. If the label is
 - tapOn: "Apply to Payback, selected No Payback"
 ```
 
+Create-paycheck screens can have the same issue after entering an amount. Allocation status text is below the core paycheck fields, so scroll to the status before asserting exact, under-, or over-allocation:
+
+```yaml
+- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: '\$50\.00 over-allocated\.'
+    direction: DOWN
+- extendedWaitUntil:
+    visible: '\$50\.00 over-allocated\.'
+    timeout: 10000
+```
+
 After typing into a field inside a bottom sheet, assume the Android keyboard may cover the next field or action. Hide the keyboard and scroll to the next target before tapping it:
 
 ```yaml
