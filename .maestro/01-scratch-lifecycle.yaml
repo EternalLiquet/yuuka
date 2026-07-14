@@ -44,7 +44,7 @@ name: Scratch paycheck lifecycle
     direction: DOWN
 - tapOn: "Save entry"
 - extendedWaitUntil:
-    visible: "Food"
+    visible: "Add entry"
     timeout: 10000
 
 - scrollUntilVisible:
