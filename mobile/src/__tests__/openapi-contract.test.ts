@@ -29,4 +29,15 @@ describe('committed backend contract', () => {
   ])('contains %s %s', (path, method) => {
     expect(contract.paths[path]?.[method]).toBeDefined();
   });
+
+  it('marks rolling spending bucket asOfDate as optional', () => {
+    const operation = contract.paths['/api/v1/spending-buckets/performance/rolling-90-days']
+      ?.get as { parameters?: { name?: string; required?: boolean }[] } | undefined;
+
+    expect(operation?.parameters?.find((parameter) => parameter.name === 'asOfDate')).toMatchObject(
+      {
+        required: false,
+      },
+    );
+  });
 });

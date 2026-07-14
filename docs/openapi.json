@@ -1470,7 +1470,7 @@
         "parameters" : [ {
           "name" : "asOfDate",
           "in" : "query",
-          "required" : true,
+          "required" : false,
           "schema" : {
             "type" : "string",
             "format" : "date"

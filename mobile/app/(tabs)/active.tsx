@@ -1,8 +1,8 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Plus, Search } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { AppState, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import type { RollingSpendingBucketPerformance } from '@/api/contracts';
@@ -18,7 +18,6 @@ import {
   YuukaLoadingState,
   YuukaRefreshIndicator,
 } from '@/components/states';
-import { yuukaDateInTimezone } from '@/domain/date';
 import { formatMoney } from '@/domain/money';
 import { PaycheckCard } from '@/features/paychecks/paycheck-card';
 import { useMinimumVisibleDuration } from '@/hooks/use-minimum-visible-duration';
@@ -30,55 +29,37 @@ export default function ActiveScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
-  const currentAsOfDate = useCallback(
-    () => yuukaDateInTimezone(settings.timezone),
-    [settings.timezone],
-  );
-  const [asOfDate, setAsOfDate] = useState(currentAsOfDate);
   const query = useQuery({
     queryKey: ['paychecks', 'active'],
     queryFn: api.activePaychecks,
   });
   const bucketPerformanceQuery = useQuery({
-    queryKey: ['spending-buckets', 'rolling-90-days', asOfDate],
-    queryFn: () => api.rollingSpendingBucketPerformance(asOfDate),
-    placeholderData: keepPreviousData,
+    queryKey: ['spending-buckets', 'rolling-90-days', 'current'],
+    queryFn: () => api.rollingSpendingBucketPerformance(),
   });
+  const { refetch: refetchActivePaychecks } = query;
+  const { refetch: refetchBucketPerformance } = bucketPerformanceQuery;
   const showColdLoader = useMinimumVisibleDuration(query.isPending && !query.data, 1000);
-
-  const refreshAsOfDate = useCallback(() => {
-    const next = currentAsOfDate();
-    setAsOfDate((current) => (current === next ? current : next));
-    return next;
-  }, [currentAsOfDate]);
-
-  useEffect(() => {
-    const handle = setTimeout(refreshAsOfDate, 0);
-    return () => clearTimeout(handle);
-  }, [refreshAsOfDate]);
 
   useFocusEffect(
     useCallback(() => {
-      refreshAsOfDate();
-    }, [refreshAsOfDate]),
+      void refetchBucketPerformance();
+    }, [refetchBucketPerformance]),
   );
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        refreshAsOfDate();
+        void refetchBucketPerformance();
       }
     });
     return () => subscription.remove();
-  }, [refreshAsOfDate]);
+  }, [refetchBucketPerformance]);
 
   const refresh = useCallback(() => {
-    const next = refreshAsOfDate();
-    void query.refetch();
-    if (next === asOfDate) {
-      void bucketPerformanceQuery.refetch();
-    }
-  }, [asOfDate, bucketPerformanceQuery, query, refreshAsOfDate]);
+    void refetchActivePaychecks();
+    void refetchBucketPerformance();
+  }, [refetchActivePaychecks, refetchBucketPerformance]);
 
   if (showColdLoader) {
     return (

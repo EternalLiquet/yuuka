@@ -10,8 +10,6 @@ import type { Paycheck, RollingSpendingBucketPerformance } from '@/api/contracts
 import ActiveScreen from '../../app/(tabs)/active';
 
 const mockPush = jest.fn();
-const mockYuukaDateInTimezone = jest.fn();
-let mockCurrentDate = '2026-07-14';
 let mockFocusCallback: (() => void) | null = null;
 let mockAppStateListener: ((state: string) => void) | null = null;
 let mockTimezone = 'America/Indianapolis';
@@ -51,10 +49,6 @@ jest.mock('@/api/use-yuuka-api', () => ({
 
 jest.mock('@/hooks/use-minimum-visible-duration', () => ({
   useMinimumVisibleDuration: () => false,
-}));
-
-jest.mock('@/domain/date', () => ({
-  yuukaDateInTimezone: (timezone: string) => mockYuukaDateInTimezone(timezone),
 }));
 
 jest.mock('@/settings/settings-provider', () => ({
@@ -158,11 +152,9 @@ describe('active route bucket performance', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
-    mockCurrentDate = '2026-07-14';
     mockTimezone = 'America/Indianapolis';
     mockFocusCallback = null;
     mockAppStateListener = null;
-    mockYuukaDateInTimezone.mockImplementation(() => mockCurrentDate);
     jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
       mockAppStateListener = listener as (state: string) => void;
       return { remove: jest.fn() };
@@ -181,13 +173,16 @@ describe('active route bucket performance', () => {
     expect(view.getByText('Loading bucket summary...')).toBeTruthy();
   });
 
-  it('requests the rolling summary for the configured timezone date', async () => {
+  it('requests the current rolling summary without a client-derived date', async () => {
     await renderRoute();
 
-    await waitFor(() =>
-      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledWith('2026-07-14'),
+    await waitFor(() => expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalled());
+    expect(mockApi.rollingSpendingBucketPerformance.mock.calls).toEqual(
+      expect.arrayContaining([[]]),
     );
-    expect(mockYuukaDateInTimezone).toHaveBeenCalledWith('America/Indianapolis');
+    expect(
+      mockApi.rollingSpendingBucketPerformance.mock.calls.every((call) => call.length === 0),
+    ).toBe(true);
   });
 
   it('renders the rolling summary when bucket data exists', async () => {
@@ -198,64 +193,73 @@ describe('active route bucket performance', () => {
     expect(view.getByText('$75.00')).toBeTruthy();
   });
 
-  it('requests a new date when the screen refocuses on a later local day', async () => {
+  it('refetches the rolling summary when the screen refocuses', async () => {
     const { view } = await renderRoute();
     expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+    const callsBeforeFocus = mockApi.rollingSpendingBucketPerformance.mock.calls.length;
 
-    mockCurrentDate = '2026-07-15';
     await act(async () => {
       mockFocusCallback?.();
     });
 
     await waitFor(() =>
-      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledWith('2026-07-15'),
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledTimes(callsBeforeFocus + 1),
     );
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith();
   });
 
-  it('requests a new date when the configured timezone changes', async () => {
+  it('does not change the financial reporting request when the local timezone setting changes', async () => {
     const { view } = await renderRoute();
     expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+    const callsBeforeTimezoneChange = mockApi.rollingSpendingBucketPerformance.mock.calls.length;
 
     mockTimezone = 'America/Los_Angeles';
-    mockCurrentDate = '2026-07-13';
     await act(async () => {
       view.rerender(<ActiveScreen />);
     });
 
-    await waitFor(() =>
-      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledWith('2026-07-13'),
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledTimes(
+      callsBeforeTimezoneChange,
     );
-    expect(mockYuukaDateInTimezone).toHaveBeenCalledWith('America/Los_Angeles');
+    expect(
+      mockApi.rollingSpendingBucketPerformance.mock.calls.every((call) => call.length === 0),
+    ).toBe(true);
   });
 
-  it('requests a new date when the app returns to the foreground', async () => {
+  it('refetches the rolling summary when the app returns to the foreground', async () => {
     const { view } = await renderRoute();
     expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+    const callsBeforeForeground = mockApi.rollingSpendingBucketPerformance.mock.calls.length;
 
-    mockCurrentDate = '2026-07-15';
     await act(async () => {
       mockAppStateListener?.('active');
     });
 
     await waitFor(() =>
-      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledWith('2026-07-15'),
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledTimes(
+        callsBeforeForeground + 1,
+      ),
     );
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith();
   });
 
-  it('recalculates the date before pull-to-refresh requests the rolling summary', async () => {
+  it('refreshes active paychecks and rolling performance on pull-to-refresh', async () => {
     const { view } = await renderRoute();
     expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+    const paycheckCallsBeforeRefresh = mockApi.activePaychecks.mock.calls.length;
+    const rollingCallsBeforeRefresh = mockApi.rollingSpendingBucketPerformance.mock.calls.length;
 
-    mockCurrentDate = '2026-07-15';
     fireEvent.press(view.getByLabelText('Refresh active paychecks'));
 
     await waitFor(() =>
-      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledWith('2026-07-15'),
+      expect(mockApi.activePaychecks).toHaveBeenCalledTimes(paycheckCallsBeforeRefresh + 1),
     );
-    expect(mockApi.rollingSpendingBucketPerformance.mock.calls.map((call) => call[0])).toEqual([
-      '2026-07-14',
-      '2026-07-15',
-    ]);
+    await waitFor(() =>
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledTimes(
+        rollingCallsBeforeRefresh + 1,
+      ),
+    );
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith();
   });
 
   it('hides the card when the rolling summary has no qualifying bucket data', async () => {

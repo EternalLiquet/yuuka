@@ -125,12 +125,24 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
     mockMvc
         .perform(
             get("/api/v1/spending-buckets/performance/rolling-90-days")
-                .param("asOfDate", "2026-07-14")
                 .header("Authorization", bearer(token)))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.asOfDate").value("2026-07-14"))
+        .andExpect(jsonPath("$.windowStartDate").value("2026-04-16"))
+        .andExpect(jsonPath("$.windowEndDate").value("2026-07-14"))
         .andExpect(jsonPath("$.summary.budgetedMinor").value(2000))
         .andExpect(jsonPath("$.summary.spentMinor").value(500))
         .andExpect(jsonPath("$.summary.netMinor").value(1500));
+    mockMvc
+        .perform(
+            get("/api/v1/spending-buckets/performance/rolling-90-days")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.asOfDate").value("2026-07-15"))
+        .andExpect(jsonPath("$.summary.budgetedMinor").value(2000))
+        .andExpect(jsonPath("$.summary.spentMinor").value(1200))
+        .andExpect(jsonPath("$.summary.netMinor").value(800));
 
     clock.setInstant(Instant.parse("2026-07-15T13:00:00Z"));
 
@@ -143,12 +155,22 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
     mockMvc
         .perform(
             get("/api/v1/spending-buckets/performance/rolling-90-days")
-                .param("asOfDate", "2026-07-15")
                 .header("Authorization", bearer(token)))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.asOfDate").value("2026-07-15"))
         .andExpect(jsonPath("$.summary.budgetedMinor").value(2000))
         .andExpect(jsonPath("$.summary.spentMinor").value(1200))
         .andExpect(jsonPath("$.summary.netMinor").value(800));
+    mockMvc
+        .perform(
+            get("/api/v1/spending-buckets/performance/rolling-90-days")
+                .param("asOfDate", "2026-07-14")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.asOfDate").value("2026-07-14"))
+        .andExpect(jsonPath("$.summary.budgetedMinor").value(2000))
+        .andExpect(jsonPath("$.summary.spentMinor").value(500))
+        .andExpect(jsonPath("$.summary.netMinor").value(1500));
   }
 
   @Test
