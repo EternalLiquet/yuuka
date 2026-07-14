@@ -15,6 +15,8 @@ The workflow has two stages:
 
 The E2E APK is built with Expo/React Native's generated `release` Android variant. The generated Gradle config signs release APKs with the debug keystore in this project, and the workflow adds a CI-only release manifest so the app can reach the disposable localhost HTTP backend. The APK embeds the JavaScript bundle and must launch without Metro.
 
+The build job validates an executable JavaScript bundle entry with exact archive-entry matching. It accepts `assets/index.android.bundle` or a Hermes bytecode asset such as `assets/<name>.hbc`; `.meta` files do not count as proof that the APK can launch without Metro.
+
 When all flows are selected, the workflow shape is:
 
 ```text
@@ -46,7 +48,7 @@ Useful inspection commands:
 ```sh
 gh run view <run-id> --json status,conclusion,jobs
 gh run view <run-id> --log-failed
-gh run download <run-id> --dir .artifacts/android-e2e-<run-id>
+gh run download <run-id> --dir artifacts/android-e2e-<run-id>
 ```
 
 `gh run view <run-id> --job <job-id> --log` may not return step logs while the job is still in progress. If a run is still active, use the JSON job/step status to see where it is. Pull the failed command log and artifacts after the job completes.
@@ -54,18 +56,18 @@ gh run download <run-id> --dir .artifacts/android-e2e-<run-id>
 Useful artifact paths after download:
 
 ```text
-.artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/backend-e2e-scratch.log
-.artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/.artifacts/android-e2e/scratch-lifecycle/logcat.txt
-.artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/.artifacts/android-e2e/scratch-lifecycle/maestro-output.txt
-.artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/.artifacts/android-e2e/scratch-lifecycle/maestro-tests/<timestamp>/maestro.log
-.artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/.artifacts/android-e2e/scratch-lifecycle/maestro-tests/<timestamp>/screenshot-*.png
+artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/backend-e2e-scratch.log
+artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/artifacts/android-e2e/scratch-lifecycle/logcat.txt
+artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/artifacts/android-e2e/scratch-lifecycle/maestro-output.txt
+artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/artifacts/android-e2e/scratch-lifecycle/maestro-tests/<timestamp>/maestro.log
+artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/artifacts/android-e2e/scratch-lifecycle/maestro-tests/<timestamp>/screenshot-*.png
 ```
 
 Payback and template diagnostics use the same structure under `android-e2e-paybacks-diagnostics` and `android-e2e-templates-diagnostics`.
 
 Always inspect the screenshot and `maestro.log` before changing a selector. The screenshot is usually the fastest way to tell whether the element is missing, off-screen, or blocked by an app overlay.
 
-When downloading artifacts into the repository, use a temporary ignored directory such as `.tmp-android-e2e/` or `.artifacts/android-e2e-<run-id>/`, inspect it, and remove it before committing. Diagnostics commonly include screenshots, logs, and device state that should not become source files.
+When downloading artifacts into the repository, use a temporary ignored directory such as `artifacts/android-e2e-<run-id>/`, inspect it, and remove it before committing. Diagnostics commonly include screenshots, logs, and device state that should not become source files.
 
 ## App Launch Details
 
@@ -73,10 +75,10 @@ Flow jobs do not start Expo or Metro. The runner script only installs the downlo
 
 ```sh
 adb reverse tcp:8080 tcp:8080
-bash .github/scripts/android-e2e.sh scratch .artifacts/android-e2e-apk/app-e2e.apk
+bash .github/scripts/android-e2e.sh scratch artifacts/android-e2e-apk/app-e2e.apk
 ```
 
-Do not add `adb reverse tcp:8081 tcp:8081`, Metro status polling, or bundle prewarming back to the flow jobs. If the APK hangs on startup, verify the `build-e2e-apk` job built `assembleRelease` and that the APK contains the embedded JavaScript bundle.
+Do not add `adb reverse tcp:8081 tcp:8081`, Metro status polling, or bundle prewarming back to the flow jobs. If the APK hangs on startup, verify the `build-e2e-apk` job built `assembleRelease` and that the APK contains `assets/index.android.bundle` or an `assets/*.hbc` bundle entry, not only a `.meta` file.
 
 `EXPO_PUBLIC_E2E=1` is compiled into the E2E APK and tells the app to hide React Native LogBox overlays. This is for test hygiene only; it must not weaken product behavior or hide failed app assertions.
 
@@ -287,6 +289,8 @@ cd mobile
 npm run typecheck
 cd android
 ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64
+apk="app/build/outputs/apk/release/app-release.apk"
+unzip -Z1 "$apk" | grep -Eq '^(assets/index\.android\.bundle|assets/.+\.hbc)$'
 ```
 
 Run broader tests when the app-code change touches shared behavior, routing, forms, API contracts, or business logic.

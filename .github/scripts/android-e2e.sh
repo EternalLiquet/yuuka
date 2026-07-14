@@ -2,7 +2,7 @@
 set -euo pipefail
 
 flow="${1:-}"
-apk="${2:-.artifacts/android-e2e-apk/app-e2e.apk}"
+apk="${2:-artifacts/android-e2e-apk/app-e2e.apk}"
 
 case "$flow" in
   scratch)
@@ -33,7 +33,7 @@ fi
 
 flow_id="$(basename "$flow" .yaml)"
 flow_id="${flow_id#??-}"
-diagnostics_dir=".artifacts/android-e2e/$flow_id"
+diagnostics_dir="artifacts/android-e2e/$flow_id"
 mkdir -p "$diagnostics_dir"
 
 collect_diagnostics() {

@@ -92,16 +92,25 @@ jobs:
       - name: Verify bundled APK
         working-directory: mobile
         run: |
-          test -f android/app/build/outputs/apk/release/app-release.apk
-          unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -E 'assets/index.android.bundle|assets/index.android.bundle.meta|assets/.+\.hbc'
-          mkdir -p ../.artifacts/android-e2e-apk
-          cp android/app/build/outputs/apk/release/app-release.apk ../.artifacts/android-e2e-apk/app-e2e.apk
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+
+          test -f "$apk"
+
+          if ! unzip -Z1 "$apk" | grep -Eq '^(assets/index\.android\.bundle|assets/.+\.hbc)$'; then
+            echo "Bundled JavaScript was not found in $apk" >&2
+            unzip -Z1 "$apk" | grep '^assets/' || true
+            exit 1
+          fi
+
+          mkdir -p ../artifacts/android-e2e-apk
+          cp "$apk" ../artifacts/android-e2e-apk/app-e2e.apk
       - name: Upload E2E APK
         uses: actions/upload-artifact@v4
         with:
           name: android-e2e-apk
           if-no-files-found: error
-          path: .artifacts/android-e2e-apk/app-e2e.apk
+          compression-level: 0
+          path: artifacts/android-e2e-apk/app-e2e.apk
 
   run-e2e-flow:
     name: Android E2E (${{ matrix.name }})
@@ -130,7 +139,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: android-e2e-apk
-          path: .artifacts/android-e2e-apk
+          path: artifacts/android-e2e-apk
       - uses: actions/setup-java@v5.5.0
         with:
           distribution: temurin
@@ -183,7 +192,7 @@ jobs:
           arch: x86_64
           profile: pixel_7
           disable-animations: false
-          script: bash .github/scripts/android-e2e.sh "${{ matrix.flow }}" ".artifacts/android-e2e-apk/app-e2e.apk"
+          script: bash .github/scripts/android-e2e.sh "${{ matrix.flow }}" "artifacts/android-e2e-apk/app-e2e.apk"
       - name: Upload Android E2E diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -192,4 +201,4 @@ jobs:
           if-no-files-found: ignore
           path: |
             backend-e2e-${{ matrix.id }}.log
-            .artifacts/android-e2e
+            artifacts/android-e2e
