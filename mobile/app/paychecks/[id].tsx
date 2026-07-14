@@ -417,6 +417,7 @@ export default function PaycheckDetailScreen() {
                 entry={params.item}
                 isFirst={index === 0}
                 isLast={index === displayedEntries.length - 1}
+                position={index + 1}
                 onEdit={() => {
                   setEditingEntry(params.item);
                   setEntryEditorVisible(true);

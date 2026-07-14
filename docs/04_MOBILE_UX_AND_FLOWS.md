@@ -117,8 +117,7 @@ Support drag-and-drop in custom-order mode and accessible Move Up / Move Down co
 
 ## Create paycheck flow
 
-Current mobile implementation supports Start from Scratch. Backend template application exists, but
-the mobile create-from-template picker and preview are later-scope.
+The mobile creation screen supports Start from Scratch and Use a Template.
 
 ### From scratch
 
@@ -134,16 +133,21 @@ After save, open paycheck detail with zero entries and the full amount shown as 
 
 ### From template
 
-Later-scope mobile flow:
-
 1. Select template.
 2. Enter exact paycheck amount manually.
-3. Enter or edit paycheck date.
-4. Preview copied entries.
-5. Edit, remove, add, or reorder entries.
+3. Enter or edit paycheck date, source, notes, and paycheck name.
+4. Preview copied entries in a local application draft.
+5. Edit, remove, add, or reorder draft entries.
 6. Create paycheck.
 
-Never assume the exact deposit matches the template total.
+Draft entries are copied from the selected template in saved order and can be adjusted before
+creation without mutating the source template. Bills preserve Autopay or Manual Pay. Due offsets are
+converted to absolute due dates from the entered income date when the paycheck is created. The draft
+allocation total is recalculated using integer minor units; under-allocation is valid, exact
+allocation is valid, and over-allocation blocks creation with a clear error. The submitted draft
+array determines the saved paycheck-entry order. Created paycheck entries are independent snapshots;
+later template edits do not affect the paycheck, and later paycheck edits do not affect the
+template.
 
 ## Entry editor
 
@@ -186,8 +190,8 @@ detail controls.
 
 ## Templates
 
-Current mobile template routes are placeholders. Backend template contracts support the actions
-below, and the mobile screens should expose them in a later slice.
+The Templates tab exposes active and archived template lists with loading, empty, stale-data,
+pull-to-refresh, error, and retry states.
 
 Template cards show:
 
@@ -196,12 +200,19 @@ Template cards show:
 - default total,
 - last edited.
 
-Actions:
+Active template detail supports:
 
-- Use
-- Edit
-- Duplicate
-- Archive
+- edit template name and description,
+- add, edit, delete with confirmation, and reorder entries,
+- Bill, Spending Bucket, and Sinking Fund entry types,
+- Bill Autopay or Manual Pay using "I need to pay this manually",
+- duplicate template,
+- archive template.
+
+Archived template detail is read-only for entries, labels the template as archived, hides entry
+mutation controls, and supports restore and duplicate when permitted by the backend. Archive is a
+recoverable lifecycle action, not permanent deletion. Template-entry order persists through saved
+reorder requests and stale writes surface conflict errors.
 
 ## Settings
 

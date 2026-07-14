@@ -1,0 +1,125 @@
+appId: com.yuuka.mobile
+name: Template application draft
+---
+- runFlow: shared/sign-in.yaml
+- tapOn: "Templates tab"
+- tapOn: "New template"
+- tapOn: "Name"
+- inputText: "E2E Template Draft"
+- tapOn: "Create template"
+- extendedWaitUntil:
+    visible: "E2E Template Draft"
+    timeout: 10000
+
+- tapOn: "Add entry"
+- tapOn: "Name"
+- inputText: "E2E Rent"
+- tapOn: "Amount"
+- inputText: "130.00"
+- hideKeyboard
+- tapOn: "I need to pay this manually"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save template entry"
+    direction: DOWN
+- tapOn: "Save template entry"
+- extendedWaitUntil:
+    visible: "E2E Rent"
+    timeout: 10000
+- assertVisible: "Bill | Manual Pay"
+
+- tapOn: "Add entry"
+- tapOn: "Spending Bucket"
+- tapOn: "Name"
+- inputText: "E2E Food"
+- tapOn: "Budget amount"
+- inputText: "70.00"
+- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save template entry"
+    direction: DOWN
+- tapOn: "Save template entry"
+- extendedWaitUntil:
+    visible: "E2E Food"
+    timeout: 10000
+- assertVisible: 'Template entry 1: E2E Rent, \$130\.00, Bill'
+- assertVisible: 'Template entry 2: E2E Food, \$70\.00, Spending Bucket'
+
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: "New template"
+    timeout: 10000
+- tapOn: "Active tab"
+- tapOn: "New paycheck"
+- tapOn: "Use a template"
+- extendedWaitUntil:
+    visible: "E2E Template Draft"
+    timeout: 10000
+- tapOn: "Name"
+- inputText: "E2E From Template"
+- tapOn: "Exact paycheck amount"
+- inputText: "150.00"
+- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: '\$50\.00 over-allocated\.'
+    direction: DOWN
+- extendedWaitUntil:
+    visible: '\$50\.00 over-allocated\.'
+    timeout: 10000
+
+- scrollUntilVisible:
+    centerElement: true
+    element: "Edit E2E Rent"
+    direction: DOWN
+- tapOn: "Edit E2E Rent"
+- extendedWaitUntil:
+    visible: "Due offset days (optional)"
+    timeout: 10000
+- tapOn: "Name"
+- eraseText: 100
+- inputText: "E2E Rent Adjusted"
+- tapOn: "Amount"
+- eraseText: 100
+- inputText: "80.00"
+- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save template entry"
+    direction: DOWN
+- tapOn: "Save template entry"
+- extendedWaitUntil:
+    visible: "Fully allocated."
+    timeout: 10000
+
+- scrollUntilVisible:
+    centerElement: true
+    element: "Move E2E Food up"
+    direction: DOWN
+- tapOn: "Move E2E Food up"
+- assertVisible: "Move E2E Food down"
+- assertVisible: "Move E2E Rent Adjusted up"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create paycheck"
+    direction: DOWN
+- tapOn: "Create paycheck"
+- extendedWaitUntil:
+    visible: "E2E From Template"
+    timeout: 10000
+- assertVisible: 'Entry 1: E2E Food, \$70\.00, Spending Bucket'
+- assertVisible: 'Entry 2: E2E Rent Adjusted, \$80\.00, Bill, Manual Pay'
+
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: "New paycheck"
+    timeout: 10000
+- tapOn: "Templates tab"
+- tapOn: "Open template E2E Template Draft"
+- extendedWaitUntil:
+    visible: "E2E Template Draft"
+    timeout: 10000
+- assertVisible: 'Template entry 1: E2E Rent, \$130\.00, Bill'
+- assertVisible: 'Template entry 2: E2E Food, \$70\.00, Spending Bucket'
+- assertNotVisible: "E2E Rent Adjusted"

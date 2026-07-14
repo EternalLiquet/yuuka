@@ -13,6 +13,8 @@ const mockReplace = jest.fn();
 
 const mockApi = {
   createPaycheck: jest.fn(),
+  createPaycheckFromTemplate: jest.fn(),
+  templates: jest.fn(),
 };
 const queryClients: QueryClient[] = [];
 
@@ -113,6 +115,19 @@ describe('new paycheck route regressions', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockApi.createPaycheck.mockResolvedValue(paycheck);
+    mockApi.createPaycheckFromTemplate.mockResolvedValue({
+      ...paycheck,
+      id: '11111111-1111-4111-8111-111111111120',
+      templateSourceId: '11111111-1111-4111-8111-111111111200',
+    });
+    mockApi.templates.mockResolvedValue({
+      hasNext: false,
+      items: [],
+      page: 0,
+      size: 0,
+      totalItems: 0,
+      totalPages: 0,
+    });
   });
 
   it('creates a scratch paycheck and navigates to detail without crashing', async () => {

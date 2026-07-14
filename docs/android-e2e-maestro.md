@@ -30,6 +30,8 @@ gh run view <run-id> --log-failed
 gh run download <run-id> --dir .artifacts/android-e2e-<run-id>
 ```
 
+`gh run view <run-id> --job <job-id> --log` may not return step logs while the job is still in progress. If a run is still active, use the JSON job/step status to see where it is. Pull the failed command log and artifacts after the job completes.
+
 Useful artifact paths after download:
 
 ```text
@@ -41,6 +43,8 @@ Useful artifact paths after download:
 ```
 
 Always inspect the screenshot and `maestro.log` before changing a selector. The screenshot is usually the fastest way to tell whether the element is missing, off-screen, or blocked by a dev overlay.
+
+When downloading artifacts into the repository, use a temporary ignored directory such as `.tmp-android-e2e/` or `.artifacts/android-e2e-<run-id>/`, inspect it, and remove it before committing. Diagnostics commonly include screenshots, logs, and device state that should not become source files.
 
 ## Metro and App Launch Details
 
@@ -156,6 +160,44 @@ If a row action is below the visible portion of the list, scroll to the action i
 
 This is not a weakened assertion. It models the user action needed to reach an off-screen control.
 
+After scrolling to row actions, the row summary text may be above the viewport even though the action controls are visible. If the state you need to prove is ordering, assert visible order-specific controls rather than an off-screen summary label:
+
+```yaml
+- tapOn: "Move E2E Food up"
+- assertVisible: "Move E2E Food down"
+- assertVisible: "Move E2E Rent Adjusted up"
+```
+
+The same rule applies to full-screen form modals after typing into fields near the top. The Android viewport can show the field label while the actual accessible control is still below the navigation bar or below the fold. A failure like this:
+
+```text
+Element not found: Text matching regex: Apply to Payback, selected No Payback
+```
+
+can still mean the selector exists. Check the failed screenshot. If the label is visible but the selector body is cut off at the bottom, scroll to the selector before tapping:
+
+```yaml
+- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Apply to Payback, selected No Payback"
+    direction: DOWN
+- tapOn: "Apply to Payback, selected No Payback"
+```
+
+Create-paycheck screens can have the same issue after entering an amount. Allocation status text is below the core paycheck fields, so scroll to the status before asserting exact, under-, or over-allocation:
+
+```yaml
+- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: '\$50\.00 over-allocated\.'
+    direction: DOWN
+- extendedWaitUntil:
+    visible: '\$50\.00 over-allocated\.'
+    timeout: 10000
+```
+
 After typing into a field inside a bottom sheet, assume the Android keyboard may cover the next field or action. Hide the keyboard and scroll to the next target before tapping it:
 
 ```yaml
@@ -186,6 +228,15 @@ For full-screen React Native modals, prefer `back` when the next assertion only 
 - back
 - extendedWaitUntil:
     visible: "Close paycheck"
+    timeout: 10000
+```
+
+Do not rely on a full-screen modal title as the only readiness assertion when it sits under the Android status bar. The title can appear in the screenshot but fail a Maestro visibility assertion if it is clipped at the top edge. Wait for a stable in-form field or action instead:
+
+```yaml
+- tapOn: "Edit E2E Rent"
+- extendedWaitUntil:
+    visible: "Due offset days (optional)"
     timeout: 10000
 ```
 
@@ -229,6 +280,7 @@ Common symptoms:
 - `curl localhost:8081/status` fails at first: normal while Metro starts. The script retries.
 - `Quickstep isn't responding`: emulator system UI noise, not an app failure. Keep the launcher force-stop in `.github/scripts/android-e2e.sh`, the optional `Close app` tap in `shared/sign-in.yaml`, and the short settle after APK install.
 - `Save entry` not found: usually off-screen. Use `scrollUntilVisible`.
+- A selector label is visible but its `tapOn` target is not found: the accessible Pressable may be lower than the text label and partly below the fold. Scroll to the selector's accessibility label, not just the visible section heading.
 - Next action after save still sees form text: the save tap may have been intercepted or navigation has not completed. Wait for a detail-screen control such as `Add entry`.
 - `Open debugger to view warnings`: a dev warning opened LogBox. Keep `EXPO_PUBLIC_E2E=1`; if a new app warning appears, fix the warning if it is in app code, or document the dependency warning if it is external.
 - `No space left on device` while installing system images: preserve the disk cleanup step.
@@ -251,6 +303,8 @@ npm test -- --runTestsByPath src/__tests__/app-root.test.tsx
 ```
 
 Run broader tests when the app-code change touches shared behavior, routing, forms, API contracts, or business logic.
+
+When adding a new flow to `.github/scripts/android-e2e.sh`, keep the existing fail-fast-with-artifacts pattern: run later flows only when earlier flows pass, preserve the first failing exit status, and still upload diagnostics. Do not skip an existing flow to get coverage for a new one. If an earlier flow fails because a real control is off-screen, fix that flow directly and rerun the workflow so the new flow is actually exercised.
 
 ## What Not To Do
 

@@ -95,13 +95,15 @@ Behaviors:
 
 - Sign in, refresh expired sessions, sign out, and show an explicit session-expired state.
 - Active cards prioritize unallocated money and work remaining over charts.
-- Create paychecks from scratch, edit entries, use a compact status sheet, preserve failed forms,
-  transact against buckets, reorder accessibly, browse History, and manage Paybacks.
+- Create paychecks from scratch or from an editable local template draft, edit entries, use a
+  compact status sheet, preserve failed forms, transact against buckets, reorder accessibly, browse
+  History, and manage Paybacks.
+- Manage templates with active/archived lists, create/edit, ordered entry CRUD, duplicate, archive,
+  restore, and independent paycheck snapshot application.
 - Settings expose API URL, connection, dark/light/system theme, timezone, currency, version, and
   sign out. Dark is the first-run default.
 - Cached reads remain visible on network errors with stale and retry affordances.
-- Mobile template management, create-from-template UI, and full audit browsing remain later-scope
-  screens even though backend contracts and service workflows exist.
+- Full audit browsing remains later-scope mobile UI even though backend audit recording exists.
 
 Tests first: money/validation/sort/filter utilities, cards and rows, forms, status sheet, bucket
 form, Payback flows, retry states, and accessibility labels.

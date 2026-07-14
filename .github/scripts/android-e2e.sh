@@ -48,6 +48,12 @@ if [ "$first_status" -eq 0 ]; then
 else
   second_status=0
 fi
+if [ "$first_status" -eq 0 ] && [ "$second_status" -eq 0 ]; then
+  maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/03-template-application-draft.yaml
+  third_status=$?
+else
+  third_status=0
+fi
 set -e
 
 adb logcat -d > .artifacts/android-e2e/logcat.txt || true
@@ -56,5 +62,8 @@ cp -R "$HOME/.maestro/tests" .artifacts/android-e2e/maestro-tests || true
 if [ "$first_status" -ne 0 ]; then
   exit "$first_status"
 fi
+if [ "$second_status" -ne 0 ]; then
+  exit "$second_status"
+fi
 
-exit "$second_status"
+exit "$third_status"

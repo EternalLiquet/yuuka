@@ -57,9 +57,9 @@ curl --fail http://127.0.0.1:8080/health/ready
 docker compose logs --tail=100 backend
 ```
 
-Sign in and inspect an Active paycheck, History, Paybacks, and status history before declaring
-recovery complete. If template data matters for the restore, verify it through the authenticated
-template API until the mobile template screens leave placeholder status.
+Sign in and inspect an Active paycheck, History, Paybacks, Templates, and status history before
+declaring recovery complete. If template data matters for the restore, verify active and archived
+templates through the mobile Templates tab or the authenticated template API.
 
 ## Secret recovery
 
