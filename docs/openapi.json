@@ -1490,6 +1490,42 @@
         }
       }
     },
+    "/api/v1/spending-buckets/performance/rolling" : {
+      "get" : {
+        "tags" : [ "spending-bucket-performance-controller" ],
+        "operationId" : "rolling",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "enum" : [ 30, 90 ],
+            "default" : 30
+          }
+        }, {
+          "name" : "asOfDate",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RollingSpendingBucketPerformanceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/paybacks/{paybackId}/repayments" : {
       "get" : {
         "tags" : [ "payback-controller" ],

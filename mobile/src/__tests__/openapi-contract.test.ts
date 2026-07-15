@@ -12,6 +12,7 @@ describe('committed backend contract', () => {
     ['/api/v1/paychecks', 'post'],
     ['/api/v1/paychecks/active', 'get'],
     ['/api/v1/paychecks/history', 'get'],
+    ['/api/v1/spending-buckets/performance/rolling', 'get'],
     ['/api/v1/spending-buckets/performance/rolling-90-days', 'get'],
     ['/api/v1/search/entries', 'get'],
     ['/api/v1/paychecks/from-template', 'post'],
@@ -30,10 +31,13 @@ describe('committed backend contract', () => {
     expect(contract.paths[path]?.[method]).toBeDefined();
   });
 
-  it('marks rolling spending bucket asOfDate as optional', () => {
-    const operation = contract.paths['/api/v1/spending-buckets/performance/rolling-90-days']
-      ?.get as { parameters?: { name?: string; required?: boolean }[] } | undefined;
+  it('marks rolling spending bucket parameters as optional with supported days', () => {
+    const operation = contract.paths['/api/v1/spending-buckets/performance/rolling']?.get as
+      { parameters?: { name?: string; required?: boolean }[] } | undefined;
 
+    expect(operation?.parameters?.find((parameter) => parameter.name === 'days')).toMatchObject({
+      required: false,
+    });
     expect(operation?.parameters?.find((parameter) => parameter.name === 'asOfDate')).toMatchObject(
       {
         required: false,

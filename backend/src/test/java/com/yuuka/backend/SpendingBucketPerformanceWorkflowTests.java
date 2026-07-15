@@ -18,6 +18,8 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -215,7 +217,8 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
 
     mockMvc
         .perform(
-            get("/api/v1/spending-buckets/performance/rolling-90-days")
+            get("/api/v1/spending-buckets/performance/rolling")
+                .param("days", "90")
                 .param("asOfDate", "2026-07-14")
                 .header("Authorization", bearer(token)))
         .andExpect(status().isOk())
@@ -226,6 +229,128 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.summary.budgetedMinor").value(7800))
         .andExpect(jsonPath("$.summary.spentMinor").value(760))
         .andExpect(jsonPath("$.summary.netMinor").value(7040));
+
+    mockMvc
+        .perform(
+            get("/api/v1/spending-buckets/performance/rolling-90-days")
+                .param("asOfDate", "2026-07-14")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.windowStartDate").value("2026-04-16"))
+        .andExpect(jsonPath("$.summary.netMinor").value(7040));
+  }
+
+  @Test
+  void rollsUpThirtyAndNinetyDayWindowsWithInclusiveBoundariesAndExclusions() throws Exception {
+    String token = register("bucket-performance-periods@yuuka.local");
+
+    JsonNode active29 = createPaycheck(token, "Active 29 Days Ago", 1000, "2026-06-16");
+    JsonNode active29Bucket =
+        addEntry(
+            token, active29.path("id").asText(), "SPENDING_BUCKET", "Active Boundary Bucket", 1000);
+    addBucketTransaction(token, active29Bucket.path("id").asText(), 100, "2026-06-16");
+
+    closeBucketPaycheck(token, "Closed In Window", "2026-07-01", 2000, 200, "2026-07-01");
+
+    JsonNode archived = createPaycheck(token, "Archived In Window", 3000, "2026-07-10");
+    JsonNode archivedBucket =
+        addEntry(token, archived.path("id").asText(), "SPENDING_BUCKET", "Archived Bucket", 3000);
+    addBucketTransaction(token, archivedBucket.path("id").asText(), 300, "2026-07-10");
+    archive(token, archived.path("id").asText(), getPaycheck(token, archived.path("id").asText()));
+
+    JsonNode deletedPurchasePaycheck =
+        createPaycheck(token, "Deleted Purchase Still Budgeted", 500, "2026-07-11");
+    JsonNode deletedPurchaseBucket =
+        addEntry(
+            token,
+            deletedPurchasePaycheck.path("id").asText(),
+            "SPENDING_BUCKET",
+            "Deleted Purchase Bucket",
+            500);
+    JsonNode deletedPurchase =
+        addBucketTransaction(token, deletedPurchaseBucket.path("id").asText(), 450, "2026-07-11");
+    mockMvc
+        .perform(
+            delete("/api/v1/bucket-transactions/{id}", deletedPurchase.path("id").asText())
+                .param("version", deletedPurchase.path("version").asText())
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isNoContent());
+
+    JsonNode deletedEntryPaycheck =
+        createPaycheck(token, "Deleted Entry Excluded", 700, "2026-07-12");
+    JsonNode deletedEntry =
+        addEntry(
+            token,
+            deletedEntryPaycheck.path("id").asText(),
+            "SPENDING_BUCKET",
+            "Deleted Entry Bucket",
+            700);
+    addBucketTransaction(token, deletedEntry.path("id").asText(), 70, "2026-07-12");
+    mockMvc
+        .perform(
+            delete("/api/v1/entries/{id}", deletedEntry.path("id").asText())
+                .param("version", deletedEntry.path("version").asText())
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isNoContent());
+
+    closeBucketPaycheck(token, "Thirty Days Ago", "2026-06-15", 4000, 400, "2026-06-15");
+    closeBucketPaycheck(token, "Ninety Day Start", "2026-04-17", 6000, 600, "2026-04-17");
+    closeBucketPaycheck(token, "Too Old For Ninety", "2026-04-16", 8000, 800, "2026-04-16");
+    closeBucketPaycheck(token, "Future Income", "2026-07-16", 9000, 900, "2026-07-15");
+
+    mockMvc
+        .perform(
+            get("/api/v1/spending-buckets/performance/rolling")
+                .param("days", "30")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.asOfDate").value("2026-07-15"))
+        .andExpect(jsonPath("$.windowStartDate").value("2026-06-16"))
+        .andExpect(jsonPath("$.windowEndDate").value("2026-07-15"))
+        .andExpect(jsonPath("$.paycheckCount").value(4))
+        .andExpect(jsonPath("$.summary.budgetedMinor").value(6500))
+        .andExpect(jsonPath("$.summary.spentMinor").value(600))
+        .andExpect(jsonPath("$.summary.netMinor").value(5900));
+
+    mockMvc
+        .perform(
+            get("/api/v1/spending-buckets/performance/rolling")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.windowStartDate").value("2026-06-16"))
+        .andExpect(jsonPath("$.summary.netMinor").value(5900));
+
+    mockMvc
+        .perform(
+            get("/api/v1/spending-buckets/performance/rolling")
+                .param("days", "90")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.asOfDate").value("2026-07-15"))
+        .andExpect(jsonPath("$.windowStartDate").value("2026-04-17"))
+        .andExpect(jsonPath("$.windowEndDate").value("2026-07-15"))
+        .andExpect(jsonPath("$.paycheckCount").value(6))
+        .andExpect(jsonPath("$.summary.budgetedMinor").value(16500))
+        .andExpect(jsonPath("$.summary.spentMinor").value(1600))
+        .andExpect(jsonPath("$.summary.netMinor").value(14900));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0", "60", "365"})
+  void rejectsUnsupportedRollingWindowDays(String days) throws Exception {
+    String token = register("bucket-performance-unsupported-" + days + "@yuuka.local");
+
+    mockMvc
+        .perform(
+            get("/api/v1/spending-buckets/performance/rolling")
+                .param("days", days)
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("days must be 30 or 90."));
   }
 
   @Test

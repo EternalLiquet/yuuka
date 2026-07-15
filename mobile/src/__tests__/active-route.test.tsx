@@ -18,7 +18,8 @@ const mockApi = {
   rollingSpendingBucketPerformance: jest.fn(),
 };
 const queryClients: QueryClient[] = [];
-const rollingTitle = 'Spending Buckets · Last 90 days';
+const rollingTitle30 = 'Spending Buckets · Last 30 days';
+const rollingTitle90 = 'Spending Buckets · Last 90 days';
 
 jest.mock('expo-router', () => {
   const React = require('react');
@@ -140,6 +141,18 @@ const rollingSummary: RollingSpendingBucketPerformance = {
     spentMinor: 7500,
   },
   windowEndDate: '2026-07-14',
+  windowStartDate: '2026-06-15',
+};
+
+const rolling90Summary: RollingSpendingBucketPerformance = {
+  asOfDate: '2026-07-14',
+  paycheckCount: 6,
+  summary: {
+    budgetedMinor: 30000,
+    netMinor: -5000,
+    spentMinor: 35000,
+  },
+  windowEndDate: '2026-07-14',
   windowStartDate: '2026-04-16',
 };
 
@@ -170,7 +183,9 @@ describe('active route bucket performance', () => {
       return { remove: jest.fn() };
     });
     mockApi.activePaychecks.mockResolvedValue(page);
-    mockApi.rollingSpendingBucketPerformance.mockResolvedValue(rollingSummary);
+    mockApi.rollingSpendingBucketPerformance.mockImplementation((days: 30 | 90 = 30) =>
+      Promise.resolve(days === 90 ? rolling90Summary : rollingSummary),
+    );
   });
 
   it('shows a loading bucket card without blocking the paycheck list', async () => {
@@ -183,7 +198,7 @@ describe('active route bucket performance', () => {
     const { view } = await renderRoute();
 
     expect(await view.findByText('Active Check')).toBeTruthy();
-    expect(view.getByText(rollingTitle)).toBeTruthy();
+    expect(view.getByText(rollingTitle30)).toBeTruthy();
     expect(view.getByText('Loading bucket summary...')).toBeTruthy();
 
     await act(async () => {
@@ -192,15 +207,15 @@ describe('active route bucket performance', () => {
     });
   });
 
-  it('requests the current rolling summary without a client-derived date', async () => {
+  it('defaults to the current thirty-day rolling summary without a client-derived date', async () => {
     await renderRoute();
 
     await waitFor(() => expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalled());
     expect(mockApi.rollingSpendingBucketPerformance.mock.calls).toEqual(
-      expect.arrayContaining([[]]),
+      expect.arrayContaining([[30]]),
     );
     expect(
-      mockApi.rollingSpendingBucketPerformance.mock.calls.every((call) => call.length === 0),
+      mockApi.rollingSpendingBucketPerformance.mock.calls.every((call) => call[0] === 30),
     ).toBe(true);
   });
 
@@ -208,12 +223,46 @@ describe('active route bucket performance', () => {
     const { view } = await renderRoute();
 
     expect(await view.findByText('Net under by $25.00')).toBeTruthy();
-    expect(view.getByText(rollingTitle)).toBeTruthy();
-    expect(view.getByLabelText('Spending buckets last 90 days: Net under by $25.00')).toBeTruthy();
+    expect(view.getByText(rollingTitle30)).toBeTruthy();
+    expect(view.getByLabelText('Spending buckets last 30 days: Net under by $25.00')).toBeTruthy();
     expect(view.getByText('Budgeted')).toBeTruthy();
     expect(view.getByText('$100.00')).toBeTruthy();
     expect(view.getByText('Spent')).toBeTruthy();
     expect(view.getByText('$75.00')).toBeTruthy();
+  });
+
+  it('switches to ninety days and renders the selected-period result', async () => {
+    const { view } = await renderRoute();
+    expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('segmented-Spending bucket period-90'));
+
+    await waitFor(() =>
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith(90),
+    );
+    expect(await view.findByText('Net over by $50.00')).toBeTruthy();
+    expect(view.getByText(rollingTitle90)).toBeTruthy();
+    expect(view.getByLabelText('Spending buckets last 90 days: Net over by $50.00')).toBeTruthy();
+    expect(view.getByText('Budgeted')).toBeTruthy();
+    expect(view.getByText('$300.00')).toBeTruthy();
+    expect(view.getByText('Spent')).toBeTruthy();
+    expect(view.getByText('$350.00')).toBeTruthy();
+  });
+
+  it('switches back to thirty days using cached data while refetching', async () => {
+    const { view } = await renderRoute();
+    expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('segmented-Spending bucket period-90'));
+    expect(await view.findByText('Net over by $50.00')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('segmented-Spending bucket period-30'));
+
+    await waitFor(() =>
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith(30),
+    );
+    expect(view.getByText(rollingTitle30)).toBeTruthy();
+    expect(view.getByText('Net under by $25.00')).toBeTruthy();
   });
 
   it('renders exactly-on-budget rolling text without losing accessibility text', async () => {
@@ -229,7 +278,7 @@ describe('active route bucket performance', () => {
 
     expect(await view.findByText('Net exactly on budget')).toBeTruthy();
     expect(
-      view.getByLabelText('Spending buckets last 90 days: Net exactly on budget'),
+      view.getByLabelText('Spending buckets last 30 days: Net exactly on budget'),
     ).toBeTruthy();
     expect(view.getByText('Budgeted')).toBeTruthy();
     expect(view.getByText('Spent')).toBeTruthy();
@@ -247,7 +296,7 @@ describe('active route bucket performance', () => {
 
     const { view } = await renderRoute(320);
     const net = await view.findByText('Net under by $1,234,567.89');
-    const title = view.getByText(rollingTitle);
+    const title = view.getByText(rollingTitle30);
     const titleNetContainerStyle = StyleSheet.flatten(title.parent?.props.style);
 
     expect(net).toBeTruthy();
@@ -270,7 +319,7 @@ describe('active route bucket performance', () => {
 
     const { view } = await renderRoute(320);
     const net = await view.findByText('Net over by $1,234,567.89');
-    const title = view.getByText(rollingTitle);
+    const title = view.getByText(rollingTitle30);
     const titleNetContainerStyle = StyleSheet.flatten(title.parent?.props.style);
 
     expect(net).toBeTruthy();
@@ -294,7 +343,7 @@ describe('active route bucket performance', () => {
     await waitFor(() =>
       expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledTimes(callsBeforeFocus + 1),
     );
-    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith();
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith(30);
   });
 
   it('does not change the financial reporting request when the local timezone setting changes', async () => {
@@ -311,7 +360,7 @@ describe('active route bucket performance', () => {
       callsBeforeTimezoneChange,
     );
     expect(
-      mockApi.rollingSpendingBucketPerformance.mock.calls.every((call) => call.length === 0),
+      mockApi.rollingSpendingBucketPerformance.mock.calls.every((call) => call[0] === 30),
     ).toBe(true);
   });
 
@@ -329,7 +378,7 @@ describe('active route bucket performance', () => {
         callsBeforeForeground + 1,
       ),
     );
-    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith();
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith(30);
   });
 
   it('refreshes active paychecks and rolling performance on pull-to-refresh', async () => {
@@ -348,7 +397,7 @@ describe('active route bucket performance', () => {
         rollingCallsBeforeRefresh + 1,
       ),
     );
-    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith();
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith(30);
   });
 
   it('hides the card when the rolling summary has no qualifying bucket data', async () => {
@@ -361,7 +410,7 @@ describe('active route bucket performance', () => {
     const { view } = await renderRoute();
 
     expect(await view.findByText('Active Check')).toBeTruthy();
-    await waitFor(() => expect(view.queryByText(rollingTitle)).toBeNull());
+    await waitFor(() => expect(view.queryByText(rollingTitle30)).toBeNull());
   });
 
   it('does not block the paycheck list when the rolling summary fails before data exists', async () => {
@@ -370,7 +419,22 @@ describe('active route bucket performance', () => {
     const { view } = await renderRoute();
 
     expect(await view.findByText('Active Check')).toBeTruthy();
-    await waitFor(() => expect(view.queryByText(rollingTitle)).toBeNull());
+    await waitFor(() => expect(view.queryByText(rollingTitle30)).toBeNull());
+  });
+
+  it('does not break the active list when the newly selected period fails', async () => {
+    mockApi.rollingSpendingBucketPerformance.mockImplementation((days: 30 | 90 = 30) =>
+      days === 90 ? Promise.reject(new Error('offline')) : Promise.resolve(rollingSummary),
+    );
+    const { view } = await renderRoute();
+    expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('segmented-Spending bucket period-90'));
+
+    await waitFor(() =>
+      expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith(90),
+    );
+    expect(view.getByText('Active Check')).toBeTruthy();
   });
 
   it('keeps the cached rolling summary visible when a refetch fails', async () => {

@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Plus, Search } from 'lucide-react-native';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AppState, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import type { RollingSpendingBucketPerformance } from '@/api/contracts';
@@ -11,6 +11,7 @@ import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
+import { SegmentedControl } from '@/components/segmented-control';
 import {
   EmptyState,
   ErrorState,
@@ -24,18 +25,27 @@ import { useMinimumVisibleDuration } from '@/hooks/use-minimum-visible-duration'
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
+type RollingBucketPeriod = '30' | '90';
+
+const rollingPeriodOptions = [
+  { label: '30 days', value: '30' },
+  { label: '90 days', value: '90' },
+] as const;
+
 export default function ActiveScreen() {
   const api = useYuukaApi();
   const router = useRouter();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const [rollingPeriod, setRollingPeriod] = useState<RollingBucketPeriod>('30');
   const query = useQuery({
     queryKey: ['paychecks', 'active'],
     queryFn: api.activePaychecks,
   });
   const bucketPerformanceQuery = useQuery({
-    queryKey: ['spending-buckets', 'rolling-90-days', 'current'],
-    queryFn: () => api.rollingSpendingBucketPerformance(),
+    placeholderData: keepPreviousData,
+    queryKey: ['spending-buckets', 'rolling-days', rollingPeriod, 'current'],
+    queryFn: () => api.rollingSpendingBucketPerformance(Number(rollingPeriod) as 30 | 90),
   });
   const { refetch: refetchActivePaychecks } = query;
   const { refetch: refetchBucketPerformance } = bucketPerformanceQuery;
@@ -114,7 +124,11 @@ export default function ActiveScreen() {
               onPress={() => router.push('/search/entries?scope=ACTIVE')}
               variant="secondary"
             />
-            <RollingSpendingBucketPerformanceCard query={bucketPerformanceQuery} />
+            <RollingSpendingBucketPerformanceCard
+              onPeriodChange={setRollingPeriod}
+              period={rollingPeriod}
+              query={bucketPerformanceQuery}
+            />
             <YuukaRefreshIndicator visible={query.isFetching && Boolean(query.data)} />
             {query.isError && query.data ? <StaleBanner /> : null}
           </View>
@@ -137,13 +151,18 @@ export default function ActiveScreen() {
 }
 
 function RollingSpendingBucketPerformanceCard({
+  onPeriodChange,
+  period,
   query,
 }: {
+  onPeriodChange: (period: RollingBucketPeriod) => void;
+  period: RollingBucketPeriod;
   query: UseQueryResult<RollingSpendingBucketPerformance, Error>;
 }) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const summary = query.data?.summary;
+  const title = `Spending Buckets · Last ${period} days`;
 
   if (query.isPending && !query.data) {
     return (
@@ -153,7 +172,13 @@ function RollingSpendingBucketPerformanceCard({
           { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
         ]}
       >
-        <AppText variant="label">Spending Buckets · Last 90 days</AppText>
+        <SegmentedControl
+          label="Spending bucket period"
+          onChange={onPeriodChange}
+          options={rollingPeriodOptions}
+          value={period}
+        />
+        <AppText variant="label">{title}</AppText>
         <AppText style={{ color: colors.muted }} variant="caption">
           Loading bucket summary...
         </AppText>
@@ -168,14 +193,20 @@ function RollingSpendingBucketPerformanceCard({
   const net = rollingNetDescription(summary.netMinor, settings.currencyCode);
   return (
     <View
-      accessibilityLabel={`Spending buckets last 90 days: ${net}`}
+      accessibilityLabel={`Spending buckets last ${period} days: ${net}`}
       style={[
         styles.bucketSummary,
         { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
       ]}
     >
+      <SegmentedControl
+        label="Spending bucket period"
+        onChange={onPeriodChange}
+        options={rollingPeriodOptions}
+        value={period}
+      />
       <View style={styles.bucketSummaryTextBlock}>
-        <AppText variant="label">Spending Buckets · Last 90 days</AppText>
+        <AppText variant="label">{title}</AppText>
         <AppText
           style={[
             styles.bucketSummaryNetText,
