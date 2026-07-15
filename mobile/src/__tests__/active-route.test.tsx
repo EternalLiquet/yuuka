@@ -201,8 +201,10 @@ describe('active route bucket performance', () => {
     expect(view.getByText(rollingTitle30)).toBeTruthy();
     expect(view.getByText('Loading bucket summary...')).toBeTruthy();
 
-    resolveSummary(rollingSummary);
-    await pendingSummary;
+    await act(async () => {
+      resolveSummary(rollingSummary);
+      await pendingSummary;
+    });
   });
 
   it('defaults to the current thirty-day rolling summary without a client-derived date', async () => {

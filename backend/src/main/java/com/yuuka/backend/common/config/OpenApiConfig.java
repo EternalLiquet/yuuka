@@ -3,6 +3,7 @@ package com.yuuka.backend.common.config;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.media.IntegerSchema;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import java.util.List;
@@ -47,5 +48,26 @@ public class OpenApiConfig {
                     .forEach(operation -> operation.setSecurity(List.of()));
               }
             });
+  }
+
+  @Bean
+  public OpenApiCustomizer spendingBucketRollingDaysParameter() {
+    return openApi -> {
+      var path = openApi.getPaths().get("/api/v1/spending-buckets/performance/rolling");
+      if (path == null || path.getGet() == null || path.getGet().getParameters() == null) {
+        return;
+      }
+      path.getGet().getParameters().stream()
+          .filter(parameter -> "days".equals(parameter.getName()))
+          .findFirst()
+          .ifPresent(
+              parameter ->
+                  parameter.setSchema(
+                      new IntegerSchema()
+                          .format("int32")
+                          .addEnumItem(30)
+                          .addEnumItem(90)
+                          ._default(30)));
+    };
   }
 }
