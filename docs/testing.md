@@ -91,8 +91,12 @@ for ordinary GitHub Actions CI.
 ## Release Versioning
 
 Successful `master` builds publish semantic-version tags in the form `vMAJOR.MINOR.PATCH`. The
-first automated release is `v1.0.0` if no valid version tag exists. Later releases increment the
-patch number from the latest valid tag.
+first automated release is `v1.0.0` if no valid version tag exists. Later releases inspect the pull
+request associated with the pushed commit for release labels. `release:major` increments the major
+number and resets minor and patch to zero, `release:minor` increments the minor number and resets
+patch to zero, and `release:patch` increments only the patch number. If more than one release label
+is present, the largest requested bump wins. Pull requests without a release label and direct pushes
+to `master` default to patch bumps.
 
 The release job fetches full history and tags, checks whether the current commit is already tagged,
 and refuses to force-overwrite tags. Rerunning a workflow for an already tagged commit reuses that

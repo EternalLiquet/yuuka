@@ -78,8 +78,9 @@ cd mobile && npm run format:check && npm run lint && npm run typecheck && npm ru
 CI runs those gates, Compose validation, Docker image build validation, Expo Doctor, and Android
 export for pull requests and pushes to `master`. Critical Android Maestro flows run nightly and
 can be started manually when a mobile change needs emulator coverage. Successful `master` pushes
-publish the next `vMAJOR.MINOR.PATCH` tag and GitHub Release. The running backend reports its
-packaged version at `/health/live`.
+publish the next `vMAJOR.MINOR.PATCH` tag and GitHub Release. Pull requests can request
+`release:major`, `release:minor`, or `release:patch`; unlabeled PRs and direct pushes default to a
+patch bump. The running backend reports its packaged version at `/health/live`.
 
 See [testing](docs/testing.md) for reports and E2E commands.
 
