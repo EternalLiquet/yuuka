@@ -23,7 +23,8 @@ After authentication, open Active.
 
 ## Active tab
 
-Show paychecks that are not fully allocated or contain at least one entry that is not Posted.
+Show paychecks that are not fully allocated, contain at least one entry that is not Posted, or were
+deliberately reopened and not explicitly closed again.
 
 Each paycheck card shows:
 
@@ -307,4 +308,6 @@ A paycheck with zero unallocated money and one Processing entry remains in Activ
 
 ### Closing and reopening
 
-A completed paycheck may be closed into History and later reopened, with both actions audited.
+An ordinary paycheck automatically closes into History when it is fully allocated and every live
+entry is Posted. A completed paycheck may be reopened from History; deliberately reopened paychecks
+stay Active until explicitly closed again, with close and reopen actions audited.

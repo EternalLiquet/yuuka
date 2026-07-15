@@ -555,14 +555,8 @@ class ServiceWorkflowCoverageTests extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.totalItems").value(3));
 
-    detail = getJson(token, "/api/v1/paychecks/{id}", paycheckId);
-    JsonNode closed =
-        json(
-            post("/api/v1/paychecks/{id}/close", paycheckId)
-                .header("Authorization", bearer(token))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"version\":" + detail.path("version").asLong() + "}"),
-            200);
+    JsonNode closed = getJson(token, "/api/v1/paychecks/{id}", paycheckId);
+    assertThat(closed.path("state").asText()).isEqualTo("CLOSED");
     mockMvc
         .perform(
             get("/api/v1/paychecks/history")
@@ -696,14 +690,8 @@ class ServiceWorkflowCoverageTests extends AbstractIntegrationTest {
                         .formatted(transaction.path("version").asLong() + 1)))
         .andExpect(status().isConflict());
 
-    detail = getJson(token, "/api/v1/paychecks/{id}", paycheckId);
-    JsonNode closed =
-        json(
-            post("/api/v1/paychecks/{id}/close", paycheckId)
-                .header("Authorization", bearer(token))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"version\":" + detail.path("version").asLong() + "}"),
-            200);
+    JsonNode closed = getJson(token, "/api/v1/paychecks/{id}", paycheckId);
+    assertThat(closed.path("state").asText()).isEqualTo("CLOSED");
 
     mockMvc
         .perform(get("/api/v1/paychecks/history").header("Authorization", bearer(token)))

@@ -15,6 +15,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -31,6 +33,7 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private MutableClock clock;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void resetClock() {
@@ -84,7 +87,6 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
         addEntry(token, exact.path("id").asText(), "SPENDING_BUCKET", "Fuel", 5000);
     addBucketTransaction(token, exactBucket.path("id").asText(), 5000, "2000-01-03");
     JsonNode posted = changeStatus(token, exactBucket.path("id").asText(), 0);
-    close(token, exact.path("id").asText(), getPaycheck(token, exact.path("id").asText()));
     assertThat(posted.path("status").asText()).isEqualTo("POSTED");
     mockMvc
         .perform(
@@ -114,7 +116,6 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
     addBucketTransaction(token, bucketId, 500, "2026-07-14");
     addBucketTransaction(token, bucketId, 700, "2026-07-15");
     changeStatus(token, bucketId, 0);
-    close(token, paycheckId, getPaycheck(token, paycheckId));
 
     mockMvc
         .perform(get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", bearer(token)))
@@ -174,7 +175,8 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
-  void rollsUpClosedAndArchivedBucketsWithinInclusiveWindowWithOwnerIsolation() throws Exception {
+  void rollsUpActiveClosedArchivedAndLegacyCompletedActiveBucketsWithinInclusiveWindow()
+      throws Exception {
     String token = register("bucket-performance-rolling@yuuka.local");
     String otherToken = register("bucket-performance-other@yuuka.local");
 
@@ -184,11 +186,11 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
     addBucketTransaction(token, startBucket.path("id").asText(), 100, "2026-04-16");
     addBucketTransaction(token, startBucket.path("id").asText(), 900, "2026-07-15");
     changeStatus(token, startBucket.path("id").asText(), 0);
-    close(token, start.path("id").asText(), getPaycheck(token, start.path("id").asText()));
 
     closeBucketPaycheck(token, "End", "2026-07-14", 2000, 200, "2026-07-14");
     closeBucketPaycheck(token, "Too Old", "2026-04-15", 900, 90, "2026-04-15");
     closeBucketPaycheck(token, "Future", "2026-07-15", 800, 80, "2026-07-14");
+    closeBucketPaycheck(token, "No Purchases Closed", "2026-07-10", 500, 0, null);
 
     JsonNode active = createPaycheck(token, "Still Active", 700, "2026-07-01");
     addEntry(token, active.path("id").asText(), "SPENDING_BUCKET", "Active Bucket", 700);
@@ -202,7 +204,12 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
     JsonNode billOnly = createPaycheck(token, "Bill Only", 1000, "2026-06-15");
     JsonNode bill = addEntry(token, billOnly.path("id").asText(), "BILL", "Internet", 1000);
     changeStatus(token, bill.path("id").asText(), 0);
-    close(token, billOnly.path("id").asText(), getPaycheck(token, billOnly.path("id").asText()));
+
+    JsonNode legacy =
+        closeBucketPaycheck(token, "Legacy Active", "2026-07-11", 600, 60, "2026-07-11");
+    jdbcTemplate.update(
+        "update paychecks set state = 'ACTIVE', closed_at = null where id = ?",
+        UUID.fromString(legacy.path("id").asText()));
 
     closeBucketPaycheck(otherToken, "Other Owner", "2026-07-01", 999, 999, "2026-07-01");
 
@@ -215,14 +222,14 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.asOfDate").value("2026-07-14"))
         .andExpect(jsonPath("$.windowStartDate").value("2026-04-16"))
         .andExpect(jsonPath("$.windowEndDate").value("2026-07-14"))
-        .andExpect(jsonPath("$.paycheckCount").value(3))
-        .andExpect(jsonPath("$.summary.budgetedMinor").value(6000))
-        .andExpect(jsonPath("$.summary.spentMinor").value(700))
-        .andExpect(jsonPath("$.summary.netMinor").value(5300));
+        .andExpect(jsonPath("$.paycheckCount").value(6))
+        .andExpect(jsonPath("$.summary.budgetedMinor").value(7800))
+        .andExpect(jsonPath("$.summary.spentMinor").value(760))
+        .andExpect(jsonPath("$.summary.netMinor").value(7040));
   }
 
   @Test
-  void reopenedPaycheckDropsOutUntilItIsClosedAgain() throws Exception {
+  void reopenedPaycheckRemainsInRollingSnapshotUntilExplicitClose() throws Exception {
     String token = register("bucket-performance-reopen@yuuka.local");
     JsonNode closed = closeBucketPaycheck(token, "Reopen", "2026-07-01", 1000, 300, "2026-07-01");
     String paycheckId = closed.path("id").asText();
@@ -237,14 +244,7 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
                 .content("{\"version\":" + closed.path("version").asLong() + "}"),
             200);
     assertThat(reopened.path("state").asText()).isEqualTo("ACTIVE");
-    mockMvc
-        .perform(
-            get("/api/v1/spending-buckets/performance/rolling-90-days")
-                .param("asOfDate", "2026-07-14")
-                .header("Authorization", bearer(token)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.paycheckCount").value(0))
-        .andExpect(jsonPath("$.summary").doesNotExist());
+    expectRolling(token, 1000, 300, 700, 1);
 
     JsonNode reclosed = close(token, paycheckId, getPaycheck(token, paycheckId));
     assertThat(reclosed.path("state").asText()).isEqualTo("CLOSED");
@@ -289,10 +289,6 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
                 .header("Authorization", bearer(token)))
         .andExpect(status().isNoContent());
     changeStatus(token, deletedPurchaseBucket.path("id").asText(), 0);
-    close(
-        token,
-        deletedPurchasePaycheck.path("id").asText(),
-        getPaycheck(token, deletedPurchasePaycheck.path("id").asText()));
 
     JsonNode editedPaycheck = createPaycheck(token, "Edited", 1500, "2026-07-03");
     JsonNode editedBucket =
@@ -320,10 +316,6 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
                     .formatted(editedPurchase.path("version").asLong())),
         200);
     changeStatus(token, updatedEntry.path("id").asText(), updatedEntry.path("version").asLong());
-    close(
-        token,
-        editedPaycheck.path("id").asText(),
-        getPaycheck(token, editedPaycheck.path("id").asText()));
 
     expectRolling(token, 3500, 500, 3000, 2);
   }
@@ -334,11 +326,14 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
     JsonNode paycheck = createPaycheck(token, name, budget, incomeDate);
     JsonNode bucket =
         addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", name + " Bucket", budget);
-    addBucketTransaction(token, bucket.path("id").asText(), spend, effectiveDate);
+    if (effectiveDate != null) {
+      addBucketTransaction(token, bucket.path("id").asText(), spend, effectiveDate);
+    }
     JsonNode posted = changeStatus(token, bucket.path("id").asText(), 0);
     assertThat(posted.path("status").asText()).isEqualTo("POSTED");
-    return close(
-        token, paycheck.path("id").asText(), getPaycheck(token, paycheck.path("id").asText()));
+    JsonNode completed = getPaycheck(token, paycheck.path("id").asText());
+    assertThat(completed.path("state").asText()).isEqualTo("CLOSED");
+    return completed;
   }
 
   private void expectRolling(

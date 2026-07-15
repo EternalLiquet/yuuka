@@ -416,6 +416,9 @@ class EntrySearchWorkflowTests extends AbstractIntegrationTest {
 
   private void closePaycheck(String token, String paycheckId) throws Exception {
     JsonNode paycheck = getPaycheck(token, paycheckId);
+    if ("CLOSED".equals(paycheck.path("state").asText())) {
+      return;
+    }
     mockMvc
         .perform(
             post("/api/v1/paychecks/{id}/close", paycheckId)

@@ -212,6 +212,7 @@ public class PaycheckService {
         request.amountMinor(),
         request.incomeDate(),
         normalizeOptional(request.notes()));
+    closeAutomaticallyIfComplete(ownerId, paycheck, liveEntries, clock.instant());
     paychecks.flush();
     PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
     auditService.append(ownerId, "PAYCHECK", paycheckId, "UPDATED", null, before, after, null);
@@ -257,6 +258,9 @@ public class PaycheckService {
             recordedAt,
             "Leftover allocated"));
     paycheck.touch(recordedAt);
+    List<PaycheckEntry> updatedEntries = new ArrayList<>(liveEntries);
+    updatedEntries.add(entry);
+    closeAutomaticallyIfComplete(ownerId, paycheck, updatedEntries, recordedAt);
     EntryResponse response = toEntryResponse(entry);
     auditService.append(
         ownerId,
@@ -308,6 +312,9 @@ public class PaycheckService {
             recordedAt,
             "Entry created"));
     paycheck.touch(recordedAt);
+    List<PaycheckEntry> updatedEntries = new ArrayList<>(liveEntries);
+    updatedEntries.add(entry);
+    closeAutomaticallyIfComplete(ownerId, paycheck, updatedEntries, recordedAt);
     EntryResponse response = toEntryResponse(entry);
     auditService.append(
         ownerId, "PAYCHECK_ENTRY", entry.getId(), "CREATED", null, null, response, null);
@@ -354,6 +361,7 @@ public class PaycheckService {
         ownerId, entry, previousPaybackId, previousAmountMinor, previousStatus, recordedAt);
     paycheck.touch(recordedAt);
     entries.flush();
+    closeAutomaticallyIfComplete(ownerId, paycheck, liveEntries, recordedAt);
     EntryResponse after = toEntryResponse(entry);
     auditService.append(ownerId, "PAYCHECK_ENTRY", entryId, "UPDATED", null, before, after, null);
     return after;
@@ -365,6 +373,7 @@ public class PaycheckService {
     Paycheck paycheck = requirePaycheck(ownerId, entry.getPaycheckId());
     requireActive(paycheck);
     assertVersion(entry.getVersion(), version);
+    List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheck.getId());
     EntryResponse before = toEntryResponse(entry);
     Instant now = clock.instant();
     if (entry.getStatus() == EntryStatus.POSTED) {
@@ -372,6 +381,9 @@ public class PaycheckService {
     }
     entry.delete(now);
     paycheck.touch(now);
+    List<PaycheckEntry> remainingEntries =
+        liveEntries.stream().filter(candidate -> !candidate.getId().equals(entryId)).toList();
+    closeAutomaticallyIfComplete(ownerId, paycheck, remainingEntries, now);
     auditService.append(ownerId, "PAYCHECK_ENTRY", entryId, "DELETED", null, before, null, null);
   }
 
@@ -404,6 +416,8 @@ public class PaycheckService {
             normalizeOptional(request.note())));
     paycheck.touch(recordedAt);
     entries.flush();
+    closeAutomaticallyIfComplete(
+        ownerId, paycheck, findEntries(ownerId, paycheck.getId()), recordedAt);
     EntryResponse after = toEntryResponse(entry);
     auditService.append(
         ownerId,
@@ -584,6 +598,32 @@ public class PaycheckService {
 
   private PaycheckMetrics calculate(Paycheck paycheck, List<PaycheckEntry> liveEntries) {
     return paycheckCalculator.calculate(paycheck.getAmountMinor(), allocationLines(liveEntries));
+  }
+
+  private void closeAutomaticallyIfComplete(
+      UUID ownerId, Paycheck paycheck, List<PaycheckEntry> liveEntries, Instant recordedAt) {
+    if (paycheck.getState() != PaycheckState.ACTIVE || paycheck.getReopenedAt() != null) {
+      return;
+    }
+    PaycheckMetrics metrics = calculate(paycheck, liveEntries);
+    if (!metrics.fullyAllocated() || !metrics.fullyPosted()) {
+      return;
+    }
+
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
+    PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
+    paycheck.close(recordedAt);
+    paychecks.flush();
+    PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
+    auditService.append(
+        ownerId,
+        "PAYCHECK",
+        paycheck.getId(),
+        "CLOSED",
+        null,
+        before,
+        after,
+        Map.of("automatic", true));
   }
 
   private List<AllocationLine> allocationLines(List<PaycheckEntry> liveEntries) {

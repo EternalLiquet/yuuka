@@ -68,15 +68,14 @@ class CriticalBudgetWorkflowTests extends AbstractIntegrationTest {
         "2026-07-10T13:00:00Z",
         backToProcessing.path("version").asLong());
     detail = getPaycheck(token, paycheckId);
-    JsonNode closed = close(token, paycheckId, detail.path("version").asLong(), 200);
-    assertThat(closed.path("state").asText()).isEqualTo("CLOSED");
+    assertThat(detail.path("state").asText()).isEqualTo("CLOSED");
 
     JsonNode reopened =
         json(
             post("/api/v1/paychecks/{id}/reopen", paycheckId)
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"version\":" + closed.path("version").asLong() + "}"),
+                .content("{\"version\":" + detail.path("version").asLong() + "}"),
             200);
     assertThat(reopened.path("state").asText()).isEqualTo("ACTIVE");
   }
