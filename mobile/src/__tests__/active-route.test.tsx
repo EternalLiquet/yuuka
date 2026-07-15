@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
-import { AppState } from 'react-native';
+import { AppState, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { Paycheck, RollingSpendingBucketPerformance } from '@/api/contracts';
@@ -18,6 +18,7 @@ const mockApi = {
   rollingSpendingBucketPerformance: jest.fn(),
 };
 const queryClients: QueryClient[] = [];
+const rollingTitle = 'Spending Buckets · Last 90 days';
 
 jest.mock('expo-router', () => {
   const React = require('react');
@@ -62,12 +63,12 @@ jest.mock('@/settings/settings-provider', () => ({
   }),
 }));
 
-function routeWrapper(queryClient: QueryClient) {
+function routeWrapper(queryClient: QueryClient, width = 390) {
   return function Wrapper({ children }: PropsWithChildren) {
     return (
       <SafeAreaProvider
         initialMetrics={{
-          frame: { height: 844, width: 390, x: 0, y: 0 },
+          frame: { height: 844, width, x: 0, y: 0 },
           insets: { bottom: 0, left: 0, right: 0, top: 0 },
         }}
       >
@@ -77,7 +78,7 @@ function routeWrapper(queryClient: QueryClient) {
   };
 }
 
-async function renderRoute() {
+async function renderRoute(width?: number) {
   const queryClient = new QueryClient({
     defaultOptions: {
       mutations: { gcTime: Infinity, retry: false },
@@ -87,7 +88,7 @@ async function renderRoute() {
   queryClients.push(queryClient);
   return {
     queryClient,
-    view: await render(<ActiveScreen />, { wrapper: routeWrapper(queryClient) }),
+    view: await render(<ActiveScreen />, { wrapper: routeWrapper(queryClient, width) }),
   };
 }
 
@@ -142,6 +143,15 @@ const rollingSummary: RollingSpendingBucketPerformance = {
   windowStartDate: '2026-04-16',
 };
 
+function rollingSummaryWith(
+  summary: RollingSpendingBucketPerformance['summary'],
+): RollingSpendingBucketPerformance {
+  return {
+    ...rollingSummary,
+    summary,
+  };
+}
+
 describe('active route bucket performance', () => {
   afterEach(() => {
     cleanup();
@@ -173,7 +183,7 @@ describe('active route bucket performance', () => {
     const { view } = await renderRoute();
 
     expect(await view.findByText('Active Check')).toBeTruthy();
-    expect(view.getByText('Spending Buckets · Last 90 days')).toBeTruthy();
+    expect(view.getByText(rollingTitle)).toBeTruthy();
     expect(view.getByText('Loading bucket summary...')).toBeTruthy();
 
     await act(async () => {
@@ -198,8 +208,78 @@ describe('active route bucket performance', () => {
     const { view } = await renderRoute();
 
     expect(await view.findByText('Net under by $25.00')).toBeTruthy();
+    expect(view.getByText(rollingTitle)).toBeTruthy();
+    expect(view.getByLabelText('Spending buckets last 90 days: Net under by $25.00')).toBeTruthy();
+    expect(view.getByText('Budgeted')).toBeTruthy();
     expect(view.getByText('$100.00')).toBeTruthy();
+    expect(view.getByText('Spent')).toBeTruthy();
     expect(view.getByText('$75.00')).toBeTruthy();
+  });
+
+  it('renders exactly-on-budget rolling text without losing accessibility text', async () => {
+    mockApi.rollingSpendingBucketPerformance.mockResolvedValue(
+      rollingSummaryWith({
+        budgetedMinor: 123456789,
+        netMinor: 0,
+        spentMinor: 123456789,
+      }),
+    );
+
+    const { view } = await renderRoute();
+
+    expect(await view.findByText('Net exactly on budget')).toBeTruthy();
+    expect(
+      view.getByLabelText('Spending buckets last 90 days: Net exactly on budget'),
+    ).toBeTruthy();
+    expect(view.getByText('Budgeted')).toBeTruthy();
+    expect(view.getByText('Spent')).toBeTruthy();
+    expect(view.getAllByText('$1,234,567.89')).toHaveLength(2);
+  });
+
+  it('renders long under-budget amounts in a stacked narrow layout', async () => {
+    mockApi.rollingSpendingBucketPerformance.mockResolvedValue(
+      rollingSummaryWith({
+        budgetedMinor: 123456789,
+        netMinor: 123456789,
+        spentMinor: 0,
+      }),
+    );
+
+    const { view } = await renderRoute(320);
+    const net = await view.findByText('Net under by $1,234,567.89');
+    const title = view.getByText(rollingTitle);
+    const titleNetContainerStyle = StyleSheet.flatten(title.parent?.props.style);
+
+    expect(net).toBeTruthy();
+    expect(title.parent).toBe(net.parent);
+    expect(titleNetContainerStyle?.flexDirection).not.toBe('row');
+    expect(view.getByText('Budgeted')).toBeTruthy();
+    expect(view.getByText('$1,234,567.89')).toBeTruthy();
+    expect(view.getByText('Spent')).toBeTruthy();
+    expect(view.getAllByText('$0.00').length).toBeGreaterThan(0);
+  });
+
+  it('renders long over-budget amounts below the title', async () => {
+    mockApi.rollingSpendingBucketPerformance.mockResolvedValue(
+      rollingSummaryWith({
+        budgetedMinor: 0,
+        netMinor: -123456789,
+        spentMinor: 123456789,
+      }),
+    );
+
+    const { view } = await renderRoute(320);
+    const net = await view.findByText('Net over by $1,234,567.89');
+    const title = view.getByText(rollingTitle);
+    const titleNetContainerStyle = StyleSheet.flatten(title.parent?.props.style);
+
+    expect(net).toBeTruthy();
+    expect(title.parent).toBe(net.parent);
+    expect(titleNetContainerStyle?.flexDirection).not.toBe('row');
+    expect(view.getByText('Budgeted')).toBeTruthy();
+    expect(view.getAllByText('$0.00').length).toBeGreaterThan(0);
+    expect(view.getByText('Spent')).toBeTruthy();
+    expect(view.getByText('$1,234,567.89')).toBeTruthy();
   });
 
   it('refetches the rolling summary when the screen refocuses', async () => {
@@ -281,7 +361,7 @@ describe('active route bucket performance', () => {
     const { view } = await renderRoute();
 
     expect(await view.findByText('Active Check')).toBeTruthy();
-    await waitFor(() => expect(view.queryByText('Spending Buckets · Last 90 days')).toBeNull());
+    await waitFor(() => expect(view.queryByText(rollingTitle)).toBeNull());
   });
 
   it('does not block the paycheck list when the rolling summary fails before data exists', async () => {
@@ -290,7 +370,7 @@ describe('active route bucket performance', () => {
     const { view } = await renderRoute();
 
     expect(await view.findByText('Active Check')).toBeTruthy();
-    await waitFor(() => expect(view.queryByText('Spending Buckets · Last 90 days')).toBeNull());
+    await waitFor(() => expect(view.queryByText(rollingTitle)).toBeNull());
   });
 
   it('keeps the cached rolling summary visible when a refetch fails', async () => {
