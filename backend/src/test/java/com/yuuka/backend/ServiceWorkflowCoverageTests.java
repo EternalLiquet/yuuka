@@ -653,9 +653,6 @@ class ServiceWorkflowCoverageTests extends AbstractIntegrationTest {
                     {"toStatus":"PROCESSING","effectiveAt":"2026-07-20T12:00:00Z","note":" "}
                     """),
             200);
-    bill = changeStatus(token, bill, "POSTED");
-    bucket = changeStatus(token, bucket, "POSTED");
-    fund = changeStatus(token, fund, "POSTED");
 
     mockMvc
         .perform(
@@ -689,6 +686,15 @@ class ServiceWorkflowCoverageTests extends AbstractIntegrationTest {
                     """
                         .formatted(transaction.path("version").asLong() + 1)))
         .andExpect(status().isConflict());
+
+    detail = getJson(token, "/api/v1/paychecks/{id}", paycheckId);
+    bill = entryByName(detail, "Phone");
+    bucket = entryByName(detail, "Food");
+    fund = entryByName(detail, "Repairs");
+
+    bill = changeStatus(token, bill, "POSTED");
+    bucket = changeStatus(token, bucket, "POSTED");
+    fund = changeStatus(token, fund, "POSTED");
 
     JsonNode closed = getJson(token, "/api/v1/paychecks/{id}", paycheckId);
     assertThat(closed.path("state").asText()).isEqualTo("CLOSED");
