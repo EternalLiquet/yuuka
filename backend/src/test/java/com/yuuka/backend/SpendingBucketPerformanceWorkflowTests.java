@@ -354,6 +354,19 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void rejectsMalformedRollingWindowDays() throws Exception {
+    String token = register("bucket-performance-malformed-days@yuuka.local");
+
+    mockMvc
+        .perform(
+            get("/api/v1/spending-buckets/performance/rolling")
+                .param("days", "thirty")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void reopenedPaycheckRemainsInRollingSnapshotUntilExplicitClose() throws Exception {
     String token = register("bucket-performance-reopen@yuuka.local");
     JsonNode closed = closeBucketPaycheck(token, "Reopen", "2026-07-01", 1000, 300, "2026-07-01");

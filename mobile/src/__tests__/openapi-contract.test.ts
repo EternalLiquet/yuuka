@@ -33,10 +33,23 @@ describe('committed backend contract', () => {
 
   it('marks rolling spending bucket parameters as optional with supported days', () => {
     const operation = contract.paths['/api/v1/spending-buckets/performance/rolling']?.get as
-      { parameters?: { name?: string; required?: boolean }[] } | undefined;
+      | {
+          parameters?: {
+            name?: string;
+            required?: boolean;
+            schema?: { default?: unknown; enum?: unknown[]; type?: string };
+          }[];
+        }
+      | undefined;
 
-    expect(operation?.parameters?.find((parameter) => parameter.name === 'days')).toMatchObject({
+    const days = operation?.parameters?.find((parameter) => parameter.name === 'days');
+    expect(days).toMatchObject({
       required: false,
+    });
+    expect(days?.schema).toMatchObject({
+      default: 30,
+      enum: [30, 90],
+      type: 'integer',
     });
     expect(operation?.parameters?.find((parameter) => parameter.name === 'asOfDate')).toMatchObject(
       {

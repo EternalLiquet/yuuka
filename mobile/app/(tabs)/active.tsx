@@ -1,7 +1,7 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Plus, Search } from 'lucide-react-native';
+import { Plus, RefreshCw, Search } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
@@ -43,7 +43,6 @@ export default function ActiveScreen() {
     queryFn: api.activePaychecks,
   });
   const bucketPerformanceQuery = useQuery({
-    placeholderData: keepPreviousData,
     queryKey: ['spending-buckets', 'rolling-days', rollingPeriod, 'current'],
     queryFn: () => api.rollingSpendingBucketPerformance(Number(rollingPeriod) as 30 | 90),
   });
@@ -163,37 +162,14 @@ function RollingSpendingBucketPerformanceCard({
   const { settings } = useSettings();
   const summary = query.data?.summary;
   const title = `Spending Buckets · Last ${period} days`;
-
-  if (query.isPending && !query.data) {
-    return (
-      <View
-        style={[
-          styles.bucketSummary,
-          { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
-        ]}
-      >
-        <SegmentedControl
-          label="Spending bucket period"
-          onChange={onPeriodChange}
-          options={rollingPeriodOptions}
-          value={period}
-        />
-        <AppText variant="label">{title}</AppText>
-        <AppText style={{ color: colors.muted }} variant="caption">
-          Loading bucket summary...
-        </AppText>
-      </View>
-    );
-  }
-
-  if (!summary) {
-    return null;
-  }
-
-  const net = rollingNetDescription(summary.netMinor, settings.currencyCode);
+  const net = summary ? rollingNetDescription(summary.netMinor, settings.currencyCode) : null;
   return (
     <View
-      accessibilityLabel={`Spending buckets last ${period} days: ${net}`}
+      accessibilityLabel={
+        net
+          ? `Spending buckets last ${period} days: ${net}`
+          : `Spending buckets last ${period} days`
+      }
       style={[
         styles.bucketSummary,
         { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
@@ -207,31 +183,60 @@ function RollingSpendingBucketPerformanceCard({
       />
       <View style={styles.bucketSummaryTextBlock}>
         <AppText variant="label">{title}</AppText>
-        <AppText
-          style={[
-            styles.bucketSummaryNetText,
-            {
-              color:
-                summary.netMinor < 0
-                  ? colors.danger
-                  : summary.netMinor === 0
-                    ? colors.muted
-                    : colors.posted,
-            },
-          ]}
-          variant="caption"
-        >
-          {net}
+        {summary && net ? (
+          <AppText
+            style={[
+              styles.bucketSummaryNetText,
+              {
+                color:
+                  summary.netMinor < 0
+                    ? colors.danger
+                    : summary.netMinor === 0
+                      ? colors.muted
+                      : colors.posted,
+              },
+            ]}
+            variant="caption"
+          >
+            {net}
+          </AppText>
+        ) : null}
+      </View>
+      {query.isPending && !query.data ? (
+        <AppText style={{ color: colors.muted }} variant="caption">
+          Loading bucket summary...
         </AppText>
-      </View>
-      <View style={styles.metrics}>
-        <Metric
-          label="Budgeted"
-          value={formatMoney(summary.budgetedMinor, settings.currencyCode)}
-        />
-        <Metric label="Spent" value={formatMoney(summary.spentMinor, settings.currencyCode)} />
-      </View>
-      {query.isError ? (
+      ) : null}
+      {query.isError && !query.data ? (
+        <View style={styles.bucketSummaryState}>
+          <AppText style={{ color: colors.muted }} variant="caption">
+            {displayError(query.error, settings.currencyCode, 'Bucket data could not be loaded.')}
+          </AppText>
+          <Button
+            icon={RefreshCw}
+            label="Retry"
+            onPress={() => {
+              void query.refetch();
+            }}
+            variant="secondary"
+          />
+        </View>
+      ) : null}
+      {!query.isPending && !query.isError && !summary ? (
+        <AppText style={{ color: colors.muted }} variant="caption">
+          No Spending Bucket data in the last {period} days.
+        </AppText>
+      ) : null}
+      {summary && net ? (
+        <View style={styles.metrics}>
+          <Metric
+            label="Budgeted"
+            value={formatMoney(summary.budgetedMinor, settings.currencyCode)}
+          />
+          <Metric label="Spent" value={formatMoney(summary.spentMinor, settings.currencyCode)} />
+        </View>
+      ) : null}
+      {query.isError && query.data ? (
         <AppText style={{ color: colors.processing }} variant="caption">
           Summary may be stale
         </AppText>
@@ -263,6 +268,7 @@ function rollingNetDescription(netMinor: number, currencyCode: string) {
 const styles = StyleSheet.create({
   bucketSummary: { borderRadius: 8, borderWidth: 1, gap: 10, padding: 12 },
   bucketSummaryNetText: { fontWeight: '700' },
+  bucketSummaryState: { alignItems: 'flex-start', gap: 8 },
   bucketSummaryTextBlock: { alignItems: 'flex-start', gap: 4 },
   center: { alignItems: 'center', justifyContent: 'center' },
   content: { flexGrow: 1, gap: 12, padding: 16, paddingBottom: 28 },

@@ -44,10 +44,10 @@ public class SpendingBucketPerformanceController {
       @Parameter(
               schema =
                   @Schema(
-                      type = "integer",
-                      allowableValues = {"30", "90"}))
+                      allowableValues = {"30", "90"},
+                      defaultValue = "30"))
           @RequestParam(defaultValue = "30")
-          String days,
+          int days,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate asOfDate) {
     return rollingFor(jwt, supportedDays(days), asOfDate);
@@ -61,14 +61,9 @@ public class SpendingBucketPerformanceController {
     return service.rollingDays(ownerId, effectiveDate, days);
   }
 
-  private int supportedDays(String days) {
-    try {
-      int parsed = Integer.parseInt(days);
-      if (SpendingBucketPerformanceService.isSupportedRollingWindow(parsed)) {
-        return parsed;
-      }
-    } catch (NumberFormatException exception) {
-      // Fall through to a consistent client-facing error below.
+  private int supportedDays(int days) {
+    if (SpendingBucketPerformanceService.isSupportedRollingWindow(days)) {
+      return days;
     }
     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be 30 or 90.");
   }

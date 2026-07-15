@@ -87,8 +87,11 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     assertThat(rollingParameters.get(0).path("required").asBoolean()).isFalse();
     assertThat(rollingParameters.get(0).path("schema").path("type").asText()).isEqualTo("integer");
     assertThat(rollingParameters.get(0).path("schema").path("enum"))
-        .extracting(JsonNode::asText)
-        .containsExactly("30", "90");
+        .allSatisfy((node) -> assertThat(node.isInt()).isTrue())
+        .extracting(JsonNode::asInt)
+        .containsExactly(30, 90);
+    assertThat(rollingParameters.get(0).path("schema").path("default").isInt()).isTrue();
+    assertThat(rollingParameters.get(0).path("schema").path("default").asInt()).isEqualTo(30);
     assertThat(rollingParameters.get(1).path("required").asBoolean()).isFalse();
 
     JsonNode compatibilityParameters =
