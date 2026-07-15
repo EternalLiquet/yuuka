@@ -4,6 +4,7 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.yuuka.backend.common.security.ApiAccessDeniedHandler;
 import com.yuuka.backend.common.security.ApiAuthenticationEntryPoint;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.List;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -27,6 +28,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
@@ -110,15 +113,19 @@ public class SecurityConfig {
   }
 
   @Bean
-  public JwtDecoder jwtDecoder(SecretKey jwtSecretKey, JwtProperties properties) {
+  public JwtDecoder jwtDecoder(SecretKey jwtSecretKey, JwtProperties properties, Clock clock) {
     NimbusJwtDecoder decoder =
         NimbusJwtDecoder.withSecretKey(jwtSecretKey).macAlgorithm(MacAlgorithm.HS256).build();
+    JwtTimestampValidator timestampValidator = new JwtTimestampValidator();
+    timestampValidator.setClock(clock);
+    OAuth2TokenValidator<Jwt> defaultValidators =
+        JwtValidators.createDefaultWithValidators(
+            timestampValidator, new JwtIssuerValidator(properties.issuer()));
     OAuth2TokenValidator<Jwt> audienceValidator =
         new JwtClaimValidator<List<String>>(
             "aud", audience -> audience != null && audience.contains(properties.audience()));
     decoder.setJwtValidator(
-        new DelegatingOAuth2TokenValidator<>(
-            JwtValidators.createDefaultWithIssuer(properties.issuer()), audienceValidator));
+        new DelegatingOAuth2TokenValidator<>(defaultValidators, audienceValidator));
     return decoder;
   }
 

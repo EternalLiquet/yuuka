@@ -164,13 +164,22 @@ describe('active route bucket performance', () => {
   });
 
   it('shows a loading bucket card without blocking the paycheck list', async () => {
-    mockApi.rollingSpendingBucketPerformance.mockReturnValue(new Promise(() => undefined));
+    let resolveSummary: (summary: RollingSpendingBucketPerformance) => void = () => undefined;
+    const pendingSummary = new Promise<RollingSpendingBucketPerformance>((resolve) => {
+      resolveSummary = resolve;
+    });
+    mockApi.rollingSpendingBucketPerformance.mockReturnValue(pendingSummary);
 
     const { view } = await renderRoute();
 
     expect(await view.findByText('Active Check')).toBeTruthy();
     expect(view.getByText('Spending Buckets · Last 90 days')).toBeTruthy();
     expect(view.getByText('Loading bucket summary...')).toBeTruthy();
+
+    await act(async () => {
+      resolveSummary(rollingSummary);
+      await pendingSummary;
+    });
   });
 
   it('requests the current rolling summary without a client-derived date', async () => {

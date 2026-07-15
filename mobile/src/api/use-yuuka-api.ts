@@ -77,13 +77,11 @@ export function useYuukaApi() {
     return {
       me: () => get('/me', meSchema),
       activePaychecks: () => get('/paychecks/active?size=100', pageSchema(paycheckSchema)),
-      rollingSpendingBucketPerformance: (asOfDate?: string) => {
-        const query = asOfDate ? `?asOfDate=${encodeURIComponent(asOfDate)}` : '';
-        return get(
-          `/spending-buckets/performance/rolling-90-days${query}`,
+      rollingSpendingBucketPerformance: () =>
+        get(
+          '/spending-buckets/performance/rolling-90-days',
           rollingSpendingBucketPerformanceSchema,
-        );
-      },
+        ),
       historyPaychecks: (query = '') =>
         get(`/paychecks/history?size=100${query}`, pageSchema(paycheckSchema)),
       searchEntries: ({
