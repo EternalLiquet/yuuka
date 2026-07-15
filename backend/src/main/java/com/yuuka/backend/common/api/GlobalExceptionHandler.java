@@ -16,6 +16,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
@@ -30,6 +31,17 @@ public class GlobalExceptionHandler {
         .getBindingResult()
         .getFieldErrors()
         .forEach(error -> fields.putIfAbsent(error.getField(), error.getDefaultMessage()));
+    return response(
+        HttpStatus.BAD_REQUEST,
+        new ApiError(
+            "VALIDATION_ERROR", "The request could not be completed.", fields, traceId(request)));
+  }
+
+  @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+  public ResponseEntity<ApiError> handleTypeMismatch(
+      MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
+    Map<String, String> fields = new LinkedHashMap<>();
+    fields.put(exception.getName(), typeMismatchMessage(exception));
     return response(
         HttpStatus.BAD_REQUEST,
         new ApiError(
@@ -120,6 +132,17 @@ public class GlobalExceptionHandler {
 
   private ResponseEntity<ApiError> response(HttpStatus status, ApiError error) {
     return ResponseEntity.status(status).body(error);
+  }
+
+  private String typeMismatchMessage(MethodArgumentTypeMismatchException exception) {
+    Class<?> requiredType = exception.getRequiredType();
+    if (requiredType == int.class
+        || requiredType == Integer.class
+        || requiredType == long.class
+        || requiredType == Long.class) {
+      return "must be a valid integer";
+    }
+    return "has an invalid value";
   }
 
   private String traceId(HttpServletRequest request) {

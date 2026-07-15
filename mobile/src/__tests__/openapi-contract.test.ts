@@ -37,7 +37,7 @@ describe('committed backend contract', () => {
           parameters?: {
             name?: string;
             required?: boolean;
-            schema?: { default?: unknown; enum?: unknown[]; type?: string };
+            schema?: { default?: unknown; enum?: unknown[]; format?: string; type?: string };
           }[];
         }
       | undefined;
@@ -49,6 +49,7 @@ describe('committed backend contract', () => {
     expect(days?.schema).toMatchObject({
       default: 30,
       enum: [30, 90],
+      format: 'int32',
       type: 'integer',
     });
     expect(operation?.parameters?.find((parameter) => parameter.name === 'asOfDate')).toMatchObject(

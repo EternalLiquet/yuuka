@@ -86,6 +86,7 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     assertThat(rollingParameters.findValuesAsText("name")).containsExactly("days", "asOfDate");
     assertThat(rollingParameters.get(0).path("required").asBoolean()).isFalse();
     assertThat(rollingParameters.get(0).path("schema").path("type").asText()).isEqualTo("integer");
+    assertThat(rollingParameters.get(0).path("schema").path("format").asText()).isEqualTo("int32");
     assertThat(rollingParameters.get(0).path("schema").path("enum"))
         .allSatisfy((node) -> assertThat(node.isInt()).isTrue())
         .extracting(JsonNode::asInt)

@@ -44,6 +44,9 @@ public class SpendingBucketPerformanceController {
       @Parameter(
               schema =
                   @Schema(
+                      implementation = Integer.class,
+                      type = "integer",
+                      format = "int32",
                       allowableValues = {"30", "90"},
                       defaultValue = "30"))
           @RequestParam(defaultValue = "30")

@@ -363,7 +363,11 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
                 .param("days", "thirty")
                 .param("asOfDate", "2026-07-15")
                 .header("Authorization", bearer(token)))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+        .andExpect(jsonPath("$.message").value("The request could not be completed."))
+        .andExpect(jsonPath("$.fieldErrors.days").value("must be a valid integer"))
+        .andExpect(jsonPath("$.traceId").isNotEmpty());
   }
 
   @Test
