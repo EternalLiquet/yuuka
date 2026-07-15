@@ -1,5 +1,6 @@
 package com.yuuka.backend.paycheck.api.dto;
 
+import com.yuuka.backend.bucket.api.dto.SpendingBucketPerformanceSummaryResponse;
 import com.yuuka.backend.paycheck.domain.Paycheck;
 import com.yuuka.backend.paycheck.domain.PaycheckMetrics;
 import com.yuuka.backend.paycheck.domain.PaycheckState;
@@ -29,6 +30,7 @@ public record PaycheckResponse(
     long processingCount,
     long notPaidCount,
     boolean requiresAttention,
+    SpendingBucketPerformanceSummaryResponse spendingBucketPerformance,
     List<EntryResponse> entries,
     Instant createdAt,
     Instant updatedAt,
@@ -37,7 +39,10 @@ public record PaycheckResponse(
     Instant archivedAt,
     long version) {
   public static PaycheckResponse from(
-      Paycheck paycheck, PaycheckMetrics metrics, List<EntryResponse> entries) {
+      Paycheck paycheck,
+      PaycheckMetrics metrics,
+      SpendingBucketPerformanceSummaryResponse spendingBucketPerformance,
+      List<EntryResponse> entries) {
     return new PaycheckResponse(
         paycheck.getId(),
         paycheck.getName(),
@@ -58,6 +63,7 @@ public record PaycheckResponse(
         metrics.processingCount(),
         metrics.notPaidCount(),
         metrics.requiresAttention(),
+        spendingBucketPerformance,
         List.copyOf(entries),
         paycheck.getCreatedAt(),
         paycheck.getUpdatedAt(),

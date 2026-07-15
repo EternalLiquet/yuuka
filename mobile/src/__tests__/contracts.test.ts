@@ -9,6 +9,8 @@ import {
   meSchema,
   pageSchema,
   paycheckSchema,
+  rollingSpendingBucketPerformanceSchema,
+  spendingBucketPerformanceSummarySchema,
   statusEventSchema,
   templateEntrySchema,
   templateSchema,
@@ -86,6 +88,11 @@ describe('API response contracts', () => {
         processingMinor: 0,
         reopenedAt: null,
         requiresAttention: true,
+        spendingBucketPerformance: {
+          budgetedMinor: 5000,
+          netMinor: 2855,
+          spentMinor: 2145,
+        },
         source: null,
         state: 'ACTIVE',
         templateSourceId: null,
@@ -95,6 +102,26 @@ describe('API response contracts', () => {
       }),
     ).toMatchObject({ entries: [expect.objectContaining({ name: 'Work Food' })] });
     expect(templateEntrySchema.parse(templateEntry)).toMatchObject({ name: 'Work Food' });
+    expect(
+      spendingBucketPerformanceSummarySchema.parse({
+        budgetedMinor: 5000,
+        netMinor: -250,
+        spentMinor: 5250,
+      }),
+    ).toMatchObject({ netMinor: -250 });
+    expect(
+      rollingSpendingBucketPerformanceSchema.parse({
+        asOfDate: '2026-07-14',
+        paycheckCount: 2,
+        summary: {
+          budgetedMinor: 12000,
+          netMinor: 3000,
+          spentMinor: 9000,
+        },
+        windowEndDate: '2026-07-14',
+        windowStartDate: '2026-04-16',
+      }),
+    ).toMatchObject({ paycheckCount: 2 });
     expect(
       templateSchema.parse({
         archived: false,

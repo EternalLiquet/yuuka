@@ -6,7 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
-import type { Entry, EntryPaymentMethod, EntryStatus, EntryType, Paycheck } from '@/api/contracts';
+import type {
+  Entry,
+  EntryPaymentMethod,
+  EntryStatus,
+  EntryType,
+  Paycheck,
+  SpendingBucketPerformanceSummary,
+} from '@/api/contracts';
 import { displayError } from '@/api/display-error';
 import { EntryPayload, useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
@@ -110,6 +117,7 @@ export default function PaycheckDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
       queryClient.invalidateQueries({ queryKey: ['paybacks'] }),
       queryClient.invalidateQueries({ queryKey: ['payback'] }),
+      queryClient.invalidateQueries({ queryKey: ['spending-buckets'] }),
     ]);
   };
 
@@ -577,6 +585,9 @@ function DetailHeader({
         />
         <Metric label="Posted" value={formatMoney(paycheck.postedMinor, settings.currencyCode)} />
       </View>
+      {paycheck.spendingBucketPerformance ? (
+        <SpendingBucketPerformanceCard summary={paycheck.spendingBucketPerformance} />
+      ) : null}
       <View style={styles.progressBlock}>
         <AppText style={{ color: colors.muted }} variant="caption">
           Allocation {paycheck.allocationPercent.toFixed(0)}%
@@ -690,6 +701,49 @@ function DetailHeader({
   );
 }
 
+function SpendingBucketPerformanceCard({ summary }: { summary: SpendingBucketPerformanceSummary }) {
+  const { colors } = useAppTheme();
+  const { settings } = useSettings();
+  const net = netDescription(summary.netMinor, settings.currencyCode);
+  return (
+    <View
+      accessibilityLabel={`Spending bucket performance: ${net}`}
+      style={[
+        styles.bucketSummary,
+        { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+      ]}
+    >
+      <View style={styles.bucketSummaryHeader}>
+        <AppText variant="label">Spending Buckets</AppText>
+        <AppText
+          style={{
+            color:
+              summary.netMinor < 0
+                ? colors.danger
+                : summary.netMinor === 0
+                  ? colors.muted
+                  : colors.posted,
+            fontWeight: '700',
+          }}
+          variant="caption"
+        >
+          {net}
+        </AppText>
+      </View>
+      <View style={styles.metrics}>
+        <Metric
+          label="Budgeted"
+          value={formatMoney(summary.budgetedMinor, settings.currencyCode)}
+        />
+        <Metric
+          label="Spent to date"
+          value={formatMoney(summary.spentMinor, settings.currencyCode)}
+        />
+      </View>
+    </View>
+  );
+}
+
 function Metric({ label, tone, value }: { label: string; tone?: string; value: string }) {
   const { colors } = useAppTheme();
   return (
@@ -704,6 +758,12 @@ function Metric({ label, tone, value }: { label: string; tone?: string; value: s
   );
 }
 
+function netDescription(netMinor: number, currencyCode: string) {
+  if (netMinor > 0) return `Under by ${formatMoney(netMinor, currencyCode)}`;
+  if (netMinor < 0) return `Over by ${formatMoney(Math.abs(netMinor), currencyCode)}`;
+  return 'Exactly on budget';
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'long',
@@ -714,6 +774,13 @@ function formatDate(value: string) {
 
 const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
+  bucketSummary: { borderRadius: 8, borderWidth: 1, gap: 10, padding: 12 },
+  bucketSummaryHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+  },
   controlHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   controls: { borderTopWidth: 1, gap: 10, paddingTop: 16 },
   header: { gap: 16, paddingBottom: 6 },

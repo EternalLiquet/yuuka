@@ -178,6 +178,11 @@ const paycheck: Paycheck = {
   processingMinor: 10000,
   reopenedAt: null,
   requiresAttention: true,
+  spendingBucketPerformance: {
+    budgetedMinor: 10000,
+    netMinor: 7000,
+    spentMinor: 3000,
+  },
   source: null,
   state: 'ACTIVE',
   templateSourceId: null,
@@ -254,6 +259,15 @@ describe('paycheck route regressions', () => {
       }),
     );
   }, 10000);
+
+  it('shows the spending bucket performance card below the main metrics', async () => {
+    const view = await renderRoute(<PaycheckDetailScreen />);
+
+    expect(await view.findByText('Spending Buckets', {}, { timeout: 5000 })).toBeTruthy();
+    expect(view.getByText('Budgeted')).toBeTruthy();
+    expect(view.getByText('Spent to date')).toBeTruthy();
+    expect(view.getByText('Under by $70.00')).toBeTruthy();
+  });
 
   it('retries a failed highlight scroll after list measurement catches up', async () => {
     mockParams = { highlightEntryId: entries[2].id, id: paycheck.id };
@@ -449,7 +463,7 @@ describe('paycheck route regressions', () => {
     fireEvent.press(await view.findByLabelText('Add activity to Work Food'));
 
     expect(await view.findByText('Bucket ledger')).toBeTruthy();
-    expect(view.getByText('Budgeted')).toBeTruthy();
+    expect(view.getAllByText('Budgeted').length).toBeGreaterThan(0);
     expect(view.getByText('Spent')).toBeTruthy();
     expect(view.getByText('Remaining')).toBeTruthy();
     expect(await view.findByText(/Cafe/)).toBeTruthy();
