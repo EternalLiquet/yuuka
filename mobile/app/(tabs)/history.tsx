@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
@@ -34,18 +34,26 @@ export default function HistoryScreen() {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timeout);
+  }, [search]);
+
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
-    if (search.trim()) params.set('search', search.trim());
+    if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
     if (/^\d{4}-\d{2}-\d{2}$/.test(from)) params.set('from', from);
     if (/^\d{4}-\d{2}-\d{2}$/.test(to)) params.set('to', to);
     params.set('oldestFirst', String(sort === 'oldest'));
     return `&${params.toString()}`;
-  }, [from, search, sort, to]);
+  }, [debouncedSearch, from, sort, to]);
   const query = useQuery({
+    placeholderData: keepPreviousData,
     queryKey: ['paychecks', 'history', queryString],
     queryFn: () => api.historyPaychecks(queryString),
   });
@@ -101,6 +109,7 @@ export default function HistoryScreen() {
               <Search color={colors.muted} size={19} style={styles.searchIcon} />
               <TextField
                 autoCapitalize="none"
+                autoCorrect={false}
                 containerStyle={styles.searchField}
                 label="Search"
                 onChangeText={setSearch}
