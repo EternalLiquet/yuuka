@@ -226,7 +226,7 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
   void appliesAndReversesPostedEntryRepaymentsExactlyOnce() throws Exception {
     String token = registerAndGetAccessToken("paybacks-lifecycle@yuuka.local");
     JsonNode payback = createPayback(token, "Car repair", 10000, 10000);
-    JsonNode paycheck = createPaycheck(token, 10000);
+    JsonNode paycheck = createPaycheck(token, 20000);
     JsonNode entry =
         createEntry(
             token,

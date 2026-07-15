@@ -174,18 +174,20 @@ function RollingSpendingBucketPerformanceCard({
         { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
       ]}
     >
-      <View style={styles.bucketSummaryHeader}>
+      <View style={styles.bucketSummaryTextBlock}>
         <AppText variant="label">Spending Buckets · Last 90 days</AppText>
         <AppText
-          style={{
-            color:
-              summary.netMinor < 0
-                ? colors.danger
-                : summary.netMinor === 0
-                  ? colors.muted
-                  : colors.posted,
-            fontWeight: '700',
-          }}
+          style={[
+            styles.bucketSummaryNetText,
+            {
+              color:
+                summary.netMinor < 0
+                  ? colors.danger
+                  : summary.netMinor === 0
+                    ? colors.muted
+                    : colors.posted,
+            },
+          ]}
           variant="caption"
         >
           {net}
@@ -229,17 +231,13 @@ function rollingNetDescription(netMinor: number, currencyCode: string) {
 
 const styles = StyleSheet.create({
   bucketSummary: { borderRadius: 8, borderWidth: 1, gap: 10, padding: 12 },
-  bucketSummaryHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'space-between',
-  },
+  bucketSummaryNetText: { fontWeight: '700' },
+  bucketSummaryTextBlock: { alignItems: 'flex-start', gap: 4 },
   center: { alignItems: 'center', justifyContent: 'center' },
   content: { flexGrow: 1, gap: 12, padding: 16, paddingBottom: 28 },
   header: { gap: 13, marginBottom: 3 },
-  metric: { flex: 1, gap: 3 },
-  metrics: { flexDirection: 'row', gap: 8 },
+  metric: { gap: 3 },
+  metrics: { gap: 8 },
   titleBlock: { gap: 3 },
   titleRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
 });

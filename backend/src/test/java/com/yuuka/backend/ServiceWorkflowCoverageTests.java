@@ -555,14 +555,8 @@ class ServiceWorkflowCoverageTests extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.totalItems").value(3));
 
-    detail = getJson(token, "/api/v1/paychecks/{id}", paycheckId);
-    JsonNode closed =
-        json(
-            post("/api/v1/paychecks/{id}/close", paycheckId)
-                .header("Authorization", bearer(token))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"version\":" + detail.path("version").asLong() + "}"),
-            200);
+    JsonNode closed = getJson(token, "/api/v1/paychecks/{id}", paycheckId);
+    assertThat(closed.path("state").asText()).isEqualTo("CLOSED");
     mockMvc
         .perform(
             get("/api/v1/paychecks/history")
@@ -659,9 +653,6 @@ class ServiceWorkflowCoverageTests extends AbstractIntegrationTest {
                     {"toStatus":"PROCESSING","effectiveAt":"2026-07-20T12:00:00Z","note":" "}
                     """),
             200);
-    bill = changeStatus(token, bill, "POSTED");
-    bucket = changeStatus(token, bucket, "POSTED");
-    fund = changeStatus(token, fund, "POSTED");
 
     mockMvc
         .perform(
@@ -697,13 +688,16 @@ class ServiceWorkflowCoverageTests extends AbstractIntegrationTest {
         .andExpect(status().isConflict());
 
     detail = getJson(token, "/api/v1/paychecks/{id}", paycheckId);
-    JsonNode closed =
-        json(
-            post("/api/v1/paychecks/{id}/close", paycheckId)
-                .header("Authorization", bearer(token))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"version\":" + detail.path("version").asLong() + "}"),
-            200);
+    bill = entryByName(detail, "Phone");
+    bucket = entryByName(detail, "Food");
+    fund = entryByName(detail, "Repairs");
+
+    bill = changeStatus(token, bill, "POSTED");
+    bucket = changeStatus(token, bucket, "POSTED");
+    fund = changeStatus(token, fund, "POSTED");
+
+    JsonNode closed = getJson(token, "/api/v1/paychecks/{id}", paycheckId);
+    assertThat(closed.path("state").asText()).isEqualTo("CLOSED");
 
     mockMvc
         .perform(get("/api/v1/paychecks/history").header("Authorization", bearer(token)))

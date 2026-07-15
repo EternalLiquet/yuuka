@@ -54,13 +54,18 @@ Every paycheck has:
 A paycheck belongs in Active if either condition is true:
 
 - it is not fully allocated, or
-- at least one non-deleted entry is not Posted.
+- at least one non-deleted entry is not Posted, or
+- it was deliberately reopened and has not been explicitly closed again.
 
-A paycheck can be 100% allocated and still remain active.
+A paycheck can be 100% allocated and still remain active when at least one live entry is not Posted.
+When a normal, never-reopened paycheck becomes fully allocated and every live entry is Posted, the
+system automatically closes it into History. Deliberately reopened paychecks stay Active until the
+user explicitly closes them again.
 
 ## History
 
-History contains closed, archived, or completed paychecks. Historical paychecks remain readable, may be reopened, and remain auditable.
+History contains closed, archived, or legacy completed paychecks that predate automatic lifecycle
+synchronization. Historical paychecks remain readable, may be reopened, and remain auditable.
 
 ## Templates
 
@@ -98,6 +103,12 @@ A bucket tracks:
 - remaining amount,
 - individual spending adjustments,
 - optional over-budget state.
+
+The rolling Spending Bucket card is a current 90-day snapshot across qualifying Active, Closed, and
+Archived paychecks. It includes owner-scoped paychecks with income dates from `asOfDate - 89 days`
+through `asOfDate`, includes live Spending Bucket budgets even when they have no purchases, and
+excludes future-dated paychecks, soft-deleted entries, soft-deleted purchases, non-bucket entries,
+and purchases effective after `asOfDate`.
 
 ### Sinking Fund
 

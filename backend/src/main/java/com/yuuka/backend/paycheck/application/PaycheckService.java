@@ -215,7 +215,8 @@ public class PaycheckService {
     paychecks.flush();
     PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
     auditService.append(ownerId, "PAYCHECK", paycheckId, "UPDATED", null, before, after, null);
-    return after;
+    closeAutomaticallyIfComplete(ownerId, paycheck, liveEntries, clock.instant(), asOfDate);
+    return toResponse(paycheck, liveEntries, asOfDate);
   }
 
   @Transactional
@@ -356,6 +357,8 @@ public class PaycheckService {
     entries.flush();
     EntryResponse after = toEntryResponse(entry);
     auditService.append(ownerId, "PAYCHECK_ENTRY", entryId, "UPDATED", null, before, after, null);
+    closeAutomaticallyIfComplete(
+        ownerId, paycheck, liveEntries, recordedAt, ownerLocalDateService.currentDate(ownerId));
     return after;
   }
 
@@ -365,6 +368,7 @@ public class PaycheckService {
     Paycheck paycheck = requirePaycheck(ownerId, entry.getPaycheckId());
     requireActive(paycheck);
     assertVersion(entry.getVersion(), version);
+    List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheck.getId());
     EntryResponse before = toEntryResponse(entry);
     Instant now = clock.instant();
     if (entry.getStatus() == EntryStatus.POSTED) {
@@ -372,7 +376,12 @@ public class PaycheckService {
     }
     entry.delete(now);
     paycheck.touch(now);
+    List<PaycheckEntry> remainingEntries =
+        liveEntries.stream().filter(candidate -> !candidate.getId().equals(entryId)).toList();
+    entries.flush();
     auditService.append(ownerId, "PAYCHECK_ENTRY", entryId, "DELETED", null, before, null, null);
+    closeAutomaticallyIfComplete(
+        ownerId, paycheck, remainingEntries, now, ownerLocalDateService.currentDate(ownerId));
   }
 
   @Transactional
@@ -404,6 +413,7 @@ public class PaycheckService {
             normalizeOptional(request.note())));
     paycheck.touch(recordedAt);
     entries.flush();
+    List<PaycheckEntry> updatedEntries = findEntries(ownerId, paycheck.getId());
     EntryResponse after = toEntryResponse(entry);
     auditService.append(
         ownerId,
@@ -414,6 +424,8 @@ public class PaycheckService {
         before,
         after,
         Map.of("note", request.note() == null ? "" : request.note()));
+    closeAutomaticallyIfComplete(
+        ownerId, paycheck, updatedEntries, recordedAt, ownerLocalDateService.currentDate(ownerId));
     return after;
   }
 
@@ -584,6 +596,35 @@ public class PaycheckService {
 
   private PaycheckMetrics calculate(Paycheck paycheck, List<PaycheckEntry> liveEntries) {
     return paycheckCalculator.calculate(paycheck.getAmountMinor(), allocationLines(liveEntries));
+  }
+
+  private void closeAutomaticallyIfComplete(
+      UUID ownerId,
+      Paycheck paycheck,
+      List<PaycheckEntry> liveEntries,
+      Instant recordedAt,
+      LocalDate asOfDate) {
+    if (paycheck.getState() != PaycheckState.ACTIVE || paycheck.getReopenedAt() != null) {
+      return;
+    }
+    PaycheckMetrics metrics = calculate(paycheck, liveEntries);
+    if (!metrics.fullyAllocated() || !metrics.fullyPosted()) {
+      return;
+    }
+
+    PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
+    paycheck.close(recordedAt);
+    paychecks.flush();
+    PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
+    auditService.append(
+        ownerId,
+        "PAYCHECK",
+        paycheck.getId(),
+        "CLOSED",
+        null,
+        before,
+        after,
+        Map.of("automatic", true));
   }
 
   private List<AllocationLine> allocationLines(List<PaycheckEntry> liveEntries) {

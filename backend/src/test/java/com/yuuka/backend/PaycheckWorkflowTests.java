@@ -2,6 +2,7 @@ package com.yuuka.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -11,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuuka.backend.support.AbstractIntegrationTest;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -123,7 +125,8 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
-  void fullyPostedPaycheckLeavesActiveAndAppearsInHistory() throws Exception {
+  void postingFinalOutstandingEntryAutomaticallyClosesPaycheckAndMovesItToHistory()
+      throws Exception {
     String token = registerAndGetAccessToken("completed-active@yuuka.local");
 
     MvcResult created =
@@ -155,17 +158,37 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
             .andReturn();
     JsonNode entry = objectMapper.readTree(entryResult.getResponse().getContentAsString());
 
+    JsonNode posted =
+        objectMapper.readTree(
+            mockMvc
+                .perform(
+                    post("/api/v1/entries/{id}/status", entry.path("id").asText())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            """
+                            {"toStatus":"POSTED","effectiveAt":"2026-07-17T12:00:00Z","version":%d}
+                            """
+                                .formatted(entry.path("version").asLong())))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(posted.path("status").asText()).isEqualTo("POSTED");
+
     mockMvc
         .perform(
-            post("/api/v1/entries/{id}/status", entry.path("id").asText())
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    """
-                    {"toStatus":"POSTED","effectiveAt":"2026-07-17T12:00:00Z","version":%d}
-                    """
-                        .formatted(entry.path("version").asLong())))
-        .andExpect(status().isOk());
+            get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("CLOSED"))
+        .andExpect(jsonPath("$.requiresAttention").value(false))
+        .andExpect(jsonPath("$.closedAt").isString());
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select state from paychecks where id = ?",
+                String.class,
+                UUID.fromString(paycheckId)))
+        .isEqualTo("CLOSED");
 
     mockMvc
         .perform(get("/api/v1/paychecks/active").header("Authorization", "Bearer " + token))
@@ -175,7 +198,198 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/paychecks/history").header("Authorization", "Bearer " + token))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].id").value(paycheckId))
+        .andExpect(jsonPath("$.items[0].state").value("CLOSED"));
+  }
+
+  @Test
+  void paycheckUpdateAuditsUpdatedActiveSnapshotBeforeAutomaticClose() throws Exception {
+    String token = registerAndGetAccessToken("paycheck-update-audit@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Audit Update", 20000);
+    String paycheckId = paycheck.path("id").asText();
+    JsonNode entry = addEntry(token, paycheckId, "BILL", "Phone", 15000);
+    changeStatus(token, entry, "POSTED");
+
+    JsonNode active = getPaycheck(token, paycheckId);
+    JsonNode closed =
+        updatePaycheck(
+            token,
+            paycheckId,
+            "Audit Update",
+            15000,
+            "2026-07-17",
+            active.path("version").asLong());
+
+    assertThat(closed.path("state").asText()).isEqualTo("CLOSED");
+
+    JsonNode audit = paycheckAudit(token, paycheckId);
+    JsonNode closedEvent = auditEvent(audit, "CLOSED");
+    JsonNode updatedEvent = auditEvent(audit, "UPDATED");
+    assertThat(audit.path("items").get(0).path("action").asText()).isEqualTo("CLOSED");
+    assertThat(audit.path("items").get(1).path("action").asText()).isEqualTo("UPDATED");
+    assertThat(countAuditEvents(audit, "UPDATED")).isEqualTo(1);
+    assertThat(countAutomaticCloseEvents(paycheckId)).isEqualTo(1);
+    assertThat(updatedEvent.path("beforeData").path("state").asText()).isEqualTo("ACTIVE");
+    assertThat(updatedEvent.path("afterData").path("state").asText()).isEqualTo("ACTIVE");
+    assertThat(updatedEvent.path("afterData").path("amountMinor").asLong()).isEqualTo(15000);
+    assertThat(closedEvent.path("beforeData")).isEqualTo(updatedEvent.path("afterData"));
+    assertThat(closedEvent.path("afterData").path("state").asText()).isEqualTo("CLOSED");
+    assertThat(closedEvent.path("afterData").path("amountMinor").asLong()).isEqualTo(15000);
+    assertThat(closedEvent.path("afterData").path("entries"))
+        .isEqualTo(closedEvent.path("beforeData").path("entries"));
+    assertThat(closedEvent.path("metadata").path("automatic").asBoolean()).isTrue();
+  }
+
+  @Test
+  void finalStatusTransitionAuditsEntryStatusBeforeAutomaticClose() throws Exception {
+    String token = registerAndGetAccessToken("status-close-audit@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Status Audit", 15000);
+    String paycheckId = paycheck.path("id").asText();
+    JsonNode entry = addEntry(token, paycheckId, "BILL", "Phone", 15000);
+
+    JsonNode posted = changeStatus(token, entry, "POSTED");
+
+    assertThat(posted.path("status").asText()).isEqualTo("POSTED");
+    assertThat(getPaycheck(token, paycheckId).path("state").asText()).isEqualTo("CLOSED");
+    assertThat(countAutomaticCloseEvents(paycheckId)).isEqualTo(1);
+    assertAuditRecordedNoLaterThanClose(entry.path("id").asText(), "STATUS_CHANGED", paycheckId);
+  }
+
+  @Test
+  void postedEntryUpdateAuditsEntryUpdateBeforeAutomaticClose() throws Exception {
+    String token = registerAndGetAccessToken("entry-update-close-audit@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Entry Update Audit", 20000);
+    String paycheckId = paycheck.path("id").asText();
+    JsonNode entry = addEntry(token, paycheckId, "BILL", "Phone", 15000);
+    JsonNode posted = changeStatus(token, entry, "POSTED");
+
+    JsonNode updated =
+        updateEntry(
+            token,
+            posted.path("id").asText(),
+            "BILL",
+            "Phone",
+            20000,
+            posted.path("version").asLong());
+
+    assertThat(updated.path("amountMinor").asLong()).isEqualTo(20000);
+    assertThat(getPaycheck(token, paycheckId).path("state").asText()).isEqualTo("CLOSED");
+    assertThat(countAutomaticCloseEvents(paycheckId)).isEqualTo(1);
+    assertAuditRecordedNoLaterThanClose(entry.path("id").asText(), "UPDATED", paycheckId);
+  }
+
+  @Test
+  void deletingNonPostedZeroEntryAuditsDeleteBeforeAutomaticClose() throws Exception {
+    String token = registerAndGetAccessToken("entry-delete-close-audit@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Delete Audit", 15000);
+    String paycheckId = paycheck.path("id").asText();
+    JsonNode postedEntry = addEntry(token, paycheckId, "BILL", "Phone", 15000);
+    JsonNode blocker = addEntry(token, paycheckId, "BILL", "Zero Blocker", 0);
+    changeStatus(token, postedEntry, "POSTED");
+
+    mockMvc
+        .perform(
+            delete("/api/v1/entries/{id}", blocker.path("id").asText())
+                .param("version", String.valueOf(blocker.path("version").asLong()))
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isNoContent());
+
+    assertThat(getPaycheck(token, paycheckId).path("state").asText()).isEqualTo("CLOSED");
+    assertThat(countAutomaticCloseEvents(paycheckId)).isEqualTo(1);
+    assertAuditRecordedNoLaterThanClose(blocker.path("id").asText(), "DELETED", paycheckId);
+  }
+
+  @Test
+  void fullyPostedButUnderAllocatedPaycheckRemainsActive() throws Exception {
+    String token = registerAndGetAccessToken("under-allocated-posted@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Under Allocated", 20000);
+    JsonNode entry = addEntry(token, paycheck.path("id").asText(), "BILL", "Phone", 15000);
+
+    changeStatus(token, entry, "POSTED");
+
+    mockMvc
+        .perform(
+            get("/api/v1/paychecks/{id}", paycheck.path("id").asText())
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("ACTIVE"))
+        .andExpect(jsonPath("$.unallocatedMinor").value(5000))
+        .andExpect(jsonPath("$.requiresAttention").value(true));
+    mockMvc
+        .perform(get("/api/v1/paychecks/active").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalItems").value(1));
+  }
+
+  @Test
+  void fullyAllocatedPaycheckWithAnyNonPostedEntryRemainsActive() throws Exception {
+    String token = registerAndGetAccessToken("allocated-processing@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Allocated Processing", 20000);
+    JsonNode posted = addEntry(token, paycheck.path("id").asText(), "BILL", "Posted", 15000);
+    JsonNode processing = addEntry(token, paycheck.path("id").asText(), "BILL", "Processing", 5000);
+
+    changeStatus(token, posted, "POSTED");
+    changeStatus(token, processing, "PROCESSING");
+
+    mockMvc
+        .perform(
+            get("/api/v1/paychecks/{id}", paycheck.path("id").asText())
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("ACTIVE"))
+        .andExpect(jsonPath("$.unallocatedMinor").value(0))
+        .andExpect(jsonPath("$.requiresAttention").value(true));
+    mockMvc
+        .perform(get("/api/v1/paychecks/active").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalItems").value(1));
+  }
+
+  @Test
+  void reopenedCompletedPaycheckStaysActiveUntilExplicitCloseEvenAfterStatusMovesBackward()
+      throws Exception {
+    String token = registerAndGetAccessToken("reopened-lifecycle@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Reopened", 10000);
+    String paycheckId = paycheck.path("id").asText();
+    JsonNode entry = addEntry(token, paycheckId, "BILL", "Phone", 10000);
+    JsonNode posted = changeStatus(token, entry, "POSTED");
+    JsonNode completed = getPaycheck(token, paycheckId);
+    assertThat(completed.path("state").asText()).isEqualTo("CLOSED");
+
+    JsonNode reopened =
+        json(
+            post("/api/v1/paychecks/{id}/reopen", paycheckId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"version\":" + completed.path("version").asLong() + "}"),
+            200);
+    assertThat(reopened.path("state").asText()).isEqualTo("ACTIVE");
+    assertThat(reopened.path("reopenedAt").isTextual()).isTrue();
+
+    JsonNode processing = changeStatus(token, posted, "PROCESSING");
+    JsonNode reopenedProcessing = getPaycheck(token, paycheckId);
+    assertThat(reopenedProcessing.path("state").asText()).isEqualTo("ACTIVE");
+    assertThat(reopenedProcessing.path("requiresAttention").asBoolean()).isTrue();
+
+    JsonNode reposted = changeStatus(token, processing, "POSTED");
+    assertThat(reposted.path("status").asText()).isEqualTo("POSTED");
+    JsonNode stillActive = getPaycheck(token, paycheckId);
+    assertThat(stillActive.path("state").asText()).isEqualTo("ACTIVE");
+    assertThat(stillActive.path("requiresAttention").asBoolean()).isFalse();
+
+    mockMvc
+        .perform(get("/api/v1/paychecks/active").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
         .andExpect(jsonPath("$.items[0].id").value(paycheckId));
+
+    JsonNode reclosed =
+        json(
+            post("/api/v1/paychecks/{id}/close", paycheckId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"version\":" + stillActive.path("version").asLong() + "}"),
+            200);
+    assertThat(reclosed.path("state").asText()).isEqualTo("CLOSED");
   }
 
   @Test
@@ -552,5 +766,158 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
         .readTree(result.getResponse().getContentAsString())
         .path("accessToken")
         .asText();
+  }
+
+  private JsonNode createPaycheck(String token, String name, long amountMinor) throws Exception {
+    return json(
+        post("/api/v1/paychecks")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {"name":"%s","amountMinor":%d,"incomeDate":"2026-07-17"}
+                """
+                    .formatted(name, amountMinor)),
+        201);
+  }
+
+  private JsonNode addEntry(
+      String token, String paycheckId, String entryType, String name, long amountMinor)
+      throws Exception {
+    return json(
+        post("/api/v1/paychecks/{id}/entries", paycheckId)
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {"entryType":"%s","name":"%s","amountMinor":%d}
+                """
+                    .formatted(entryType, name, amountMinor)),
+        201);
+  }
+
+  private JsonNode updatePaycheck(
+      String token,
+      String paycheckId,
+      String name,
+      long amountMinor,
+      String incomeDate,
+      long version)
+      throws Exception {
+    return json(
+        patch("/api/v1/paychecks/{id}", paycheckId)
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {"name":"%s","amountMinor":%d,"incomeDate":"%s","version":%d}
+                """
+                    .formatted(name, amountMinor, incomeDate, version)),
+        200);
+  }
+
+  private JsonNode updateEntry(
+      String token, String entryId, String entryType, String name, long amountMinor, long version)
+      throws Exception {
+    return json(
+        patch("/api/v1/entries/{id}", entryId)
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {"entryType":"%s","name":"%s","amountMinor":%d,"version":%d}
+                """
+                    .formatted(entryType, name, amountMinor, version)),
+        200);
+  }
+
+  private JsonNode changeStatus(String token, JsonNode entry, String nextStatus) throws Exception {
+    return json(
+        post("/api/v1/entries/{id}/status", entry.path("id").asText())
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {"toStatus":"%s","effectiveAt":"2026-07-17T12:00:00Z","version":%d}
+                """
+                    .formatted(nextStatus, entry.path("version").asLong())),
+        200);
+  }
+
+  private JsonNode getPaycheck(String token, String paycheckId) throws Exception {
+    return json(
+        get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", "Bearer " + token), 200);
+  }
+
+  private JsonNode paycheckAudit(String token, String paycheckId) throws Exception {
+    return json(
+        get("/api/v1/paychecks/{id}/audit", paycheckId).header("Authorization", "Bearer " + token),
+        200);
+  }
+
+  private JsonNode auditEvent(JsonNode audit, String action) {
+    for (JsonNode item : audit.path("items")) {
+      if (action.equals(item.path("action").asText())) {
+        return item;
+      }
+    }
+    throw new AssertionError("Missing audit event " + action);
+  }
+
+  private long countAuditEvents(JsonNode audit, String action) {
+    long count = 0;
+    for (JsonNode item : audit.path("items")) {
+      if (action.equals(item.path("action").asText())) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  private long countAutomaticCloseEvents(String paycheckId) {
+    return jdbcTemplate.queryForObject(
+        """
+        select count(*)
+        from audit_events
+        where entity_type = 'PAYCHECK'
+          and entity_id = ?
+          and action = 'CLOSED'
+          and metadata ->> 'automatic' = 'true'
+        """,
+        Long.class,
+        UUID.fromString(paycheckId));
+  }
+
+  private void assertAuditRecordedNoLaterThanClose(
+      String entryId, String entryAction, String paycheckId) {
+    Instant entryRecordedAt = auditRecordedAt("PAYCHECK_ENTRY", entryId, entryAction);
+    Instant closeRecordedAt = auditRecordedAt("PAYCHECK", paycheckId, "CLOSED");
+    assertThat(entryRecordedAt).isBeforeOrEqualTo(closeRecordedAt);
+  }
+
+  private Instant auditRecordedAt(String entityType, String entityId, String action) {
+    return jdbcTemplate.queryForObject(
+        """
+        select recorded_at
+        from audit_events
+        where entity_type = ?
+          and entity_id = ?
+          and action = ?
+        order by recorded_at desc
+        limit 1
+        """,
+        Instant.class,
+        entityType,
+        UUID.fromString(entityId),
+        action);
+  }
+
+  private JsonNode json(
+      org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request,
+      int expectedStatus)
+      throws Exception {
+    MvcResult result = mockMvc.perform(request).andExpect(status().is(expectedStatus)).andReturn();
+    String body = result.getResponse().getContentAsString();
+    return body.isBlank() ? objectMapper.createObjectNode() : objectMapper.readTree(body);
   }
 }

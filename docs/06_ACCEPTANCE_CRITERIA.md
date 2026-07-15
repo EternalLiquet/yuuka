@@ -64,7 +64,9 @@ $50.00 bucket shows $51.00 spent and $1.00 over budget.
 
 ### History
 
-A fully allocated and fully Posted paycheck can be closed into History. Reopening returns it to Active and creates an audit event.
+A fully allocated and fully Posted ordinary paycheck closes into History automatically. Reopening
+returns it to Active and creates an audit event; a deliberately reopened paycheck remains Active
+until it is explicitly closed again.
 
 ### Concurrency
 
