@@ -212,11 +212,11 @@ public class PaycheckService {
         request.amountMinor(),
         request.incomeDate(),
         normalizeOptional(request.notes()));
-    closeAutomaticallyIfComplete(ownerId, paycheck, liveEntries, clock.instant());
     paychecks.flush();
     PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
     auditService.append(ownerId, "PAYCHECK", paycheckId, "UPDATED", null, before, after, null);
-    return after;
+    closeAutomaticallyIfComplete(ownerId, paycheck, liveEntries, clock.instant(), asOfDate);
+    return toResponse(paycheck, liveEntries, asOfDate);
   }
 
   @Transactional
@@ -258,9 +258,6 @@ public class PaycheckService {
             recordedAt,
             "Leftover allocated"));
     paycheck.touch(recordedAt);
-    List<PaycheckEntry> updatedEntries = new ArrayList<>(liveEntries);
-    updatedEntries.add(entry);
-    closeAutomaticallyIfComplete(ownerId, paycheck, updatedEntries, recordedAt);
     EntryResponse response = toEntryResponse(entry);
     auditService.append(
         ownerId,
@@ -312,9 +309,6 @@ public class PaycheckService {
             recordedAt,
             "Entry created"));
     paycheck.touch(recordedAt);
-    List<PaycheckEntry> updatedEntries = new ArrayList<>(liveEntries);
-    updatedEntries.add(entry);
-    closeAutomaticallyIfComplete(ownerId, paycheck, updatedEntries, recordedAt);
     EntryResponse response = toEntryResponse(entry);
     auditService.append(
         ownerId, "PAYCHECK_ENTRY", entry.getId(), "CREATED", null, null, response, null);
@@ -361,9 +355,10 @@ public class PaycheckService {
         ownerId, entry, previousPaybackId, previousAmountMinor, previousStatus, recordedAt);
     paycheck.touch(recordedAt);
     entries.flush();
-    closeAutomaticallyIfComplete(ownerId, paycheck, liveEntries, recordedAt);
     EntryResponse after = toEntryResponse(entry);
     auditService.append(ownerId, "PAYCHECK_ENTRY", entryId, "UPDATED", null, before, after, null);
+    closeAutomaticallyIfComplete(
+        ownerId, paycheck, liveEntries, recordedAt, ownerLocalDateService.currentDate(ownerId));
     return after;
   }
 
@@ -383,8 +378,10 @@ public class PaycheckService {
     paycheck.touch(now);
     List<PaycheckEntry> remainingEntries =
         liveEntries.stream().filter(candidate -> !candidate.getId().equals(entryId)).toList();
-    closeAutomaticallyIfComplete(ownerId, paycheck, remainingEntries, now);
+    entries.flush();
     auditService.append(ownerId, "PAYCHECK_ENTRY", entryId, "DELETED", null, before, null, null);
+    closeAutomaticallyIfComplete(
+        ownerId, paycheck, remainingEntries, now, ownerLocalDateService.currentDate(ownerId));
   }
 
   @Transactional
@@ -416,8 +413,7 @@ public class PaycheckService {
             normalizeOptional(request.note())));
     paycheck.touch(recordedAt);
     entries.flush();
-    closeAutomaticallyIfComplete(
-        ownerId, paycheck, findEntries(ownerId, paycheck.getId()), recordedAt);
+    List<PaycheckEntry> updatedEntries = findEntries(ownerId, paycheck.getId());
     EntryResponse after = toEntryResponse(entry);
     auditService.append(
         ownerId,
@@ -428,6 +424,8 @@ public class PaycheckService {
         before,
         after,
         Map.of("note", request.note() == null ? "" : request.note()));
+    closeAutomaticallyIfComplete(
+        ownerId, paycheck, updatedEntries, recordedAt, ownerLocalDateService.currentDate(ownerId));
     return after;
   }
 
@@ -601,7 +599,11 @@ public class PaycheckService {
   }
 
   private void closeAutomaticallyIfComplete(
-      UUID ownerId, Paycheck paycheck, List<PaycheckEntry> liveEntries, Instant recordedAt) {
+      UUID ownerId,
+      Paycheck paycheck,
+      List<PaycheckEntry> liveEntries,
+      Instant recordedAt,
+      LocalDate asOfDate) {
     if (paycheck.getState() != PaycheckState.ACTIVE || paycheck.getReopenedAt() != null) {
       return;
     }
@@ -610,7 +612,6 @@ public class PaycheckService {
       return;
     }
 
-    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
     PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
     paycheck.close(recordedAt);
     paychecks.flush();
