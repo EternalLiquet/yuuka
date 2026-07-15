@@ -104,11 +104,12 @@ A bucket tracks:
 - individual spending adjustments,
 - optional over-budget state.
 
-The rolling Spending Bucket card is a current 90-day snapshot across qualifying Active, Closed, and
-Archived paychecks. It includes owner-scoped paychecks with income dates from `asOfDate - 89 days`
-through `asOfDate`, includes live Spending Bucket budgets even when they have no purchases, and
-excludes future-dated paychecks, soft-deleted entries, soft-deleted purchases, non-bucket entries,
-and purchases effective after `asOfDate`.
+The rolling Spending Bucket card is a current 30- or 90-day snapshot across qualifying Active,
+Closed, and Archived paychecks. The default mobile view is 30 days. It includes owner-scoped
+paychecks with income dates from `asOfDate - 29 days` through `asOfDate` for 30 days, or
+`asOfDate - 89 days` through `asOfDate` for 90 days. It includes live Spending Bucket budgets even
+when they have no purchases, and excludes future-dated paychecks, soft-deleted entries,
+soft-deleted purchases, non-bucket entries, and purchases effective after `asOfDate`.
 
 ### Sinking Fund
 

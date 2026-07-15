@@ -77,9 +77,9 @@ export function useYuukaApi() {
     return {
       me: () => get('/me', meSchema),
       activePaychecks: () => get('/paychecks/active?size=100', pageSchema(paycheckSchema)),
-      rollingSpendingBucketPerformance: () =>
+      rollingSpendingBucketPerformance: (days: 30 | 90 = 30) =>
         get(
-          '/spending-buckets/performance/rolling-90-days',
+          `/spending-buckets/performance/rolling?days=${days}`,
           rollingSpendingBucketPerformanceSchema,
         ),
       historyPaychecks: (query = '') =>

@@ -90,7 +90,8 @@ Status-change request:
 - `POST /entries/{entryId}/bucket-transactions` with positive `amountMinor`, `effectiveDate`, optional `description`, and optional `notes`.
 - `PATCH /bucket-transactions/{id}` with positive `amountMinor`, `effectiveDate`, optional `description`, optional `notes`, and `version`.
 - `DELETE /bucket-transactions/{id}`
-- `GET /spending-buckets/performance/rolling-90-days` returns a current 90-day snapshot across qualifying Active, Closed, and Archived paychecks; `summary` is absent only when there are zero qualifying live Spending Bucket entries.
+- `GET /spending-buckets/performance/rolling?days=30|90` returns a current 30- or 90-day snapshot across qualifying Active, Closed, and Archived paychecks; `days` defaults to `30`, unsupported values are rejected, and `summary` is absent only when there are zero qualifying live Spending Bucket entries.
+- `GET /spending-buckets/performance/rolling-90-days` remains available as a compatibility endpoint delegating to the 90-day calculation.
 
 ### Paybacks
 

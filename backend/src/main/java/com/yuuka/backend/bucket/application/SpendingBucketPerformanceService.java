@@ -11,7 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class SpendingBucketPerformanceService {
-  private static final int ROLLING_WINDOW_DAYS = 90;
+  public static final int THIRTY_DAY_WINDOW = 30;
+  public static final int NINETY_DAY_WINDOW = 90;
 
   private final JpaBucketTransactionRepository transactions;
 
@@ -29,11 +30,24 @@ public class SpendingBucketPerformanceService {
 
   @Transactional(readOnly = true)
   public RollingSpendingBucketPerformanceResponse rolling90Days(UUID ownerId, LocalDate asOfDate) {
-    LocalDate windowStart = asOfDate.minusDays(ROLLING_WINDOW_DAYS - 1L);
+    return rollingDays(ownerId, asOfDate, NINETY_DAY_WINDOW);
+  }
+
+  @Transactional(readOnly = true)
+  public RollingSpendingBucketPerformanceResponse rollingDays(
+      UUID ownerId, LocalDate asOfDate, int days) {
+    if (!isSupportedRollingWindow(days)) {
+      throw new IllegalArgumentException("Rolling Spending Bucket window must be 30 or 90 days.");
+    }
+    LocalDate windowStart = asOfDate.minusDays(days - 1L);
     SpendingBucketPerformanceProjection aggregate =
         transactions.aggregateRollingPerformance(ownerId, windowStart, asOfDate);
     return new RollingSpendingBucketPerformanceResponse(
         asOfDate, windowStart, asOfDate, value(aggregate.getPaycheckCount()), toSummary(aggregate));
+  }
+
+  public static boolean isSupportedRollingWindow(int days) {
+    return days == THIRTY_DAY_WINDOW || days == NINETY_DAY_WINDOW;
   }
 
   private SpendingBucketPerformanceSummaryResponse toSummary(

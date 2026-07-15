@@ -27,6 +27,7 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/paychecks/active",
           "/api/v1/paychecks/history",
           "/api/v1/paychecks",
+          "/api/v1/spending-buckets/performance/rolling",
           "/api/v1/spending-buckets/performance/rolling-90-days",
           "/api/v1/paychecks/from-template",
           "/api/v1/search/entries",
@@ -78,12 +79,31 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     JsonNode rollingParameters =
         generated
             .path("paths")
+            .path("/api/v1/spending-buckets/performance/rolling")
+            .path("get")
+            .path("parameters");
+    assertThat(rollingParameters.size()).isEqualTo(2);
+    assertThat(rollingParameters.findValuesAsText("name")).containsExactly("days", "asOfDate");
+    assertThat(rollingParameters.get(0).path("required").asBoolean()).isFalse();
+    assertThat(rollingParameters.get(0).path("schema").path("type").asText()).isEqualTo("integer");
+    assertThat(rollingParameters.get(0).path("schema").path("format").asText()).isEqualTo("int32");
+    assertThat(rollingParameters.get(0).path("schema").path("enum"))
+        .allSatisfy((node) -> assertThat(node.isInt()).isTrue())
+        .extracting(JsonNode::asInt)
+        .containsExactly(30, 90);
+    assertThat(rollingParameters.get(0).path("schema").path("default").isInt()).isTrue();
+    assertThat(rollingParameters.get(0).path("schema").path("default").asInt()).isEqualTo(30);
+    assertThat(rollingParameters.get(1).path("required").asBoolean()).isFalse();
+
+    JsonNode compatibilityParameters =
+        generated
+            .path("paths")
             .path("/api/v1/spending-buckets/performance/rolling-90-days")
             .path("get")
             .path("parameters");
-    assertThat(rollingParameters.size()).isEqualTo(1);
-    assertThat(rollingParameters.get(0).path("name").asText()).isEqualTo("asOfDate");
-    assertThat(rollingParameters.get(0).path("required").asBoolean()).isFalse();
+    assertThat(compatibilityParameters.size()).isEqualTo(1);
+    assertThat(compatibilityParameters.get(0).path("name").asText()).isEqualTo("asOfDate");
+    assertThat(compatibilityParameters.get(0).path("required").asBoolean()).isFalse();
 
     Path generatedPath = Path.of("build", "generated", "openapi.json");
     Files.createDirectories(generatedPath.getParent());
