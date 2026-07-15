@@ -34,7 +34,7 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
 
   @BeforeEach
   void resetClock() {
-    clock.setInstant(Instant.parse("2026-07-15T02:00:00Z"));
+    clock.setInstant(Instant.parse("2026-07-15T03:59:00Z"));
   }
 
   @Test
@@ -144,7 +144,7 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.summary.spentMinor").value(1200))
         .andExpect(jsonPath("$.summary.netMinor").value(800));
 
-    clock.setInstant(Instant.parse("2026-07-15T13:00:00Z"));
+    clock.setInstant(Instant.parse("2026-07-15T04:01:00Z"));
 
     mockMvc
         .perform(get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", bearer(token)))
@@ -466,7 +466,7 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
     @Bean
     @Primary
     MutableClock testClock() {
-      return new MutableClock(Instant.parse("2026-07-15T02:00:00Z"));
+      return new MutableClock(Instant.parse("2026-07-15T03:59:00Z"));
     }
   }
 
