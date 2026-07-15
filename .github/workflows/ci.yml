@@ -130,6 +130,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
       contents: write
+      pull-requests: read
     concurrency:
       group: yuuka-release-master
       cancel-in-progress: false
@@ -146,6 +147,8 @@ jobs:
         run: chmod +x backend/gradlew
       - name: Calculate release version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -157,8 +160,34 @@ jobs:
             echo "tag=$existing" >> "$GITHUB_OUTPUT"
             echo "version=${existing#v}" >> "$GITHUB_OUTPUT"
             echo "already_tagged=true" >> "$GITHUB_OUTPUT"
+            echo "bump=none" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          labels="$(
+            gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+              --jq '.[] | select(.base.ref == "master") | .labels[].name'
+          )"
+
+          bump="patch"
+          if grep -Fxq "release:major" <<< "$labels"; then
+            bump="major"
+          elif grep -Fxq "release:minor" <<< "$labels"; then
+            bump="minor"
+          elif grep -Fxq "release:patch" <<< "$labels"; then
+            bump="patch"
+          fi
+
+          if [[ -n "$labels" ]]; then
+            echo "Release labels for ${GITHUB_SHA}:"
+            printf '%s\n' "$labels" | sed 's/^/- /'
+          else
+            echo "No release labels found for ${GITHUB_SHA}; defaulting to patch."
+          fi
+          echo "Release bump is $bump"
 
           latest="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1 || true)"
           if [[ -z "$latest" ]]; then
@@ -166,13 +195,28 @@ jobs:
           else
             version="${latest#v}"
             IFS='.' read -r major minor patch <<< "$version"
-            next="v${major}.${minor}.$((patch + 1))"
+            case "$bump" in
+              major)
+                next="v$((major + 1)).0.0"
+                ;;
+              minor)
+                next="v${major}.$((minor + 1)).0"
+                ;;
+              patch)
+                next="v${major}.${minor}.$((patch + 1))"
+                ;;
+              *)
+                echo "Unsupported release bump: $bump" >&2
+                exit 64
+                ;;
+            esac
           fi
 
           echo "Next release tag is $next"
           echo "tag=$next" >> "$GITHUB_OUTPUT"
           echo "version=${next#v}" >> "$GITHUB_OUTPUT"
           echo "already_tagged=false" >> "$GITHUB_OUTPUT"
+          echo "bump=$bump" >> "$GITHUB_OUTPUT"
       - name: Package backend release jar
         working-directory: backend
         run: ./gradlew bootJar --no-daemon -PyuukaVersion=${{ steps.version.outputs.version }}
@@ -181,6 +225,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_BUMP: ${{ steps.version.outputs.bump }}
           ALREADY_TAGGED: ${{ steps.version.outputs.already_tagged }}
         shell: bash
         run: |
@@ -198,6 +243,7 @@ jobs:
             echo "## ${RELEASE_TAG}"
             echo
             echo "- Version: ${RELEASE_VERSION}"
+            echo "- Bump: ${RELEASE_BUMP}"
             echo "- Commit: ${GITHUB_SHA}"
             echo "- Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo
