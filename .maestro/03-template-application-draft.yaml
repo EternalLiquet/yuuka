@@ -108,6 +108,10 @@ name: Template application draft
 - extendedWaitUntil:
     visible: "E2E From Template"
     timeout: 10000
+- scrollUntilVisible:
+    centerElement: true
+    element: 'Entry 1: E2E Food, \$70\.00, Spending Bucket'
+    direction: DOWN
 - assertVisible: 'Entry 1: E2E Food, \$70\.00, Spending Bucket'
 - scrollUntilVisible:
     centerElement: true

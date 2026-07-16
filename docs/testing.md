@@ -45,12 +45,14 @@ The current critical Maestro flows are:
 
 - `.maestro/01-scratch-lifecycle.yaml`
 - `.maestro/02-payback-delete-reassign.yaml`
+- `.maestro/03-template-application-draft.yaml`
 
 Run them against a disposable demo backend and installed preview APK:
 
 ```sh
 maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/01-scratch-lifecycle.yaml
 maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/02-payback-delete-reassign.yaml
+maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/03-template-application-draft.yaml
 ```
 
 Never run destructive E2E flows against production data. Flaky tests are failures and must be fixed, not disabled.
@@ -76,7 +78,8 @@ successful push to `master`, and does not run for pull requests.
 Android E2E is intentionally not part of every pull-request or push run because emulator jobs are
 slow and comparatively flaky on shared GitHub-hosted runners. The separate `Android E2E` workflow
 runs every night at 07:00 UTC and can also be started manually. It provisions disposable PostgreSQL,
-starts the demo backend, builds an Android debug app, and runs the critical Maestro flow.
+starts the demo backend, builds a bundled Android release APK for E2E, and runs the critical Maestro
+flows.
 
 Checks that remain local/manual:
 
