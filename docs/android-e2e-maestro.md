@@ -163,6 +163,17 @@ If a row action is below the visible portion of the list, scroll to the action i
 
 This is not a weakened assertion. It models the user action needed to reach an off-screen control.
 
+This can also happen when a row summary is partially visible at the bottom of a detail screen but the row's action buttons are still below the Android navigation bar. Do not tap the action immediately after opening the detail screen. Scroll to the action label first:
+
+```yaml
+- tapOn: 'E2E Payback Assign, \$40\.00, \$30\.00 unallocated'
+- scrollUntilVisible:
+    centerElement: true
+    element: "Edit Repay Payback"
+    direction: DOWN
+- tapOn: "Edit Repay Payback"
+```
+
 After scrolling to row actions, the row summary text may be above the viewport even though the action controls are visible. If the state you need to prove is ordering, assert visible order-specific controls rather than an off-screen summary label:
 
 ```yaml
