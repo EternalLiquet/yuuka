@@ -15,6 +15,7 @@ describe('committed backend contract', () => {
     ['/api/v1/spending-buckets/performance/rolling', 'get'],
     ['/api/v1/spending-buckets/performance/rolling-90-days', 'get'],
     ['/api/v1/search/entries', 'get'],
+    ['/api/v1/paychecks/from-draft', 'post'],
     ['/api/v1/paychecks/from-template', 'post'],
     ['/api/v1/paychecks/{paycheckId}/leftover-entry', 'post'],
     ['/api/v1/paychecks/{paycheckId}/entries', 'post'],

@@ -31,6 +31,8 @@ Yuuka is a paycheck-first budgeting app for bills, spending buckets, and sinking
 - Bill entries can be marked Autopay or Manual Pay and filtered in paycheck detail
 - Template list/detail/create/edit flows with ordered entries, duplicate/archive/restore lifecycle,
   and create-paycheck-from-template using an editable local draft
+- Duplicate-paycheck flow that reviews paycheck details, edits copied draft entries, shifts Bill
+  due dates, clears Paybacks, and excludes LEFTOVER before creating an independent paycheck
 - Password plus optional/deployment-required TOTP, JWT access tokens, and rotating refresh tokens
 - Dark-first mobile UI with light/system preferences
 

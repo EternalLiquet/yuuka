@@ -13,7 +13,9 @@ import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.api.ResourceNotFoundException;
 import com.yuuka.backend.payback.application.PaybackService;
 import com.yuuka.backend.paycheck.api.dto.CreateEntryRequest;
+import com.yuuka.backend.paycheck.api.dto.CreatePaycheckFromDraftRequest;
 import com.yuuka.backend.paycheck.api.dto.CreatePaycheckRequest;
+import com.yuuka.backend.paycheck.api.dto.DraftPaycheckEntryRequest;
 import com.yuuka.backend.paycheck.api.dto.EntryResponse;
 import com.yuuka.backend.paycheck.api.dto.PaycheckResponse;
 import com.yuuka.backend.paycheck.api.dto.ReorderEntriesRequest;
@@ -113,6 +115,61 @@ public class PaycheckService {
     PaycheckResponse response = toResponse(paycheck, List.of(), asOfDate);
     auditService.append(
         ownerId, "PAYCHECK", paycheck.getId(), "CREATED", null, null, response, null);
+    return response;
+  }
+
+  @Transactional
+  public PaycheckResponse createFromDraft(UUID ownerId, CreatePaycheckFromDraftRequest request) {
+    List<DraftPaycheckEntryRequest> requestedEntries = request.entries();
+    PaycheckMetrics proposed =
+        paycheckCalculator.calculate(
+            request.amountMinor(),
+            requestedEntries.stream()
+                .map(entry -> new AllocationLine(entry.amountMinor(), EntryStatus.NOT_PAID, false))
+                .toList());
+    assertNotOverAllocated(proposed);
+
+    Paycheck paycheck =
+        paychecks.saveAndFlush(
+            new Paycheck(
+                ownerId,
+                request.name().trim(),
+                normalizeOptional(request.source()),
+                request.amountMinor(),
+                request.incomeDate(),
+                normalizeOptional(request.notes()),
+                null));
+    List<PaycheckEntry> createdEntries = new ArrayList<>();
+    Instant now = clock.instant();
+    for (int index = 0; index < requestedEntries.size(); index++) {
+      DraftPaycheckEntryRequest source = requestedEntries.get(index);
+      PaycheckEntry entry =
+          entries.saveAndFlush(
+              new PaycheckEntry(
+                  ownerId,
+                  paycheck.getId(),
+                  source.entryType(),
+                  source.name().trim(),
+                  source.amountMinor(),
+                  index,
+                  paymentMethodForCreate(source.entryType(), source.paymentMethod()),
+                  billValue(source.entryType(), source.dueDate()),
+                  billValue(source.entryType(), normalizeOptional(source.accountName())),
+                  billValue(source.entryType(), normalizeOptional(source.payee())),
+                  normalizeOptional(source.notes()),
+                  sinkingValue(source.entryType(), source.targetMinor()),
+                  sinkingValue(source.entryType(), source.targetDate()),
+                  null));
+      createdEntries.add(entry);
+      statusEvents.save(
+          new EntryStatusEvent(
+              ownerId, entry.getId(), null, EntryStatus.NOT_PAID, now, now, "Created from draft"));
+    }
+
+    LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
+    PaycheckResponse response = toResponse(paycheck, createdEntries, asOfDate);
+    auditService.append(
+        ownerId, "PAYCHECK", paycheck.getId(), "CREATED_FROM_DRAFT", null, null, response, null);
     return response;
   }
 

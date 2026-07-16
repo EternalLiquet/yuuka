@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationResult } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { Archive, CheckCircle2, Pencil, Plus, RotateCcw } from 'lucide-react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Archive, CheckCircle2, Copy, Pencil, Plus, RotateCcw } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
@@ -83,6 +83,7 @@ export default function PaycheckDetailScreen() {
     id: string;
   }>();
   const api = useYuukaApi();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
@@ -386,6 +387,7 @@ export default function PaycheckDetailScreen() {
                 setEntryEditorVisible(true);
               }}
               onEdit={() => setPaycheckEditorVisible(true)}
+              onDuplicate={() => router.push(`/paychecks/duplicate/${id}`)}
               statusFilter={statusFilter}
               setStatusFilter={setStatusFilter}
               typeFilter={typeFilter}
@@ -510,6 +512,7 @@ function DetailHeader({
   onAdd,
   onAllocateLeftover,
   onEdit,
+  onDuplicate,
   paymentMethodFilter,
   paycheck,
   refreshing,
@@ -530,6 +533,7 @@ function DetailHeader({
   onAdd: () => void;
   onAllocateLeftover: () => void;
   onEdit: () => void;
+  onDuplicate: () => void;
   paymentMethodFilter: 'ALL' | EntryPaymentMethod;
   paycheck: Paycheck;
   refreshing: boolean;
@@ -606,6 +610,12 @@ function DetailHeader({
         {paycheck.state === 'ACTIVE' ? (
           <>
             <Button icon={Pencil} label="Edit paycheck" onPress={onEdit} variant="secondary" />
+            <Button
+              icon={Copy}
+              label="Duplicate Paycheck"
+              onPress={onDuplicate}
+              variant="secondary"
+            />
             <Button icon={Plus} label="Add entry" onPress={onAdd} />
             {paycheck.unallocatedMinor > 0 ? (
               <Button
@@ -634,12 +644,20 @@ function DetailHeader({
             />
           </>
         ) : (
-          <Button
-            icon={RotateCcw}
-            label="Reopen paycheck"
-            loading={lifecycleMutation.isPending}
-            onPress={() => lifecycleMutation.mutate('reopen')}
-          />
+          <>
+            <Button
+              icon={RotateCcw}
+              label="Reopen paycheck"
+              loading={lifecycleMutation.isPending}
+              onPress={() => lifecycleMutation.mutate('reopen')}
+            />
+            <Button
+              icon={Copy}
+              label="Duplicate Paycheck"
+              onPress={onDuplicate}
+              variant="secondary"
+            />
+          </>
         )}
       </View>
       {lifecycleMutation.error ? (

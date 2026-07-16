@@ -1,12 +1,13 @@
 import {
   applicationEntriesFromDraft,
+  draftEntriesFromPaycheck,
   draftEntriesFromTemplate,
   draftTotalMinor,
   dueDateFromOffset,
   TemplateApplicationDraftEntry,
 } from '@/features/templates/application-draft';
 
-import type { BudgetTemplate } from '@/api/contracts';
+import type { BudgetTemplate, Entry, Paycheck } from '@/api/contracts';
 
 describe('template application draft helpers', () => {
   it('initializes ordered draft entries from template entries', () => {
@@ -87,6 +88,30 @@ describe('template application draft helpers', () => {
       }),
     ]);
   });
+
+  it('initializes duplicate draft entries from a paycheck without copied state', () => {
+    const draft = draftEntriesFromPaycheck(paycheck());
+
+    expect(draft.omittedLeftoverCount).toBe(1);
+    expect(draft.clearedPaybackCount).toBe(1);
+    expect(draft.entries.map((entry) => entry.name)).toEqual(['Rent', 'Groceries', 'Insurance']);
+    expect(draft.entries[0]).toEqual(
+      expect.objectContaining({
+        amountMinor: 94000,
+        clientId: 'paycheck-entry-bill',
+        defaultDueOffsetDays: 6,
+        paymentMethod: 'MANUAL',
+      }),
+    );
+    expect(applicationEntriesFromDraft('2026-07-16', draft.entries)[0]).toEqual(
+      expect.objectContaining({
+        dueDate: '2026-07-22',
+        name: 'Rent',
+        paymentMethod: 'MANUAL',
+      }),
+    );
+    expect(draftTotalMinor(draft.entries)).toBe(119000);
+  });
 });
 
 function draftEntry(
@@ -156,5 +181,102 @@ function template(): BudgetTemplate {
     name: 'Rent 1',
     updatedAt: '2026-07-13T12:00:00Z',
     version: 7,
+  };
+}
+
+function paycheck(): Paycheck {
+  return {
+    allocatedMinor: 120000,
+    allocationPercent: 100,
+    amountMinor: 120000,
+    archivedAt: null,
+    closedAt: '2026-07-08T12:00:00Z',
+    completionPercent: 100,
+    createdAt: '2026-07-02T12:00:00Z',
+    entries: [
+      paycheckEntry({
+        amountMinor: 1000,
+        id: 'entry-leftover',
+        name: 'LEFTOVER',
+        position: 3,
+      }),
+      paycheckEntry({
+        amountMinor: 10000,
+        entryType: 'SPENDING_BUCKET',
+        id: 'entry-bucket',
+        name: 'Groceries',
+        paymentMethod: null,
+        position: 1,
+        remainingMinor: 2500,
+        spentMinor: 7500,
+      }),
+      paycheckEntry({
+        amountMinor: 15000,
+        entryType: 'SINKING_FUND',
+        id: 'entry-fund',
+        name: 'Insurance',
+        paymentMethod: null,
+        paybackId: '11111111-1111-4111-8111-111111111777',
+        position: 2,
+        targetDate: '2026-12-01',
+        targetMinor: 120000,
+      }),
+      paycheckEntry({
+        accountName: 'Checking',
+        amountMinor: 94000,
+        dueDate: '2026-07-08',
+        id: 'entry-bill',
+        name: 'Rent',
+        payee: 'Apartment',
+        paymentMethod: 'MANUAL',
+        position: 0,
+      }),
+    ],
+    id: '11111111-1111-4111-8111-111111111100',
+    incomeDate: '2026-07-02',
+    name: 'Rent 1/2',
+    notPaidCount: 0,
+    notPaidMinor: 0,
+    notes: 'Original notes',
+    postedCount: 4,
+    postedMinor: 120000,
+    processingCount: 0,
+    processingMinor: 0,
+    reopenedAt: null,
+    requiresAttention: false,
+    source: 'Employer',
+    spendingBucketPerformance: null,
+    state: 'CLOSED',
+    templateSourceId: null,
+    unallocatedMinor: 0,
+    updatedAt: '2026-07-08T12:00:00Z',
+    version: 4,
+  };
+}
+
+function paycheckEntry(overrides: Partial<Entry>): Entry {
+  return {
+    accountName: null,
+    amountMinor: 1000,
+    createdAt: '2026-07-02T12:00:00Z',
+    dueDate: null,
+    entryType: 'BILL',
+    id: 'entry',
+    name: 'Entry',
+    notes: null,
+    overBudget: null,
+    paybackId: null,
+    payee: null,
+    paycheckId: '11111111-1111-4111-8111-111111111100',
+    paymentMethod: 'AUTOPAY',
+    position: 0,
+    remainingMinor: null,
+    spentMinor: null,
+    status: 'POSTED',
+    targetDate: null,
+    targetMinor: null,
+    updatedAt: '2026-07-08T12:00:00Z',
+    version: 1,
+    ...overrides,
   };
 }

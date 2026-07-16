@@ -491,6 +491,34 @@
         }
       }
     },
+    "/api/v1/paychecks/from-draft" : {
+      "post" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "createFromDraft",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreatePaycheckFromDraftRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/paybacks" : {
       "get" : {
         "tags" : [ "payback-controller" ],
@@ -1313,6 +1341,131 @@
         "security" : [ ]
       }
     },
+    "/api/v1/spending-buckets/performance/rolling" : {
+      "get" : {
+        "tags" : [ "spending-bucket-performance-controller" ],
+        "operationId" : "rolling",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 30,
+            "enum" : [ 30, 90 ]
+          }
+        }, {
+          "name" : "asOfDate",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RollingSpendingBucketPerformanceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/spending-buckets/performance/rolling-90-days" : {
+      "get" : {
+        "tags" : [ "spending-bucket-performance-controller" ],
+        "operationId" : "rolling90Days",
+        "parameters" : [ {
+          "name" : "asOfDate",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RollingSpendingBucketPerformanceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/entries" : {
+      "get" : {
+        "tags" : [ "search-controller" ],
+        "operationId" : "entries",
+        "parameters" : [ {
+          "name" : "query",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "amountMinor",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "scope",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "ALL",
+            "enum" : [ "ALL", "ACTIVE", "HISTORY" ]
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 25
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseEntrySearchResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/paychecks/{paycheckId}/audit" : {
       "get" : {
         "tags" : [ "paycheck-controller" ],
@@ -1456,70 +1609,6 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/PageResponsePaycheckResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/spending-buckets/performance/rolling-90-days" : {
-      "get" : {
-        "tags" : [ "spending-bucket-performance-controller" ],
-        "operationId" : "rolling90Days",
-        "parameters" : [ {
-          "name" : "asOfDate",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "format" : "date"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/RollingSpendingBucketPerformanceResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/spending-buckets/performance/rolling" : {
-      "get" : {
-        "tags" : [ "spending-bucket-performance-controller" ],
-        "operationId" : "rolling",
-        "parameters" : [ {
-          "name" : "days",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "format" : "int32",
-            "enum" : [ 30, 90 ],
-            "default" : 30
-          }
-        }, {
-          "name" : "asOfDate",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "format" : "date"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/RollingSpendingBucketPerformanceResponse"
                 }
               }
             }
@@ -1679,67 +1768,6 @@
           }
         }
       }
-    },
-    "/api/v1/search/entries" : {
-      "get" : {
-        "tags" : [ "search-controller" ],
-        "operationId" : "entries",
-        "parameters" : [ {
-          "name" : "query",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string"
-          }
-        }, {
-          "name" : "amountMinor",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "format" : "int64"
-          }
-        }, {
-          "name" : "scope",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "enum" : [ "ALL", "ACTIVE", "HISTORY" ],
-            "default" : "ALL"
-          }
-        }, {
-          "name" : "page",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "format" : "int32",
-            "default" : 0
-          }
-        }, {
-          "name" : "size",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "format" : "int32",
-            "default" : 25
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/PageResponseEntrySearchResultResponse"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components" : {
@@ -1773,10 +1801,6 @@
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
-          "paymentMethod" : {
-            "type" : "string",
-            "enum" : [ "AUTOPAY", "MANUAL" ]
-          },
           "name" : {
             "type" : "string",
             "maxLength" : 160,
@@ -1785,6 +1809,10 @@
           "defaultAmountMinor" : {
             "type" : "integer",
             "format" : "int64"
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
           },
           "defaultDueOffsetDays" : {
             "type" : "integer",
@@ -2080,47 +2108,6 @@
           }
         }
       },
-      "RollingSpendingBucketPerformanceResponse" : {
-        "type" : "object",
-        "properties" : {
-          "asOfDate" : {
-            "type" : "string",
-            "format" : "date"
-          },
-          "windowStartDate" : {
-            "type" : "string",
-            "format" : "date"
-          },
-          "windowEndDate" : {
-            "type" : "string",
-            "format" : "date"
-          },
-          "paycheckCount" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "summary" : {
-            "$ref" : "#/components/schemas/SpendingBucketPerformanceSummaryResponse"
-          }
-        }
-      },
-      "SpendingBucketPerformanceSummaryResponse" : {
-        "type" : "object",
-        "properties" : {
-          "budgetedMinor" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "spentMinor" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "netMinor" : {
-            "type" : "integer",
-            "format" : "int64"
-          }
-        }
-      },
       "PaycheckResponse" : {
         "type" : "object",
         "properties" : {
@@ -2229,6 +2216,23 @@
           }
         }
       },
+      "SpendingBucketPerformanceSummaryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "budgetedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "spentMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "netMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "AllocateLeftoverRequest" : {
         "type" : "object",
         "properties" : {
@@ -2246,10 +2250,6 @@
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
-          "paymentMethod" : {
-            "type" : "string",
-            "enum" : [ "AUTOPAY", "MANUAL" ]
-          },
           "name" : {
             "type" : "string",
             "maxLength" : 160,
@@ -2258,6 +2258,10 @@
           "amountMinor" : {
             "type" : "integer",
             "format" : "int64"
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
           },
           "dueDate" : {
             "type" : "string",
@@ -2357,10 +2361,6 @@
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
-          "paymentMethod" : {
-            "type" : "string",
-            "enum" : [ "AUTOPAY", "MANUAL" ]
-          },
           "name" : {
             "type" : "string",
             "maxLength" : 160,
@@ -2369,6 +2369,10 @@
           "amountMinor" : {
             "type" : "integer",
             "format" : "int64"
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
           },
           "dueDate" : {
             "type" : "string",
@@ -2399,6 +2403,91 @@
           }
         },
         "required" : [ "entryType", "name" ]
+      },
+      "CreatePaycheckFromDraftRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "incomeDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "source" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          },
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DraftPaycheckEntryRequest"
+            }
+          }
+        },
+        "required" : [ "amountMinor", "entries", "incomeDate", "name" ]
+      },
+      "DraftPaycheckEntryRequest" : {
+        "type" : "object",
+        "properties" : {
+          "entryType" : {
+            "type" : "string",
+            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
+          },
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "accountName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "payee" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          },
+          "targetMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "targetDate" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        },
+        "required" : [ "amountMinor", "entryType", "name" ]
       },
       "CreatePaybackRequest" : {
         "type" : "object",
@@ -2817,10 +2906,6 @@
             "type" : "string",
             "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
           },
-          "paymentMethod" : {
-            "type" : "string",
-            "enum" : [ "AUTOPAY", "MANUAL" ]
-          },
           "name" : {
             "type" : "string",
             "maxLength" : 160,
@@ -2829,6 +2914,10 @@
           "amountMinor" : {
             "type" : "integer",
             "format" : "int64"
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
           },
           "dueDate" : {
             "type" : "string",
@@ -2932,6 +3021,107 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/TemplateResponse"
+            }
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "hasNext" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "RollingSpendingBucketPerformanceResponse" : {
+        "type" : "object",
+        "properties" : {
+          "asOfDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "windowStartDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "windowEndDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "paycheckCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "summary" : {
+            "$ref" : "#/components/schemas/SpendingBucketPerformanceSummaryResponse"
+          }
+        }
+      },
+      "EntrySearchResultResponse" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "PAYCHECK_ENTRY" ]
+          },
+          "entryId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "paycheckId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entryName" : {
+            "type" : "string"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "entryType" : {
+            "type" : "string",
+            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "NOT_PAID", "PROCESSING", "POSTED" ]
+          },
+          "paycheckName" : {
+            "type" : "string"
+          },
+          "paycheckIncomeDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "paycheckContext" : {
+            "type" : "string",
+            "enum" : [ "ACTIVE", "HISTORY" ]
+          }
+        }
+      },
+      "PageResponseEntrySearchResultResponse" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EntrySearchResultResponse"
             }
           },
           "page" : {
@@ -3227,83 +3417,6 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/BucketTransactionResponse"
-            }
-          },
-          "page" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "size" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "totalItems" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "totalPages" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "hasNext" : {
-            "type" : "boolean"
-          }
-        }
-      },
-      "EntrySearchResultResponse" : {
-        "type" : "object",
-        "properties" : {
-          "kind" : {
-            "type" : "string",
-            "enum" : [ "PAYCHECK_ENTRY" ]
-          },
-          "entryId" : {
-            "type" : "string",
-            "format" : "uuid"
-          },
-          "paycheckId" : {
-            "type" : "string",
-            "format" : "uuid"
-          },
-          "entryName" : {
-            "type" : "string"
-          },
-          "amountMinor" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "entryType" : {
-            "type" : "string",
-            "enum" : [ "BILL", "SPENDING_BUCKET", "SINKING_FUND" ]
-          },
-          "paymentMethod" : {
-            "type" : "string",
-            "enum" : [ "AUTOPAY", "MANUAL" ]
-          },
-          "status" : {
-            "type" : "string",
-            "enum" : [ "NOT_PAID", "PROCESSING", "POSTED" ]
-          },
-          "paycheckName" : {
-            "type" : "string"
-          },
-          "paycheckIncomeDate" : {
-            "type" : "string",
-            "format" : "date"
-          },
-          "paycheckContext" : {
-            "type" : "string",
-            "enum" : [ "ACTIVE", "HISTORY" ]
-          }
-        }
-      },
-      "PageResponseEntrySearchResultResponse" : {
-        "type" : "object",
-        "properties" : {
-          "items" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/EntrySearchResultResponse"
             }
           },
           "page" : {

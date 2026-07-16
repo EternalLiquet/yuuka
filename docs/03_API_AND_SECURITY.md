@@ -55,12 +55,20 @@ display. Example:
 - `GET /paychecks/active`
 - `GET /paychecks/history`
 - `POST /paychecks`
+- `POST /paychecks/from-draft`
 - `POST /paychecks/from-template`
 - `GET /paychecks/{id}`
 - `PATCH /paychecks/{id}`
 - `POST /paychecks/{id}/close`
 - `POST /paychecks/{id}/reopen`
 - `DELETE /paychecks/{id}` for archive/soft delete
+
+`POST /paychecks/from-draft` creates a normal Active paycheck from a complete edited draft request.
+It accepts paycheck fields plus an ordered `entries` array, validates the full allocation
+transactionally, creates entries in supplied order, initializes each entry as Not Paid with an
+initial status event, writes normal creation audit, and rolls back the whole create on failure. The
+request is source-independent: it does not accept source paycheck IDs, entry IDs, versions,
+statuses, bucket purchases, Payback assignments, or copied history.
 
 ### Entries
 
