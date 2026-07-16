@@ -6,6 +6,7 @@ import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.security.AuthenticatedOwner;
 import com.yuuka.backend.paycheck.api.dto.AllocateLeftoverRequest;
 import com.yuuka.backend.paycheck.api.dto.CreateEntryRequest;
+import com.yuuka.backend.paycheck.api.dto.CreatePaycheckFromDraftRequest;
 import com.yuuka.backend.paycheck.api.dto.CreatePaycheckRequest;
 import com.yuuka.backend.paycheck.api.dto.EntryResponse;
 import com.yuuka.backend.paycheck.api.dto.PaycheckResponse;
@@ -73,6 +74,14 @@ public class PaycheckController {
   public PaycheckResponse create(
       @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CreatePaycheckRequest request) {
     return paycheckService.create(AuthenticatedOwner.id(jwt), request);
+  }
+
+  @PostMapping("/paychecks/from-draft")
+  @ResponseStatus(HttpStatus.CREATED)
+  public PaycheckResponse createFromDraft(
+      @AuthenticationPrincipal Jwt jwt,
+      @Valid @RequestBody CreatePaycheckFromDraftRequest request) {
+    return paycheckService.createFromDraft(AuthenticatedOwner.id(jwt), request);
   }
 
   @GetMapping("/paychecks/{paycheckId}")

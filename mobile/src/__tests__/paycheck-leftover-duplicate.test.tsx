@@ -44,6 +44,7 @@ jest.mock('expo-router', () => {
   return {
     Stack,
     useLocalSearchParams: () => mockParams,
+    useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
   };
 });
 

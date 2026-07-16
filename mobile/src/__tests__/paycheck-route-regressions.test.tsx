@@ -346,6 +346,25 @@ describe('paycheck route regressions', () => {
     expect(view.queryByText('Add LEFTOVER')).toBeNull();
   });
 
+  it('offers duplicate paycheck for active paychecks', async () => {
+    const view = await renderRoute(<PaycheckDetailScreen />);
+
+    fireEvent.press(await view.findByLabelText('Duplicate Paycheck'));
+    expect(mockPush).toHaveBeenCalledWith(`/paychecks/duplicate/${paycheck.id}`);
+  });
+
+  it('offers duplicate paycheck for closed paychecks', async () => {
+    mockApi.paycheck.mockResolvedValue({
+      ...paycheck,
+      closedAt: '2026-07-20T12:00:00Z',
+      state: 'CLOSED',
+    });
+    const view = await renderRoute(<PaycheckDetailScreen />);
+
+    fireEvent.press(await view.findByLabelText('Duplicate Paycheck'));
+    expect(mockPush).toHaveBeenCalledWith(`/paychecks/duplicate/${paycheck.id}`);
+  });
+
   it('filters Manual Pay Bills together with Not Paid status', async () => {
     const view = await renderRoute(<PaycheckDetailScreen />);
 

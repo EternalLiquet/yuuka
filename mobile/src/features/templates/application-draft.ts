@@ -1,4 +1,10 @@
-import type { BudgetTemplate, EntryPaymentMethod, TemplateEntry } from '@/api/contracts';
+import type {
+  BudgetTemplate,
+  Entry,
+  EntryPaymentMethod,
+  Paycheck,
+  TemplateEntry,
+} from '@/api/contracts';
 import type { EntryPayload } from '@/api/use-yuuka-api';
 
 export type TemplateApplicationDraftEntry = {
@@ -23,6 +29,22 @@ export function draftEntriesFromTemplate(
     .map(draftEntryFromTemplateEntry);
 }
 
+export function draftEntriesFromPaycheck(paycheck: Paycheck): {
+  clearedPaybackCount: number;
+  entries: TemplateApplicationDraftEntry[];
+  omittedLeftoverCount: number;
+} {
+  const liveEntries = [...paycheck.entries].sort((left, right) => left.position - right.position);
+  const duplicateEntries = liveEntries.filter((entry) => !isGeneratedLeftover(entry));
+  return {
+    clearedPaybackCount: duplicateEntries.filter((entry) => entry.paybackId != null).length,
+    entries: duplicateEntries.map((entry) =>
+      draftEntryFromPaycheckEntry(entry, paycheck.incomeDate),
+    ),
+    omittedLeftoverCount: liveEntries.length - duplicateEntries.length,
+  };
+}
+
 export function draftEntryFromTemplateEntry(entry: TemplateEntry): TemplateApplicationDraftEntry {
   return {
     accountName: entry.accountName,
@@ -36,6 +58,28 @@ export function draftEntryFromTemplateEntry(entry: TemplateEntry): TemplateAppli
     paymentMethod: entry.paymentMethod,
     targetDate: entry.targetDate,
     targetMinor: entry.targetMinor,
+  };
+}
+
+export function draftEntryFromPaycheckEntry(
+  entry: Entry,
+  sourceIncomeDate: string,
+): TemplateApplicationDraftEntry {
+  return {
+    accountName: entry.entryType === 'BILL' ? entry.accountName : null,
+    amountMinor: entry.amountMinor,
+    clientId: `paycheck-${entry.id}`,
+    defaultDueOffsetDays:
+      entry.entryType === 'BILL' && entry.dueDate
+        ? daysBetween(sourceIncomeDate, entry.dueDate)
+        : null,
+    entryType: entry.entryType,
+    name: entry.name,
+    notes: entry.notes,
+    payee: entry.entryType === 'BILL' ? entry.payee : null,
+    paymentMethod: entry.entryType === 'BILL' ? entry.paymentMethod : null,
+    targetDate: entry.entryType === 'SINKING_FUND' ? entry.targetDate : null,
+    targetMinor: entry.entryType === 'SINKING_FUND' ? entry.targetMinor : null,
   };
 }
 
@@ -68,4 +112,14 @@ export function applicationEntriesFromDraft(
     targetMinor: entry.entryType === 'SINKING_FUND' ? entry.targetMinor : null,
     targetDate: entry.entryType === 'SINKING_FUND' ? entry.targetDate : null,
   }));
+}
+
+function isGeneratedLeftover(entry: Entry) {
+  return entry.entryType === 'BILL' && entry.name.trim().toUpperCase() === 'LEFTOVER';
+}
+
+function daysBetween(start: string, end: string) {
+  const startDate = new Date(`${start}T00:00:00Z`);
+  const endDate = new Date(`${end}T00:00:00Z`);
+  return Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000);
 }

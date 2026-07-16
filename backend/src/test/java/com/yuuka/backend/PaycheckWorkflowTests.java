@@ -706,6 +706,125 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
         .andExpect(status().isNotFound());
   }
 
+  @Test
+  void createsPaycheckFromDraftWithOrderedNotPaidIndependentEntries() throws Exception {
+    String token = registerAndGetAccessToken("draft-create@yuuka.local");
+
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks/from-draft")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "name":"Rent 2/2",
+                          "amountMinor":125000,
+                          "incomeDate":"2026-07-16",
+                          "source":"Employer",
+                          "notes":"Reviewed duplicate draft",
+                          "entries":[
+                            {
+                              "entryType":"BILL",
+                              "name":"Rent",
+                              "amountMinor":100000,
+                              "paymentMethod":"MANUAL",
+                              "dueDate":"2026-07-22",
+                              "accountName":"Checking",
+                              "payee":"Apartment",
+                              "notes":"Portal"
+                            },
+                            {
+                              "entryType":"SPENDING_BUCKET",
+                              "name":"Groceries",
+                              "amountMinor":15000,
+                              "notes":"Local budget"
+                            },
+                            {
+                              "entryType":"SINKING_FUND",
+                              "name":"Insurance",
+                              "amountMinor":10000,
+                              "targetMinor":120000,
+                              "targetDate":"2026-12-01",
+                              "notes":"Goal"
+                            }
+                          ]
+                        }
+                        """))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.state").value("ACTIVE"))
+            .andExpect(jsonPath("$.templateSourceId").value(nullValue()))
+            .andExpect(jsonPath("$.allocatedMinor").value(125000))
+            .andExpect(jsonPath("$.unallocatedMinor").value(0))
+            .andExpect(jsonPath("$.entries[0].name").value("Rent"))
+            .andExpect(jsonPath("$.entries[0].position").value(0))
+            .andExpect(jsonPath("$.entries[0].status").value("NOT_PAID"))
+            .andExpect(jsonPath("$.entries[0].paymentMethod").value("MANUAL"))
+            .andExpect(jsonPath("$.entries[0].dueDate").value("2026-07-22"))
+            .andExpect(jsonPath("$.entries[0].accountName").value("Checking"))
+            .andExpect(jsonPath("$.entries[0].payee").value("Apartment"))
+            .andExpect(jsonPath("$.entries[1].name").value("Groceries"))
+            .andExpect(jsonPath("$.entries[1].status").value("NOT_PAID"))
+            .andExpect(jsonPath("$.entries[1].spentMinor").value(0))
+            .andExpect(jsonPath("$.entries[1].remainingMinor").value(15000))
+            .andExpect(jsonPath("$.entries[1].overBudget").value(false))
+            .andExpect(jsonPath("$.entries[2].name").value("Insurance"))
+            .andExpect(jsonPath("$.entries[2].targetMinor").value(120000))
+            .andExpect(jsonPath("$.entries[2].targetDate").value("2026-12-01"))
+            .andReturn();
+
+    JsonNode paycheck = objectMapper.readTree(result.getResponse().getContentAsString());
+    UUID paycheckId = UUID.fromString(paycheck.path("id").asText());
+    assertThat(statusEventCount(paycheckId)).isEqualTo(3);
+    assertThat(auditCount("PAYCHECK", paycheckId, "CREATED_FROM_DRAFT")).isEqualTo(1);
+  }
+
+  @Test
+  void rejectsInvalidDraftCreationTransactionally() throws Exception {
+    String token = registerAndGetAccessToken("draft-invalid@yuuka.local");
+    long paycheckCountBefore = paycheckCount();
+
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/from-draft")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"Too Small",
+                      "amountMinor":9999,
+                      "incomeDate":"2026-07-16",
+                      "entries":[
+                        {"entryType":"BILL","name":"Rent","amountMinor":10000}
+                      ]
+                    }
+                    """))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("PAYCHECK_OVER_ALLOCATED"));
+
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/from-draft")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"Invalid Metadata",
+                      "amountMinor":10000,
+                      "incomeDate":"2026-07-16",
+                      "entries":[
+                        {"entryType":"SPENDING_BUCKET","name":"Fuel","amountMinor":1000,"paymentMethod":"MANUAL"}
+                      ]
+                    }
+                    """))
+        .andExpect(status().isUnprocessableEntity());
+
+    assertThat(paycheckCount()).isEqualTo(paycheckCountBefore);
+  }
+
   private void assertOverAllocationError(
       String email, long paycheckAmountMinor, long entryAmountMinor, long expectedOverageMinor)
       throws Exception {
@@ -886,6 +1005,31 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
         """,
         Long.class,
         UUID.fromString(paycheckId));
+  }
+
+  private long paycheckCount() {
+    return jdbcTemplate.queryForObject("select count(*) from paychecks", Long.class);
+  }
+
+  private long statusEventCount(UUID paycheckId) {
+    return jdbcTemplate.queryForObject(
+        """
+        select count(*)
+        from entry_status_events status
+        join paycheck_entries entry on entry.id = status.entry_id
+        where entry.paycheck_id = ?
+        """,
+        Long.class,
+        paycheckId);
+  }
+
+  private long auditCount(String entityType, UUID entityId, String action) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from audit_events where entity_type = ? and entity_id = ? and action = ?",
+        Long.class,
+        entityType,
+        entityId,
+        action);
   }
 
   private void assertAuditRecordedNoLaterThanClose(

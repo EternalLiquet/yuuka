@@ -52,6 +52,10 @@ Header shows:
 - completion progress,
 - edit menu.
 
+The secondary actions include Duplicate Paycheck for Active, Closed, Archived, historical, and
+reopened paychecks. Duplication opens a reviewed draft instead of immediately cloning persisted
+data.
+
 Entries default to custom order.
 
 Each entry row shows:
@@ -149,6 +153,23 @@ allocation is valid, and over-allocation blocks creation with a clear error. The
 array determines the saved paycheck-entry order. Created paycheck entries are independent snapshots;
 later template edits do not affect the paycheck, and later paycheck edits do not affect the
 template.
+
+### From duplicate paycheck
+
+1. Open any readable paycheck.
+2. Tap Duplicate Paycheck.
+3. Review or edit paycheck name, amount, income date, source, and notes.
+4. Continue to a local entry draft.
+5. Edit, remove, add, or reorder draft entries.
+6. Create paycheck and open the new paycheck detail.
+
+The duplicate draft loads the authoritative paycheck detail before initialization. It copies live
+entries in saved order, excludes generated `LEFTOVER`, clears Payback assignments with an
+informational count, and does not copy statuses, history, bucket purchases, spent values, IDs, or
+versions. Bills preserve Autopay or Manual Pay and shift due dates by the source due-date offset
+from the source paycheck income date to the new income date. Sinking Fund target dates remain exact.
+Failed creation keeps the local draft available for retry, and repeated taps are guarded so one
+successful request creates one paycheck.
 
 ## Entry editor
 

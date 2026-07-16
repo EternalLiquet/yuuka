@@ -146,6 +146,14 @@ export function useYuukaApi() {
         source?: string | null;
         templateId: string;
       }) => send('/paychecks/from-template', 'POST', body, paycheckSchema),
+      createPaycheckFromDraft: (body: {
+        amountMinor: number;
+        entries: EntryPayload[];
+        incomeDate: string;
+        name: string;
+        notes?: string | null;
+        source?: string | null;
+      }) => send('/paychecks/from-draft', 'POST', body, paycheckSchema),
       updatePaycheck: (id: string, body: unknown) =>
         send(`/paychecks/${id}`, 'PATCH', body, paycheckSchema),
       closePaycheck: (id: string, version: number) =>

@@ -12,15 +12,16 @@ The user must be able to:
 2. See active paychecks that still require attention.
 3. Create a paycheck from scratch.
 4. Create a paycheck from a reusable template.
-5. Enter the exact paycheck amount manually each time.
-6. Add bills, spending buckets, and sinking funds.
-7. Track every entry as Not Paid, Processing, or Posted.
-8. Edit the effective date of a status change.
-9. Preserve the real recorded timestamp separately.
-10. Reorder entries.
-11. Filter and sort entries.
-12. View historical paychecks and progress.
-13. View an append-only audit history.
+5. Duplicate an existing paycheck into a reviewed editable draft.
+6. Enter the exact paycheck amount manually each time.
+7. Add bills, spending buckets, and sinking funds.
+8. Track every entry as Not Paid, Processing, or Posted.
+9. Edit the effective date of a status change.
+10. Preserve the real recorded timestamp separately.
+11. Reorder entries.
+12. Filter and sort entries.
+13. View historical paychecks and progress.
+14. View an append-only audit history.
 
 ## Paychecks and income events
 
@@ -82,6 +83,27 @@ Templates support:
 - create paycheck from template.
 
 Applying a template copies its entries into a new paycheck. The resulting entries are independent snapshots. Editing a paycheck must not alter the template, and later template edits must not alter existing paychecks.
+
+## Duplicate Paycheck
+
+Any readable paycheck can be duplicated into a local editable draft, including Active, partially
+completed, Closed, Archived, and deliberately reopened paychecks. Duplication never modifies the
+source paycheck and does not create persistent source lineage.
+
+The duplicate draft pre-fills paycheck name, amount, source, and notes from the source paycheck.
+The income date uses the normal new-paycheck default and must be reviewed before the entry draft is
+created. Duplicate names are allowed and Yuuka does not prepend `Copy of`.
+
+The entry draft copies live source entries in saved custom order, excluding generated `LEFTOVER`
+entries. It copies entry type, name, amount, notes, Bill payment method/account/payee/due-date
+relationship, and Sinking Fund target fields. It does not copy entry IDs, versions, statuses,
+status history, timestamps, audit history, Spending Bucket purchases or spent totals, Payback
+assignments, Payback repayment history, or soft-deleted entries. Every saved duplicate entry starts
+as Not Paid, and the new paycheck starts Active.
+
+Bill due dates are shifted by preserving the source due-date offset from the source paycheck income
+date and applying it to the new income date. Sinking Fund target dates stay exact. Payback
+assignments are cleared by omission and the mobile draft reports how many were not copied.
 
 ## Entry types
 
