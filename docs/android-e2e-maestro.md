@@ -163,6 +163,17 @@ If a row action is below the visible portion of the list, scroll to the action i
 
 This is not a weakened assertion. It models the user action needed to reach an off-screen control.
 
+This can also happen when a row summary is partially visible at the bottom of a detail screen but the row's action buttons are still below the Android navigation bar. Do not tap the action immediately after opening the detail screen. Scroll to the action label first:
+
+```yaml
+- tapOn: 'E2E Payback Assign, \$40\.00, \$30\.00 unallocated'
+- scrollUntilVisible:
+    centerElement: true
+    element: "Edit Repay Payback"
+    direction: DOWN
+- tapOn: "Edit Repay Payback"
+```
+
 After scrolling to row actions, the row summary text may be above the viewport even though the action controls are visible. If the state you need to prove is ordering, assert visible order-specific controls rather than an off-screen summary label:
 
 ```yaml
@@ -180,6 +191,19 @@ Consecutive detail-list summary assertions can have the opposite problem: the fi
     element: 'Entry 2: E2E Rent Adjusted, \$80\.00, Bill, Manual Pay'
     direction: DOWN
 - assertVisible: 'Entry 2: E2E Rent Adjusted, \$80\.00, Bill, Manual Pay'
+```
+
+After creating a paycheck from a long template-application form, do not assume the created detail screen resets to a position where entry summaries are visible. The screen can land with allocation controls and filters in view while the first entry row is just below the Android viewport. Scroll to the first summary before asserting ordered entries:
+
+```yaml
+- extendedWaitUntil:
+    visible: "E2E From Template"
+    timeout: 10000
+- scrollUntilVisible:
+    centerElement: true
+    element: 'Entry 1: E2E Food, \$70\.00, Spending Bucket'
+    direction: DOWN
+- assertVisible: 'Entry 1: E2E Food, \$70\.00, Spending Bucket'
 ```
 
 The same rule applies to full-screen form modals after typing into fields near the top. The Android viewport can show the field label while the actual accessible control is still below the navigation bar or below the fold. A failure like this:
@@ -276,6 +300,15 @@ The app's detail routes hide the bottom tab bar. After saving inside a paycheck 
 ```
 
 The bottom tabs currently expose `Active tab`, `History tab`, `Paybacks tab`, `Templates tab`, and `Settings tab`. Prefer those labels in Maestro. A raw `tapOn: "Active"` can match an `Active` status badge inside a payback card and open the wrong detail screen.
+
+When the last required entry is moved to `Posted`, the paycheck may immediately satisfy the lifecycle rules for a closed/history paycheck. In that state the detail action is `Reopen paycheck`, not `Close paycheck`. Assert the closed-state action before checking history or navigating back:
+
+```yaml
+- tapOn: "Save status"
+- extendedWaitUntil:
+    visible: "Reopen paycheck"
+    timeout: 10000
+```
 
 ## Debugging Failures Fast
 

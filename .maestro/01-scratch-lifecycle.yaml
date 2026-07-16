@@ -95,7 +95,7 @@ name: Scratch paycheck lifecycle
     direction: DOWN
 - tapOn: "Save status"
 - extendedWaitUntil:
-    visible: "Close paycheck"
+    visible: "Reopen paycheck"
     timeout: 10000
 
 - tapOn: "View status history for Phone"
@@ -103,10 +103,6 @@ name: Scratch paycheck lifecycle
 - assertVisible: "Processing"
 - assertVisible: "Posted"
 - back
-- extendedWaitUntil:
-    visible: "Close paycheck"
-    timeout: 10000
-- tapOn: "Close paycheck"
 - extendedWaitUntil:
     visible: "Reopen paycheck"
     timeout: 10000
