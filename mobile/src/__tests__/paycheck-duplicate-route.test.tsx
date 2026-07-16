@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ const mockApi = {
   createPaycheckFromDraft: jest.fn(),
   paycheck: jest.fn(),
 };
+const queryClients: QueryClient[] = [];
 
 jest.mock('expo-router', () => {
   const React = require('react');
@@ -59,6 +60,17 @@ jest.mock('@/settings/settings-provider', () => ({
   }),
 }));
 
+function createQueryClient() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      mutations: { gcTime: Infinity, retry: false },
+      queries: { gcTime: Infinity, retry: false, staleTime: 30_000 },
+    },
+  });
+  queryClients.push(queryClient);
+  return queryClient;
+}
+
 function routeWrapper(queryClient: QueryClient) {
   return function Wrapper({ children }: PropsWithChildren) {
     return (
@@ -76,13 +88,7 @@ function routeWrapper(queryClient: QueryClient) {
   };
 }
 
-async function renderRoute() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      mutations: { gcTime: Infinity, retry: false },
-      queries: { gcTime: Infinity, retry: false },
-    },
-  });
+async function renderRoute(queryClient = createQueryClient()) {
   return render(<DuplicatePaycheckScreen />, { wrapper: routeWrapper(queryClient) });
 }
 
@@ -119,6 +125,8 @@ const createdPaycheck: Paycheck = {
 describe('duplicate paycheck route', () => {
   afterEach(() => {
     cleanup();
+    queryClients.forEach((queryClient) => queryClient.clear());
+    queryClients.length = 0;
   });
 
   beforeEach(() => {
@@ -128,20 +136,188 @@ describe('duplicate paycheck route', () => {
     mockApi.createPaycheckFromDraft.mockResolvedValue(createdPaycheck);
   });
 
-  it('loads the source into a reviewed editable draft and creates from draft once', async () => {
-    const view = await renderRoute();
+  it('ignores stale detail-cache data and initializes from the fresh duplicate source', async () => {
+    const sourceId = sourcePaycheck().id;
+    const queryClient = createQueryClient();
+    const stalePaycheck = sourcePaycheck({
+      amountMinor: 50000,
+      entries: [
+        entry({
+          amountMinor: 50000,
+          dueDate: '2026-07-05',
+          id: '11111111-1111-4111-8111-111111111201',
+          name: 'Stale cached bill',
+        }),
+      ],
+      name: 'Stale cached paycheck',
+      source: 'Stale source',
+    });
+    const freshPaycheck = sourcePaycheck({
+      amountMinor: 135000,
+      entries: [
+        entry({
+          amountMinor: 85000,
+          dueDate: '2026-08-04',
+          id: '11111111-1111-4111-8111-111111111301',
+          name: 'Fresh rent',
+          paymentMethod: 'MANUAL',
+          position: 0,
+        }),
+        entry({
+          amountMinor: 25000,
+          entryType: 'SPENDING_BUCKET',
+          id: '11111111-1111-4111-8111-111111111302',
+          name: 'Fresh groceries',
+          paymentMethod: null,
+          position: 1,
+        }),
+      ],
+      incomeDate: '2026-08-01',
+      name: 'Fresh authoritative paycheck',
+      source: 'Fresh source',
+    });
+    queryClient.setQueryData(['paycheck', sourceId], stalePaycheck);
+    queryClient.setQueryData(['paycheck', 'duplicate-source', sourceId], stalePaycheck);
+    mockApi.paycheck.mockResolvedValue(freshPaycheck);
+
+    const view = await renderRoute(queryClient);
+
+    expect(view.queryByLabelText('Name')).toBeNull();
+    await waitFor(() =>
+      expect(view.getByLabelText('Name').props.value).toBe('Fresh authoritative paycheck'),
+    );
+    expect(mockApi.paycheck).toHaveBeenCalledWith(sourceId);
+    expect(view.getByLabelText('Exact paycheck amount').props.value).toBe('1350.00');
+
+    expect(view.queryByText('Fresh rent')).toBeNull();
+    expect(view.queryByText('Stale cached bill')).toBeNull();
+    expect(mockApi.createPaycheckFromDraft).not.toHaveBeenCalled();
+  });
+
+  it('keeps loading until the authoritative duplicate-source request succeeds', async () => {
+    const sourceId = sourcePaycheck().id;
+    const queryClient = createQueryClient();
+    const stalePaycheck = sourcePaycheck({
+      entries: [entry({ name: 'Cached pending bill' })],
+      name: 'Cached pending paycheck',
+    });
+    const freshPaycheck = sourcePaycheck({
+      amountMinor: 140000,
+      entries: [entry({ amountMinor: 140000, name: 'Fresh pending bill' })],
+      name: 'Fresh pending paycheck',
+    });
+    const sourceRequest = deferred<Paycheck>();
+    queryClient.setQueryData(['paycheck', sourceId], stalePaycheck);
+    queryClient.setQueryData(['paycheck', 'duplicate-source', sourceId], stalePaycheck);
+    mockApi.paycheck.mockReturnValue(sourceRequest.promise);
+
+    const view = await renderRoute(queryClient);
+
+    expect(view.getByLabelText('Loading paycheck...')).toBeTruthy();
+    expect(view.queryByLabelText('Name')).toBeNull();
+    expect(view.queryByText('Cached pending bill')).toBeNull();
+
+    await act(async () => {
+      sourceRequest.resolve(freshPaycheck);
+      await sourceRequest.promise;
+    });
+
+    await waitFor(() =>
+      expect(view.getByLabelText('Name').props.value).toBe('Fresh pending paycheck'),
+    );
+    expect(view.getByLabelText('Exact paycheck amount').props.value).toBe('1400.00');
+    fireEvent(view.getByLabelText('Continue to entries'), 'press');
+    expect(await view.findByText('Fresh pending bill')).toBeTruthy();
+    expect(view.queryByText('Cached pending bill')).toBeNull();
+  });
+
+  it('shows a load error instead of using stale cache when the authoritative fetch fails', async () => {
+    const sourceId = sourcePaycheck().id;
+    const queryClient = createQueryClient();
+    const stalePaycheck = sourcePaycheck({
+      entries: [entry({ name: 'Cached failed bill' })],
+      name: 'Cached failed paycheck',
+    });
+    const freshRetryPaycheck = sourcePaycheck({ name: 'Fresh retry paycheck' });
+    queryClient.setQueryData(['paycheck', sourceId], stalePaycheck);
+    queryClient.setQueryData(['paycheck', 'duplicate-source', sourceId], stalePaycheck);
+    mockApi.paycheck
+      .mockRejectedValueOnce(new Error('fresh source failed'))
+      .mockResolvedValueOnce(freshRetryPaycheck);
+
+    const view = await renderRoute(queryClient);
+
+    await waitFor(() => expect(view.getByText('Could not load')).toBeTruthy());
+    expect(view.getByText('fresh source failed')).toBeTruthy();
+    expect(view.queryByLabelText('Name')).toBeNull();
+    expect(view.queryByLabelText('Create paycheck')).toBeNull();
+    expect(view.queryByText('Cached failed bill')).toBeNull();
+    expect(mockApi.createPaycheckFromDraft).not.toHaveBeenCalled();
+
+    fireEvent.press(view.getByLabelText('Retry'));
+
+    await waitFor(() => expect(mockApi.paycheck).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(view.getByLabelText('Name').props.value).toBe('Fresh retry paycheck'),
+    );
+  });
+
+  it('creates once from the fresh authoritative draft despite stale cache and repeated taps', async () => {
+    const sourceId = sourcePaycheck().id;
+    const queryClient = createQueryClient();
+    const stalePaycheck = sourcePaycheck({
+      amountMinor: 33300,
+      entries: [
+        entry({
+          amountMinor: 33300,
+          dueDate: '2026-07-05',
+          id: '11111111-1111-4111-8111-111111111501',
+          name: 'Stale submit bill',
+        }),
+      ],
+      name: 'Stale submit paycheck',
+      source: 'Stale submit source',
+    });
+    queryClient.setQueryData(['paycheck', sourceId], stalePaycheck);
+    queryClient.setQueryData(['paycheck', 'duplicate-source', sourceId], stalePaycheck);
+    mockApi.paycheck.mockResolvedValue(sourcePaycheck());
+    const view = await renderRoute(queryClient);
 
     await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
     expect(view.getByLabelText('Exact paycheck amount').props.value).toBe('1200.00');
     fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-16');
-    fireEvent.press(view.getByLabelText('Continue to entries'));
+    fireEvent.press(view.getByText('Continue to entries'));
+    await flushReactWork();
 
     expect(await view.findByText('Draft entries')).toBeTruthy();
     expect(view.getByText('1 Payback assignment was not copied.')).toBeTruthy();
     expect(view.getByText('1 LEFTOVER entry was excluded.')).toBeTruthy();
+    expect(view.queryByText('Stale submit bill')).toBeNull();
+
+    await act(async () => {
+      queryClient.setQueriesData(
+        { queryKey: ['paycheck', 'duplicate-source', sourceId] },
+        sourcePaycheck({
+          amountMinor: 999999,
+          entries: [
+            entry({
+              amountMinor: 999999,
+              id: '11111111-1111-4111-8111-111111111601',
+              name: 'Later server entry',
+            }),
+          ],
+          name: 'Later server paycheck',
+          source: 'Later server source',
+        }),
+      );
+    });
+    expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2');
+    expect(view.getByText('Rent')).toBeTruthy();
+    expect(view.queryByText('Later server entry')).toBeNull();
 
     fireEvent.press(view.getByLabelText('Create paycheck'));
     fireEvent.press(view.getByLabelText('Create paycheck'));
+    await flushReactWork();
 
     await waitFor(() =>
       expect(mockApi.createPaycheckFromDraft).toHaveBeenCalledWith(
@@ -174,14 +350,35 @@ describe('duplicate paycheck route', () => {
         ],
       }),
     );
+    expect(mockApi.createPaycheckFromDraft).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        entries: expect.arrayContaining([expect.objectContaining({ name: 'Stale submit bill' })]),
+      }),
+    );
     await waitFor(() =>
       expect(mockReplace).toHaveBeenCalledWith(`/paychecks/${createdPaycheck.id}`),
     );
   });
 });
 
-function sourcePaycheck(): Paycheck {
-  return {
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, reject, resolve };
+}
+
+async function flushReactWork() {
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
+function sourcePaycheck(overrides: Partial<Paycheck> = {}): Paycheck {
+  const paycheck: Paycheck = {
     allocatedMinor: 120000,
     allocationPercent: 100,
     amountMinor: 120000,
@@ -246,6 +443,7 @@ function sourcePaycheck(): Paycheck {
     updatedAt: '2026-07-10T12:00:00Z',
     version: 4,
   };
+  return { ...paycheck, ...overrides };
 }
 
 function entry(overrides: Partial<Entry>): Entry {

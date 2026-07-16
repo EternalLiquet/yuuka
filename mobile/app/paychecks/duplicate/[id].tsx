@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowDown, ArrowLeft, ArrowUp, Pencil, Plus, Save, Trash2 } from 'lucide-react-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
@@ -34,7 +34,13 @@ export default function DuplicatePaycheckScreen() {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const initializedSourceId = useRef('');
+  const duplicateSourceRequestId = useId();
+  const duplicateSourceQueryKey = useMemo(
+    () => ['paycheck', 'duplicate-source', id, duplicateSourceRequestId] as const,
+    [duplicateSourceRequestId, id],
+  );
   const submitInFlight = useRef(false);
+  const [sourceInitialized, setSourceInitialized] = useState(false);
   const [step, setStep] = useState<'details' | 'entries'>('details');
   const [draftEntries, setDraftEntries] = useState<TemplateApplicationDraftEntry[]>([]);
   const [clearedPaybackCount, setClearedPaybackCount] = useState(0);
@@ -44,7 +50,12 @@ export default function DuplicatePaycheckScreen() {
   );
   const [draftEditorVisible, setDraftEditorVisible] = useState(false);
   const [submitLocked, setSubmitLocked] = useState(false);
-  const query = useQuery({ queryKey: ['paycheck', id], queryFn: () => api.paycheck(id) });
+  const query = useQuery({
+    queryKey: duplicateSourceQueryKey,
+    queryFn: () => api.paycheck(id),
+    refetchOnMount: 'always',
+    staleTime: 0,
+  });
   const {
     control,
     formState: { errors, isSubmitting },
@@ -59,7 +70,14 @@ export default function DuplicatePaycheckScreen() {
   const incomeDate = useWatch({ control, name: 'incomeDate' });
 
   useEffect(() => {
-    if (!query.data || initializedSourceId.current === query.data.id) return;
+    if (
+      !query.data ||
+      !query.isSuccess ||
+      !query.isFetchedAfterMount ||
+      initializedSourceId.current === query.data.id
+    ) {
+      return;
+    }
     const draft = draftEntriesFromPaycheck(query.data);
     initializedSourceId.current = query.data.id;
     reset({
@@ -72,7 +90,8 @@ export default function DuplicatePaycheckScreen() {
     setDraftEntries(draft.entries);
     setClearedPaybackCount(draft.clearedPaybackCount);
     setOmittedLeftoverCount(draft.omittedLeftoverCount);
-  }, [query.data, reset]);
+    setSourceInitialized(true);
+  }, [query.data, query.isFetchedAfterMount, query.isSuccess, reset]);
 
   const draftTotal = draftTotalMinor(draftEntries);
   const parsedAmount = parseAmountOrNull(amountValue);
@@ -106,9 +125,9 @@ export default function DuplicatePaycheckScreen() {
   });
 
   const createDisabled = overAllocated || isSubmitting || submitLocked || mutation.isPending;
-  const sourceName = query.data?.name ?? 'paycheck';
+  const sourceName = sourceInitialized ? (query.data?.name ?? 'paycheck') : 'paycheck';
 
-  async function continueToEntries(values: PaycheckFormValues) {
+  function continueToEntries(values: PaycheckFormValues) {
     parseMoneyToMinor(values.amount);
     setStep('entries');
   }
@@ -149,15 +168,7 @@ export default function DuplicatePaycheckScreen() {
     [colors.danger, colors.muted, differenceMinor, settings.currencyCode],
   );
 
-  if (query.isPending && !query.data) {
-    return (
-      <ScrollScreen contentContainerStyle={styles.center}>
-        <YuukaLoadingState message="Loading paycheck..." />
-      </ScrollScreen>
-    );
-  }
-
-  if (query.isError && !query.data) {
+  if (!sourceInitialized && query.isError && !query.isFetching) {
     return (
       <ScrollScreen contentContainerStyle={styles.center}>
         <ErrorState
@@ -168,6 +179,14 @@ export default function DuplicatePaycheckScreen() {
           )}
           retry={() => query.refetch()}
         />
+      </ScrollScreen>
+    );
+  }
+
+  if (!sourceInitialized) {
+    return (
+      <ScrollScreen contentContainerStyle={styles.center}>
+        <YuukaLoadingState message="Loading paycheck..." />
       </ScrollScreen>
     );
   }
