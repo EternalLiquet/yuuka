@@ -107,6 +107,8 @@ Do not delete broad Gradle caches unless disk pressure proves it is necessary. T
 
 Do not set `disable-animations: true` on the emulator runner. On this stack it enables the Android reduced-motion setting, which makes Reanimated emit a development warning. That warning can cover controls at the bottom of the screen.
 
+The API 35 hosted image can use the AOSP keyboard, which asks for contacts access the first time a flow types into a form. That system dialog blocks Maestro from reaching app controls. The runner pre-grants `READ_CONTACTS` only to the AOSP keyboard on the disposable emulator; keep that setup before Maestro starts. Local images that use a different keyboard skip the command.
+
 ## Writing Reliable Maestro Flows
 
 Use the existing sign-in flow:
@@ -268,6 +270,22 @@ After typing into a field inside a bottom sheet, assume the Android keyboard may
 
 Use the same pattern before bottom-sheet save buttons when the sheet content can extend below the fold.
 
+First confirm that the sheet is actually scrollable. The fixed status editor is not: `scrollUntilVisible` can move its visible card away and leave only the dark modal backdrop. Fill the multiline note before the single-line effective timestamp, then use Enter to dismiss the timestamp keyboard and tap the already-visible save action:
+
+```yaml
+- tapOn:
+    text: "Note (optional)"
+    index: 1
+- inputText: "Scheduled"
+- tapOn:
+    text: "Effective date and time"
+    point: "90%,50%"
+- eraseText: 100
+- inputText: "2026-07-16T12:00:00Z"
+- pressKey: Enter
+- tapOn: "Save status"
+```
+
 When replacing an existing text-field value, remember that Maestro `eraseText` sends backspaces from the current cursor position. Tap near the end of the field before erasing, or a suffix can remain and make the next value invalid:
 
 ```yaml
@@ -343,6 +361,7 @@ Common symptoms:
 
 - Blank screen before `Yuuka`: the E2E APK may not contain the JavaScript bundle, the app crashed, or `adb reverse tcp:8080 tcp:8080` is missing.
 - `Quickstep isn't responding`: emulator system UI noise, not an app failure. Keep the launcher force-stop in `.github/scripts/android-e2e.sh`, the optional `Close app` tap in `shared/sign-in.yaml`, and the short settle after APK install.
+- `Allow Android Keyboard (AOSP) to access your contacts?`: fresh hosted-emulator setup is missing. Keep the runner's AOSP keyboard permission pre-grant; do not add the system dialog to product flows.
 - `Save entry` not found: usually off-screen. Use `scrollUntilVisible`.
 - A selector label is visible but its `tapOn` target is not found: the accessible Pressable may be lower than the text label and partly below the fold. Scroll to the selector's accessibility label, not just the visible section heading.
 - Next action after save still sees form text: the save tap may have been intercepted or navigation has not completed. Wait for a detail-screen control such as `Add entry`.

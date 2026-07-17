@@ -108,6 +108,10 @@ name: Template application draft
     element: "Save template entry"
     direction: DOWN
 - tapOn: "Save template entry"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Fully allocated."
+    direction: UP
 - extendedWaitUntil:
     visible: "Fully allocated."
     timeout: 10000

@@ -51,6 +51,9 @@ trap collect_diagnostics EXIT
 adb logcat -c
 adb reverse tcp:8080 tcp:8080
 adb install -r "$apk"
+if adb shell pm path com.android.inputmethod.latin >/dev/null 2>&1; then
+  adb shell pm grant com.android.inputmethod.latin android.permission.READ_CONTACTS || true
+fi
 adb shell am force-stop com.android.launcher3 || true
 sleep 5
 
