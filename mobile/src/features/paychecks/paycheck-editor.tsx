@@ -80,7 +80,11 @@ export function PaycheckEditor({
             <X color={colors.text} size={23} />
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.form}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+        >
           <Field control={control} error={errors.name?.message} label="Name" name="name" />
           <Field
             control={control}

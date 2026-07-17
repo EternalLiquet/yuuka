@@ -23,7 +23,8 @@ When all flows are selected, the workflow shape is:
 build-e2e-apk
 |-- scratch-lifecycle
 |-- payback-delete-reassign
-`-- template-application
+|-- template-application
+`-- recurring-bill-import
 ```
 
 The flow jobs use `fail-fast: false`, so one Maestro failure does not cancel the other flows.
@@ -38,6 +39,7 @@ Manual runs can select one flow or all flows:
 gh workflow run android-e2e.yml --ref <branch> -f flow=scratch
 gh workflow run android-e2e.yml --ref <branch> -f flow=paybacks
 gh workflow run android-e2e.yml --ref <branch> -f flow=templates
+gh workflow run android-e2e.yml --ref <branch> -f flow=recurring
 gh workflow run android-e2e.yml --ref <branch> -f flow=all
 ```
 
@@ -63,7 +65,7 @@ artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/artifacts/android
 artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/artifacts/android-e2e/scratch-lifecycle/maestro-tests/<timestamp>/screenshot-*.png
 ```
 
-Payback and template diagnostics use the same structure under `android-e2e-paybacks-diagnostics` and `android-e2e-templates-diagnostics`.
+Payback, template, and recurring-Bill diagnostics use the same structure under `android-e2e-paybacks-diagnostics`, `android-e2e-templates-diagnostics`, and `android-e2e-recurring-diagnostics`.
 
 Always inspect the screenshot and `maestro.log` before changing a selector. The screenshot is usually the fastest way to tell whether the element is missing, off-screen, or blocked by an app overlay.
 
@@ -82,6 +84,14 @@ Do not add `adb reverse tcp:8081 tcp:8081`, Metro status polling, or bundle prew
 
 `EXPO_PUBLIC_E2E=1` is compiled into the E2E APK and tells the app to hide React Native LogBox overlays. This is for test hygiene only; it must not hide failed app assertions.
 
+When rebuilding an E2E APK locally after changing an `EXPO_PUBLIC_*` value, Gradle may consider the existing release JavaScript bundle up to date. Force the bundle task before packaging again, or clean only the generated app build output:
+
+```sh
+cd mobile/android
+./gradlew :app:createBundleReleaseJsAndAssets --rerun-tasks
+./gradlew assembleRelease
+```
+
 Because the E2E APK is a release build, the app keeps the normal release requirement that API URLs use HTTPS. The E2E flag adds one narrow exception for the disposable CI backend: release builds with `EXPO_PUBLIC_E2E=1` may use HTTP only for explicit loopback hosts, `localhost` or `127.0.0.1`. Arbitrary production HTTP endpoints remain rejected, including in E2E mode.
 
 ## Emulator and Disk Pitfalls
@@ -96,6 +106,8 @@ sudo rm -rf /usr/local/lib/android/sdk/ndk || true
 Do not delete broad Gradle caches unless disk pressure proves it is necessary. The backend still benefits from Gradle caching in each flow job.
 
 Do not set `disable-animations: true` on the emulator runner. On this stack it enables the Android reduced-motion setting, which makes Reanimated emit a development warning. That warning can cover controls at the bottom of the screen.
+
+The API 35 hosted image can use the AOSP keyboard, which asks for contacts access the first time a flow types into a form. That system dialog blocks Maestro from reaching app controls. The runner pre-grants `READ_CONTACTS` only to the AOSP keyboard on the disposable emulator; keep that setup before Maestro starts. Local images that use a different keyboard skip the command.
 
 ## Writing Reliable Maestro Flows
 
@@ -115,6 +127,14 @@ Prefer user-visible labels and accessibility labels over coordinates. If a contr
     element: "Save entry"
     direction: DOWN
 - tapOn: "Save entry"
+```
+
+If a visible field label and its input share the same text in the accessibility tree, use the verified input occurrence instead of the shorthand selector. Otherwise Maestro can tap the non-interactive label and leave keyboard input focused in the previous field:
+
+```yaml
+- tapOn:
+    text: "Original amount owed"
+    index: 1
 ```
 
 After saving a form, assert a detail-screen control before continuing. Text from the form can remain visible briefly or be matched in an unexpected place.
@@ -250,6 +270,38 @@ After typing into a field inside a bottom sheet, assume the Android keyboard may
 
 Use the same pattern before bottom-sheet save buttons when the sheet content can extend below the fold.
 
+On the hosted AOSP numeric keyboard, scrolling a long entry form directly after `inputText` can leave the keyboard open and consume the gesture. When the focused field is single-line, press Enter before scrolling to an action below later controls such as the Payback selector:
+
+```yaml
+- inputText: "150.00"
+- pressKey: Enter
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save entry"
+    direction: DOWN
+```
+
+First confirm that the sheet is actually scrollable. The fixed status editor is not: `scrollUntilVisible` can move its visible card away and leave only the dark modal backdrop. The hosted AOSP keyboard can remain open after Maestro fills the multiline note, while Gboard may already be gone. Conditionally hide the keyboard only when its `Return` key is visible, then edit the single-line effective timestamp. Use Enter to dismiss the timestamp keyboard and tap the already-visible save action:
+
+```yaml
+- tapOn:
+    text: "Note (optional)"
+    index: 1
+- inputText: "Scheduled"
+- runFlow:
+    when:
+      visible: "Return"
+    commands:
+      - hideKeyboard
+- tapOn:
+    text: "Effective date and time"
+    point: "90%,50%"
+- eraseText: 100
+- inputText: "2026-07-16T12:00:00Z"
+- pressKey: Enter
+- tapOn: "Save status"
+```
+
 When replacing an existing text-field value, remember that Maestro `eraseText` sends backspaces from the current cursor position. Tap near the end of the field before erasing, or a suffix can remain and make the next value invalid:
 
 ```yaml
@@ -299,7 +351,7 @@ The app's detail routes hide the bottom tab bar. After saving inside a paycheck 
 - tapOn: "Paybacks tab"
 ```
 
-The bottom tabs currently expose `Active tab`, `History tab`, `Paybacks tab`, `Templates tab`, and `Settings tab`. Prefer those labels in Maestro. A raw `tapOn: "Active"` can match an `Active` status badge inside a payback card and open the wrong detail screen.
+The bottom tabs expose `Active tab` and `History tab`. Paybacks, Templates, Recurring Bills, and Settings are reached with `Open app menu` followed by their `Open <destination>` accessibility label. A raw `tapOn: "Active"` can match an `Active` status badge inside a payback card and open the wrong detail screen.
 
 When the last required entry is moved to `Posted`, the paycheck may immediately satisfy the lifecycle rules for a closed/history paycheck. In that state the detail action is `Reopen paycheck`, not `Close paycheck`. Assert the closed-state action before checking history or navigating back:
 
@@ -325,6 +377,7 @@ Common symptoms:
 
 - Blank screen before `Yuuka`: the E2E APK may not contain the JavaScript bundle, the app crashed, or `adb reverse tcp:8080 tcp:8080` is missing.
 - `Quickstep isn't responding`: emulator system UI noise, not an app failure. Keep the launcher force-stop in `.github/scripts/android-e2e.sh`, the optional `Close app` tap in `shared/sign-in.yaml`, and the short settle after APK install.
+- `Allow Android Keyboard (AOSP) to access your contacts?`: fresh hosted-emulator setup is missing. Keep the runner's AOSP keyboard permission pre-grant; do not add the system dialog to product flows.
 - `Save entry` not found: usually off-screen. Use `scrollUntilVisible`.
 - A selector label is visible but its `tapOn` target is not found: the accessible Pressable may be lower than the text label and partly below the fold. Scroll to the selector's accessibility label, not just the visible section heading.
 - Next action after save still sees form text: the save tap may have been intercepted or navigation has not completed. Wait for a detail-screen control such as `Add entry`.

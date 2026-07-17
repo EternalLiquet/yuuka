@@ -124,7 +124,11 @@ export function PaybackEditor({
           <X color={colors.text} size={23} />
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.form}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+      >
         <ControlledField control={control} error={errors.name?.message} label="Name" name="name" />
         <ControlledField
           control={control}

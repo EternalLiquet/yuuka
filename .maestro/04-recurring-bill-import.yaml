@@ -1,0 +1,90 @@
+appId: com.yuuka.mobile
+name: Recurring Bill import into scratch draft
+---
+- runFlow: shared/sign-in.yaml
+- tapOn: "Open app menu"
+- tapOn: "Open Recurring Bills"
+- tapOn: "New recurring Bill"
+- tapOn:
+    text: "Name"
+    index: 1
+- inputText: "E2E Electric"
+- tapOn:
+    text: "Typical amount"
+    index: 1
+- inputText: "120.00"
+- tapOn:
+    text: "Monthly due day"
+    index: 1
+- inputText: "21"
+- scrollUntilVisible:
+    centerElement: true
+    element: "I need to pay this manually"
+    direction: DOWN
+- tapOn: "I need to pay this manually"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create recurring Bill"
+    direction: DOWN
+- tapOn: "Create recurring Bill"
+- extendedWaitUntil:
+    visible: "Edit recurring Bill"
+    timeout: 10000
+- back
+- back
+- extendedWaitUntil:
+    visible: "New paycheck"
+    timeout: 10000
+- tapOn: "New paycheck"
+- tapOn:
+    text: "Name"
+    index: 1
+- inputText: "E2E Recurring Import"
+- tapOn:
+    text: "Exact paycheck amount"
+    index: 1
+- inputText: "200.00"
+- tapOn:
+    text: "Income date"
+    index: 1
+- eraseText: 100
+- inputText: "2026-07-17"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Import recurring Bills"
+    direction: DOWN
+- tapOn: "Import recurring Bills"
+- extendedWaitUntil:
+    visible: "Edit amount for E2E Electric"
+    timeout: 10000
+- tapOn: "Edit amount for E2E Electric"
+- tapOn:
+    text: "Amount for this paycheck"
+    index: 1
+- eraseText: 100
+- inputText: "146.00"
+- scrollUntilVisible:
+    centerElement: true
+    element: "This paycheck only"
+    direction: DOWN
+- tapOn: "This paycheck only"
+- tapOn: "Add selected Bills (1)"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Edit E2E Electric"
+    direction: DOWN
+- assertVisible: "Edit E2E Electric"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create paycheck"
+    direction: DOWN
+- tapOn: "Create paycheck"
+- extendedWaitUntil:
+    visible: "E2E Recurring Import"
+    timeout: 10000
+- scrollUntilVisible:
+    centerElement: true
+    element: 'Entry 1: E2E Electric, \$146\.00, Bill, Manual Pay'
+    direction: DOWN
+- assertVisible: 'Entry 1: E2E Electric, \$146\.00, Bill, Manual Pay'
+- assertVisible: "Status: Not Paid"

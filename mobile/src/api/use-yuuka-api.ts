@@ -16,11 +16,20 @@ import {
   paybackSchema,
   paycheckSchema,
   rollingSpendingBucketPerformanceSchema,
+  recurringBillListSchema,
+  recurringBillSchema,
+  recurringBillTimelineSchema,
   statusEventSchema,
   templateEntrySchema,
   templateSchema,
 } from './contracts';
-import type { EntryPaymentMethod, EntrySearchResult, Page, SearchScope } from './contracts';
+import type {
+  EntryPaymentMethod,
+  EntrySearchResult,
+  Page,
+  RecurringBillStatusFilter,
+  SearchScope,
+} from './contracts';
 
 export type EntryPayload = {
   accountName?: string | null;
@@ -34,7 +43,28 @@ export type EntryPayload = {
   paybackId?: string | null;
   targetDate?: string | null;
   targetMinor?: number | null;
+  sourceRecurringBillDefinitionId?: string | null;
+  sourceRecurringOccurrenceDate?: string | null;
   version?: number;
+};
+
+export type RecurringBillPayload = {
+  accountName?: string | null;
+  dueDay: number;
+  name: string;
+  notes?: string | null;
+  payee?: string | null;
+  paymentMethod?: EntryPaymentMethod;
+  typicalAmountMinor: number;
+  version?: number;
+};
+
+export type RecurringBillImportPayload = {
+  amountMinor: number;
+  definitionId: string;
+  definitionVersion: number;
+  occurrenceDate: string;
+  updateTypicalAmount: boolean;
 };
 
 export type TemplateEntryPayload = {
@@ -59,7 +89,7 @@ export function useYuukaApi() {
       parseApiResponse(await authenticatedRequest(path), schema);
     const send = async <T>(
       path: string,
-      method: 'DELETE' | 'PATCH' | 'POST',
+      method: 'DELETE' | 'PATCH' | 'POST' | 'PUT',
       body: unknown,
       schema: z.ZodType<T>,
     ) =>
@@ -76,6 +106,40 @@ export function useYuukaApi() {
 
     return {
       me: () => get('/me', meSchema),
+      updateOwnerSettings: (recurringBillSuggestionDays: number) =>
+        send('/me/settings', 'PATCH', { recurringBillSuggestionDays }, meSchema),
+      recurringBills: (status: RecurringBillStatusFilter = 'ACTIVE', search = '') => {
+        const params = new URLSearchParams({ status });
+        if (search.trim()) params.set('search', search.trim());
+        return get(`/recurring-bills?${params.toString()}`, recurringBillListSchema);
+      },
+      recurringBill: (id: string) => get(`/recurring-bills/${id}`, recurringBillSchema),
+      createRecurringBill: (body: RecurringBillPayload) =>
+        send('/recurring-bills', 'POST', body, recurringBillSchema),
+      updateRecurringBill: (id: string, body: RecurringBillPayload & { version: number }) =>
+        send(`/recurring-bills/${id}`, 'PUT', body, recurringBillSchema),
+      activateRecurringBill: (id: string, version: number) =>
+        send(`/recurring-bills/${id}/activate`, 'POST', { version }, recurringBillSchema),
+      deactivateRecurringBill: (id: string, version: number) =>
+        send(`/recurring-bills/${id}/deactivate`, 'POST', { version }, recurringBillSchema),
+      deleteRecurringBill: (id: string, version: number) =>
+        remove(`/recurring-bills/${id}?version=${version}`),
+      recurringBillTimeline: (from: string, through: string) =>
+        get(
+          `/recurring-bills/timeline?from=${encodeURIComponent(from)}&through=${encodeURIComponent(through)}`,
+          recurringBillTimelineSchema,
+        ),
+      importRecurringBills: (
+        paycheckId: string,
+        paycheckVersion: number,
+        items: RecurringBillImportPayload[],
+      ) =>
+        send(
+          `/paychecks/${paycheckId}/recurring-bill-imports`,
+          'POST',
+          { paycheckVersion, items },
+          paycheckSchema,
+        ),
       activePaychecks: () => get('/paychecks/active?size=100', pageSchema(paycheckSchema)),
       rollingSpendingBucketPerformance: (days: 30 | 90 = 30) =>
         get(

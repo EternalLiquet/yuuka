@@ -2,16 +2,26 @@ appId: com.yuuka.mobile
 name: Payback delete unassigns entry
 ---
 - runFlow: shared/sign-in.yaml
-- tapOn: "Paybacks tab"
+- tapOn: "Open app menu"
+- tapOn: "Open Paybacks"
 - tapOn: "New Payback"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Delete Source"
-- tapOn: "Original amount owed"
+- tapOn:
+    text: "Original amount owed"
+    index: 1
 - inputText: "40.00"
-- tapOn: "Balance when tracking began"
+- tapOn:
+    text: "Balance when tracking began"
+    index: 1
 - eraseText
 - inputText: "40.00"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create Payback"
+    direction: DOWN
 - tapOn: "Create Payback"
 - extendedWaitUntil:
     visible: "E2E Delete Source"
@@ -19,14 +29,23 @@ name: Payback delete unassigns entry
 - tapOn: "Back"
 
 - tapOn: "New Payback"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Delete Target"
-- tapOn: "Original amount owed"
+- tapOn:
+    text: "Original amount owed"
+    index: 1
 - inputText: "40.00"
-- tapOn: "Balance when tracking began"
+- tapOn:
+    text: "Balance when tracking began"
+    index: 1
 - eraseText
 - inputText: "40.00"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create Payback"
+    direction: DOWN
 - tapOn: "Create Payback"
 - extendedWaitUntil:
     visible: "E2E Delete Target"
@@ -37,21 +56,31 @@ name: Payback delete unassigns entry
     visible: "New paycheck"
     timeout: 10000
 - tapOn: "New paycheck"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Payback Assign"
-- tapOn: "Exact paycheck amount"
+- tapOn:
+    text: "Exact paycheck amount"
+    index: 1
 - inputText: "40.00"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create paycheck"
+    direction: DOWN
 - tapOn: "Create paycheck"
 - extendedWaitUntil:
     visible: "E2E Payback Assign"
     timeout: 10000
 - tapOn: "Add entry"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "Repay Payback"
-- tapOn: "Amount"
+- tapOn:
+    text: "Amount"
+    index: 1
 - inputText: "10.00"
-- hideKeyboard
 - scrollUntilVisible:
     centerElement: true
     element: "Apply to Payback, selected No Payback"
@@ -64,14 +93,15 @@ name: Payback delete unassigns entry
     direction: DOWN
 - tapOn: "Save entry"
 - extendedWaitUntil:
-    visible: "Repay Payback"
+    visible: "Add entry"
     timeout: 10000
 
-- tapOn: "Back"
+- back
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
-- tapOn: "Paybacks tab"
+- tapOn: "Open app menu"
+- tapOn: "Open Paybacks"
 - tapOn: 'E2E Delete Source, \$40\.00 left, 0 percent repaid since tracking began'
 - tapOn: "Delete"
 - extendedWaitUntil:

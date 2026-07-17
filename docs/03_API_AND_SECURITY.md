@@ -49,6 +49,7 @@ display. Example:
 - `POST /auth/refresh`
 - `POST /auth/logout`
 - `GET /me`
+- `PATCH /me/settings` updates owner-backed settings such as the recurring Bill suggestion window.
 
 ### Paychecks
 
@@ -126,6 +127,24 @@ instead of embedding raw storage values in the message.
 - `POST /templates/{id}/restore`
 - CRUD for template entries
 - reorder template entries
+
+### Recurring Bills
+
+- `GET /recurring-bills?status=ACTIVE|INACTIVE|ALL&search=...`
+- `POST /recurring-bills`
+- `GET /recurring-bills/timeline?from=YYYY-MM-DD&through=YYYY-MM-DD`
+- `GET /recurring-bills/{definitionId}`
+- `PUT /recurring-bills/{definitionId}`
+- `POST /recurring-bills/{definitionId}/activate`
+- `POST /recurring-bills/{definitionId}/deactivate`
+- `DELETE /recurring-bills/{definitionId}?version=...`
+- `POST /paychecks/{paycheckId}/recurring-bill-imports`
+
+Timeline ranges are inclusive and bounded to 366 days. They return dynamically derived active
+monthly occurrences together with import counts/status for the requested period. Existing-paycheck
+imports require the current paycheck version, validate every selected occurrence and the aggregate
+allocation, and either create the complete ordered Bill snapshot batch or roll back. Draft creation
+requests may carry nullable recurring-definition and occurrence provenance for Bill entries.
 
 ### Search
 

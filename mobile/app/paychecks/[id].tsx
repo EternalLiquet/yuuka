@@ -1,7 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Archive, CheckCircle2, Copy, Pencil, Plus, RotateCcw } from 'lucide-react-native';
+import {
+  Archive,
+  CheckCircle2,
+  Copy,
+  Pencil,
+  Plus,
+  ReceiptText,
+  RotateCcw,
+} from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
@@ -36,6 +44,7 @@ import { EntryRow } from '@/features/paychecks/entry-row';
 import { PaycheckEditor } from '@/features/paychecks/paycheck-editor';
 import { StatusSheet } from '@/features/paychecks/status-sheet';
 import { StatusHistorySheet } from '@/features/paychecks/status-history-sheet';
+import { ImportRecurringBillsSheet } from '@/features/recurring-bills/import-recurring-bills-sheet';
 import { useMinimumVisibleDuration } from '@/hooks/use-minimum-visible-duration';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
@@ -99,6 +108,7 @@ export default function PaycheckDetailScreen() {
   const [bucketEntryId, setBucketEntryId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState('');
   const [paycheckEditorVisible, setPaycheckEditorVisible] = useState(false);
+  const [recurringImportVisible, setRecurringImportVisible] = useState(false);
   const leftoverInFlight = useRef(false);
   const listRef = useRef<EntryListHandle | null>(null);
   const highlightScrolledRef = useRef(false);
@@ -388,6 +398,7 @@ export default function PaycheckDetailScreen() {
               }}
               onEdit={() => setPaycheckEditorVisible(true)}
               onDuplicate={() => router.push(`/paychecks/duplicate/${id}`)}
+              onImportRecurring={() => setRecurringImportVisible(true)}
               statusFilter={statusFilter}
               setStatusFilter={setStatusFilter}
               typeFilter={typeFilter}
@@ -500,6 +511,26 @@ export default function PaycheckDetailScreen() {
         paycheck={paycheck}
         visible={paycheckEditorVisible}
       />
+      <ImportRecurringBillsSheet
+        incomeDate={paycheck.incomeDate}
+        onClose={() => setRecurringImportVisible(false)}
+        onImport={(items) =>
+          api
+            .importRecurringBills(
+              id,
+              paycheck.version,
+              items.map((item) => ({
+                definitionId: item.definitionId,
+                definitionVersion: item.definitionVersion,
+                occurrenceDate: item.occurrenceDate,
+                amountMinor: item.amountMinor,
+                updateTypicalAmount: item.updateTypicalAmount,
+              })),
+            )
+            .then(async () => invalidate())
+        }
+        visible={recurringImportVisible}
+      />
     </>
   );
 }
@@ -513,6 +544,7 @@ function DetailHeader({
   onAllocateLeftover,
   onEdit,
   onDuplicate,
+  onImportRecurring,
   paymentMethodFilter,
   paycheck,
   refreshing,
@@ -534,6 +566,7 @@ function DetailHeader({
   onAllocateLeftover: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
+  onImportRecurring: () => void;
   paymentMethodFilter: 'ALL' | EntryPaymentMethod;
   paycheck: Paycheck;
   refreshing: boolean;
@@ -617,6 +650,12 @@ function DetailHeader({
               variant="secondary"
             />
             <Button icon={Plus} label="Add entry" onPress={onAdd} />
+            <Button
+              icon={ReceiptText}
+              label="Import recurring Bills"
+              onPress={onImportRecurring}
+              variant="secondary"
+            />
             {paycheck.unallocatedMinor > 0 ? (
               <Button
                 disabled={leftoverMutation.isPending}

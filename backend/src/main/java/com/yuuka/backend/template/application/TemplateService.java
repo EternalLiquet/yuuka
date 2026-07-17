@@ -330,22 +330,28 @@ public class TemplateService {
     for (int index = 0; index < applicationEntries.size(); index++) {
       ApplicationEntry source = applicationEntries.get(index);
       PaycheckEntry entry =
-          paycheckEntries.saveAndFlush(
-              new PaycheckEntry(
-                  ownerId,
-                  paycheck.getId(),
-                  source.entryType(),
-                  source.name(),
-                  source.amountMinor(),
-                  index,
-                  source.paymentMethod(),
-                  source.dueDate(),
-                  source.accountName(),
-                  source.payee(),
-                  source.notes(),
-                  source.targetMinor(),
-                  source.targetDate(),
-                  null));
+          new PaycheckEntry(
+              ownerId,
+              paycheck.getId(),
+              source.entryType(),
+              source.name(),
+              source.amountMinor(),
+              index,
+              source.paymentMethod(),
+              source.dueDate(),
+              source.accountName(),
+              source.payee(),
+              source.notes(),
+              source.targetMinor(),
+              source.targetDate(),
+              null);
+      validateRecurringSource(
+          source.entryType(),
+          source.sourceRecurringBillDefinitionId(),
+          source.sourceRecurringOccurrenceDate());
+      entry.setRecurringSource(
+          source.sourceRecurringBillDefinitionId(), source.sourceRecurringOccurrenceDate());
+      entry = paycheckEntries.saveAndFlush(entry);
       copied.add(entry);
       statusEvents.save(
           new EntryStatusEvent(
@@ -406,7 +412,9 @@ public class TemplateService {
                     entry.getPayee(),
                     entry.getNotes(),
                     entry.getTargetMinor(),
-                    entry.getTargetDate()))
+                    entry.getTargetDate(),
+                    null,
+                    null))
         .toList();
   }
 
@@ -421,7 +429,9 @@ public class TemplateService {
         billValue(request.entryType(), normalizeOptional(request.payee())),
         normalizeOptional(request.notes()),
         sinkingValue(request.entryType(), request.targetMinor()),
-        sinkingValue(request.entryType(), request.targetDate()));
+        sinkingValue(request.entryType(), request.targetDate()),
+        request.sourceRecurringBillDefinitionId(),
+        request.sourceRecurringOccurrenceDate());
   }
 
   private TemplateEntry fromRequest(
@@ -513,6 +523,16 @@ public class TemplateService {
     return type == EntryType.SINKING_FUND ? value : null;
   }
 
+  private void validateRecurringSource(
+      EntryType entryType, UUID definitionId, LocalDate occurrenceDate) {
+    if ((definitionId == null) != (occurrenceDate == null)) {
+      throw new BusinessRuleException("Recurring Bill provenance must be supplied together.");
+    }
+    if (definitionId != null && entryType != EntryType.BILL) {
+      throw new BusinessRuleException("Only Bills can have recurring provenance.");
+    }
+  }
+
   private record ApplicationEntry(
       EntryType entryType,
       String name,
@@ -523,5 +543,7 @@ public class TemplateService {
       String payee,
       String notes,
       Long targetMinor,
-      LocalDate targetDate) {}
+      LocalDate targetDate,
+      UUID sourceRecurringBillDefinitionId,
+      LocalDate sourceRecurringOccurrenceDate) {}
 }

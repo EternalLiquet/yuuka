@@ -14,6 +14,9 @@ case "$flow" in
   templates)
     flow=".maestro/03-template-application-draft.yaml"
     ;;
+  recurring)
+    flow=".maestro/04-recurring-bill-import.yaml"
+    ;;
 esac
 
 if [ -z "$flow" ]; then
@@ -48,6 +51,9 @@ trap collect_diagnostics EXIT
 adb logcat -c
 adb reverse tcp:8080 tcp:8080
 adb install -r "$apk"
+if adb shell pm path com.android.inputmethod.latin >/dev/null 2>&1; then
+  adb shell pm grant com.android.inputmethod.latin android.permission.READ_CONTACTS || true
+fi
 adb shell am force-stop com.android.launcher3 || true
 sleep 5
 

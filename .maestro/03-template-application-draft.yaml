@@ -2,9 +2,12 @@ appId: com.yuuka.mobile
 name: Template application draft
 ---
 - runFlow: shared/sign-in.yaml
-- tapOn: "Templates tab"
+- tapOn: "Open app menu"
+- tapOn: "Open Templates"
 - tapOn: "New template"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Template Draft"
 - tapOn: "Create template"
 - extendedWaitUntil:
@@ -12,11 +15,18 @@ name: Template application draft
     timeout: 10000
 
 - tapOn: "Add entry"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Rent"
-- tapOn: "Amount"
+- tapOn:
+    text: "Amount"
+    index: 1
 - inputText: "130.00"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "I need to pay this manually"
+    direction: DOWN
 - tapOn: "I need to pay this manually"
 - scrollUntilVisible:
     centerElement: true
@@ -30,11 +40,14 @@ name: Template application draft
 
 - tapOn: "Add entry"
 - tapOn: "Spending Bucket"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Food"
-- tapOn: "Budget amount"
+- tapOn:
+    text: "Budget amount"
+    index: 1
 - inputText: "70.00"
-- hideKeyboard
 - scrollUntilVisible:
     centerElement: true
     element: "Save template entry"
@@ -46,7 +59,7 @@ name: Template application draft
 - assertVisible: 'Template entry 1: E2E Rent, \$130\.00, Bill'
 - assertVisible: 'Template entry 2: E2E Food, \$70\.00, Spending Bucket'
 
-- tapOn: "Back"
+- back
 - extendedWaitUntil:
     visible: "New template"
     timeout: 10000
@@ -56,11 +69,14 @@ name: Template application draft
 - extendedWaitUntil:
     visible: "E2E Template Draft"
     timeout: 10000
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E From Template"
-- tapOn: "Exact paycheck amount"
+- tapOn:
+    text: "Exact paycheck amount"
+    index: 1
 - inputText: "150.00"
-- hideKeyboard
 - scrollUntilVisible:
     centerElement: true
     element: '\$50\.00 over-allocated\.'
@@ -77,18 +93,25 @@ name: Template application draft
 - extendedWaitUntil:
     visible: "Due offset days (optional)"
     timeout: 10000
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - eraseText: 100
 - inputText: "E2E Rent Adjusted"
-- tapOn: "Amount"
+- tapOn:
+    text: "Amount"
+    index: 1
 - eraseText: 100
 - inputText: "80.00"
-- hideKeyboard
 - scrollUntilVisible:
     centerElement: true
     element: "Save template entry"
     direction: DOWN
 - tapOn: "Save template entry"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Fully allocated."
+    direction: UP
 - extendedWaitUntil:
     visible: "Fully allocated."
     timeout: 10000
@@ -119,11 +142,12 @@ name: Template application draft
     direction: DOWN
 - assertVisible: 'Entry 2: E2E Rent Adjusted, \$80\.00, Bill, Manual Pay'
 
-- tapOn: "Back"
+- back
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
-- tapOn: "Templates tab"
+- tapOn: "Open app menu"
+- tapOn: "Open Templates"
 - tapOn: "Open template E2E Template Draft"
 - extendedWaitUntil:
     visible: "E2E Template Draft"

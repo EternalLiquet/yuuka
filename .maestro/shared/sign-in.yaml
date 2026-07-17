@@ -12,7 +12,10 @@ appId: com.yuuka.mobile
 - inputText: "${YUUKA_EMAIL}"
 - tapOn: "Password"
 - inputText: "${YUUKA_PASSWORD}"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Sign in"
+    direction: DOWN
 - tapOn: "Sign in"
 - extendedWaitUntil:
     visible: "Active"

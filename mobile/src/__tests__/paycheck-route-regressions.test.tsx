@@ -514,6 +514,8 @@ function entry(overrides: Partial<Entry>): Entry {
     paycheckId: paycheckId(),
     position: 0,
     remainingMinor: null,
+    sourceRecurringBillDefinitionId: null,
+    sourceRecurringOccurrenceDate: null,
     spentMinor: null,
     status: 'NOT_PAID',
     targetDate: null,

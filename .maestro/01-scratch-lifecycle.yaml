@@ -3,22 +3,32 @@ name: Scratch paycheck lifecycle
 ---
 - runFlow: shared/sign-in.yaml
 - tapOn: "New paycheck"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Scratch"
-- tapOn: "Exact paycheck amount"
+- tapOn:
+    text: "Exact paycheck amount"
+    index: 1
 - inputText: "200.00"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create paycheck"
+    direction: DOWN
 - tapOn: "Create paycheck"
 - extendedWaitUntil:
     visible: "E2E Scratch"
     timeout: 10000
 
 - tapOn: "Add entry"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "Phone"
-- tapOn: "Amount"
+- tapOn:
+    text: "Amount"
+    index: 1
 - inputText: "50.00"
-- hideKeyboard
 - scrollUntilVisible:
     centerElement: true
     element: "Save entry"
@@ -33,11 +43,15 @@ name: Scratch paycheck lifecycle
 
 - tapOn: "Add entry"
 - tapOn: "Spending Bucket"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "Food"
-- tapOn: "Budget amount"
+- tapOn:
+    text: "Budget amount"
+    index: 1
 - inputText: "150.00"
-- hideKeyboard
+- pressKey: Enter
 - scrollUntilVisible:
     centerElement: true
     element: "Save entry"
@@ -55,22 +69,20 @@ name: Scratch paycheck lifecycle
 - tapOn: "Change status for Phone"
 - tapOn: "Processing"
 - tapOn:
+    text: "Note (optional)"
+    index: 1
+- inputText: "Scheduled"
+- runFlow:
+    when:
+      visible: "Return"
+    commands:
+      - hideKeyboard
+- tapOn:
     text: "Effective date and time"
     point: "90%,50%"
 - eraseText: 100
 - inputText: "2026-07-16T12:00:00Z"
-- hideKeyboard
-- scrollUntilVisible:
-    centerElement: true
-    element: "Note (optional)"
-    direction: DOWN
-- tapOn: "Note (optional)"
-- inputText: "Scheduled"
-- hideKeyboard
-- scrollUntilVisible:
-    centerElement: true
-    element: "Save status"
-    direction: DOWN
+- pressKey: Enter
 - tapOn: "Save status"
 - extendedWaitUntil:
     visible: "Status: Processing"
@@ -78,10 +90,6 @@ name: Scratch paycheck lifecycle
 
 - tapOn: "Change status for Phone"
 - tapOn: "Posted"
-- scrollUntilVisible:
-    centerElement: true
-    element: "Save status"
-    direction: DOWN
 - tapOn: "Save status"
 - extendedWaitUntil:
     visible: "Status: Posted"
@@ -89,10 +97,6 @@ name: Scratch paycheck lifecycle
 
 - tapOn: "Change status for Food"
 - tapOn: "Posted"
-- scrollUntilVisible:
-    centerElement: true
-    element: "Save status"
-    direction: DOWN
 - tapOn: "Save status"
 - extendedWaitUntil:
     visible: "Reopen paycheck"

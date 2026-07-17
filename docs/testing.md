@@ -46,6 +46,7 @@ The current critical Maestro flows are:
 - `.maestro/01-scratch-lifecycle.yaml`
 - `.maestro/02-payback-delete-reassign.yaml`
 - `.maestro/03-template-application-draft.yaml`
+- `.maestro/04-recurring-bill-import.yaml`
 
 Run them against a disposable demo backend and installed preview APK:
 
@@ -53,6 +54,7 @@ Run them against a disposable demo backend and installed preview APK:
 maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/01-scratch-lifecycle.yaml
 maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/02-payback-delete-reassign.yaml
 maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/03-template-application-draft.yaml
+maestro test -e YUUKA_EMAIL=e2e@yuuka.local -e YUUKA_PASSWORD=E2ePassword123 .maestro/04-recurring-bill-import.yaml
 ```
 
 Never run destructive E2E flows against production data. Flaky tests are failures and must be fixed, not disabled.

@@ -178,11 +178,20 @@ describe('duplicate paycheck route', () => {
     });
     queryClient.setQueryData(['paycheck', sourceId], stalePaycheck);
     queryClient.setQueryData(['paycheck', 'duplicate-source', sourceId], stalePaycheck);
-    mockApi.paycheck.mockResolvedValue(freshPaycheck);
+    const sourceRequest = deferred<Paycheck>();
+    mockApi.paycheck.mockReturnValue(sourceRequest.promise);
 
     const view = await renderRoute(queryClient);
 
+    expect(view.getByLabelText('Loading paycheck...')).toBeTruthy();
     expect(view.queryByLabelText('Name')).toBeNull();
+    expect(view.queryByText('Stale cached bill')).toBeNull();
+
+    await act(async () => {
+      sourceRequest.resolve(freshPaycheck);
+      await sourceRequest.promise;
+    });
+
     await waitFor(() =>
       expect(view.getByLabelText('Name').props.value).toBe('Fresh authoritative paycheck'),
     );
@@ -463,6 +472,8 @@ function entry(overrides: Partial<Entry>): Entry {
     paymentMethod: 'AUTOPAY',
     position: 0,
     remainingMinor: null,
+    sourceRecurringBillDefinitionId: null,
+    sourceRecurringOccurrenceDate: null,
     spentMinor: null,
     status: 'POSTED',
     targetDate: null,

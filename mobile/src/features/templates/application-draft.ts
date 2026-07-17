@@ -6,6 +6,7 @@ import type {
   TemplateEntry,
 } from '@/api/contracts';
 import type { EntryPayload } from '@/api/use-yuuka-api';
+import type { RecurringBillImportSelection } from '@/features/recurring-bills/import-recurring-bills-sheet';
 
 export type TemplateApplicationDraftEntry = {
   accountName: string | null;
@@ -17,6 +18,8 @@ export type TemplateApplicationDraftEntry = {
   notes: string | null;
   payee: string | null;
   paymentMethod: EntryPaymentMethod | null;
+  sourceRecurringBillDefinitionId: string | null;
+  sourceRecurringOccurrenceDate: string | null;
   targetDate: string | null;
   targetMinor: number | null;
 };
@@ -56,6 +59,8 @@ export function draftEntryFromTemplateEntry(entry: TemplateEntry): TemplateAppli
     notes: entry.notes,
     payee: entry.payee,
     paymentMethod: entry.paymentMethod,
+    sourceRecurringBillDefinitionId: null,
+    sourceRecurringOccurrenceDate: null,
     targetDate: entry.targetDate,
     targetMinor: entry.targetMinor,
   };
@@ -78,6 +83,8 @@ export function draftEntryFromPaycheckEntry(
     notes: entry.notes,
     payee: entry.entryType === 'BILL' ? entry.payee : null,
     paymentMethod: entry.entryType === 'BILL' ? entry.paymentMethod : null,
+    sourceRecurringBillDefinitionId: null,
+    sourceRecurringOccurrenceDate: null,
     targetDate: entry.entryType === 'SINKING_FUND' ? entry.targetDate : null,
     targetMinor: entry.entryType === 'SINKING_FUND' ? entry.targetMinor : null,
   };
@@ -85,6 +92,27 @@ export function draftEntryFromPaycheckEntry(
 
 export function draftTotalMinor(entries: TemplateApplicationDraftEntry[]) {
   return entries.reduce((total, entry) => total + entry.amountMinor, 0);
+}
+
+export function draftEntriesFromRecurringBills(
+  selections: RecurringBillImportSelection[],
+): TemplateApplicationDraftEntry[] {
+  const batch = Date.now();
+  return selections.map((item, index) => ({
+    accountName: item.accountName,
+    amountMinor: item.amountMinor,
+    clientId: `recurring-${item.definitionId}-${item.occurrenceDate}-${batch}-${index}`,
+    defaultDueOffsetDays: null,
+    entryType: 'BILL',
+    name: item.name,
+    notes: item.notes,
+    payee: item.payee,
+    paymentMethod: item.paymentMethod,
+    sourceRecurringBillDefinitionId: item.definitionId,
+    sourceRecurringOccurrenceDate: item.occurrenceDate,
+    targetDate: null,
+    targetMinor: null,
+  }));
 }
 
 export function dueDateFromOffset(incomeDate: string, offset: number | null): string | null {
@@ -105,12 +133,20 @@ export function applicationEntriesFromDraft(
     amountMinor: entry.amountMinor,
     paymentMethod: entry.entryType === 'BILL' ? (entry.paymentMethod ?? 'AUTOPAY') : null,
     dueDate:
-      entry.entryType === 'BILL' ? dueDateFromOffset(incomeDate, entry.defaultDueOffsetDays) : null,
+      entry.entryType === 'BILL'
+        ? entry.defaultDueOffsetDays == null
+          ? entry.sourceRecurringOccurrenceDate
+          : dueDateFromOffset(incomeDate, entry.defaultDueOffsetDays)
+        : null,
     accountName: entry.entryType === 'BILL' ? entry.accountName : null,
     payee: entry.entryType === 'BILL' ? entry.payee : null,
     notes: entry.notes,
     targetMinor: entry.entryType === 'SINKING_FUND' ? entry.targetMinor : null,
     targetDate: entry.entryType === 'SINKING_FUND' ? entry.targetDate : null,
+    sourceRecurringBillDefinitionId:
+      entry.entryType === 'BILL' ? entry.sourceRecurringBillDefinitionId : null,
+    sourceRecurringOccurrenceDate:
+      entry.entryType === 'BILL' ? entry.sourceRecurringOccurrenceDate : null,
   }));
 }
 

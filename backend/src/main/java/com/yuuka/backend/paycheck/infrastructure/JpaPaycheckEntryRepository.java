@@ -27,6 +27,18 @@ public interface JpaPaycheckEntryRepository extends JpaRepository<PaycheckEntry,
 
   long countByPaybackIdAndOwnerIdAndDeletedAtIsNull(UUID paybackId, UUID ownerId);
 
+  @Query(
+      "select entry from PaycheckEntry entry "
+          + "where entry.ownerId = :ownerId "
+          + "and entry.sourceRecurringBillDefinitionId in :definitionIds "
+          + "and entry.sourceRecurringOccurrenceDate between :from and :through "
+          + "and entry.deletedAt is null")
+  List<PaycheckEntry> findRecurringImports(
+      @Param("ownerId") UUID ownerId,
+      @Param("definitionIds") java.util.Collection<UUID> definitionIds,
+      @Param("from") java.time.LocalDate from,
+      @Param("through") java.time.LocalDate through);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       "select entry from PaycheckEntry entry "

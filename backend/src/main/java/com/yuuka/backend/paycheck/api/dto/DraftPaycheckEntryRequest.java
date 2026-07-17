@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.UUID;
 
 public record DraftPaycheckEntryRequest(
     @NotNull EntryType entryType,
@@ -21,4 +22,6 @@ public record DraftPaycheckEntryRequest(
     @Size(max = 2000) String notes,
     @PositiveOrZero(message = "Target amount must be greater than or equal to $0.00.")
         Long targetMinor,
-    LocalDate targetDate) {}
+    LocalDate targetDate,
+    UUID sourceRecurringBillDefinitionId,
+    LocalDate sourceRecurringOccurrenceDate) {}
