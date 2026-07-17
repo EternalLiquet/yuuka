@@ -5,7 +5,9 @@ name: Template application draft
 - tapOn: "Open app menu"
 - tapOn: "Open Templates"
 - tapOn: "New template"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Template Draft"
 - tapOn: "Create template"
 - extendedWaitUntil:
@@ -13,9 +15,13 @@ name: Template application draft
     timeout: 10000
 
 - tapOn: "Add entry"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Rent"
-- tapOn: "Amount"
+- tapOn:
+    text: "Amount"
+    index: 1
 - inputText: "130.00"
 - scrollUntilVisible:
     centerElement: true
@@ -34,9 +40,13 @@ name: Template application draft
 
 - tapOn: "Add entry"
 - tapOn: "Spending Bucket"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Food"
-- tapOn: "Budget amount"
+- tapOn:
+    text: "Budget amount"
+    index: 1
 - inputText: "70.00"
 - scrollUntilVisible:
     centerElement: true
@@ -49,7 +59,7 @@ name: Template application draft
 - assertVisible: 'Template entry 1: E2E Rent, \$130\.00, Bill'
 - assertVisible: 'Template entry 2: E2E Food, \$70\.00, Spending Bucket'
 
-- tapOn: "Back"
+- back
 - extendedWaitUntil:
     visible: "New template"
     timeout: 10000
@@ -59,9 +69,13 @@ name: Template application draft
 - extendedWaitUntil:
     visible: "E2E Template Draft"
     timeout: 10000
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E From Template"
-- tapOn: "Exact paycheck amount"
+- tapOn:
+    text: "Exact paycheck amount"
+    index: 1
 - inputText: "150.00"
 - scrollUntilVisible:
     centerElement: true
@@ -79,10 +93,14 @@ name: Template application draft
 - extendedWaitUntil:
     visible: "Due offset days (optional)"
     timeout: 10000
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - eraseText: 100
 - inputText: "E2E Rent Adjusted"
-- tapOn: "Amount"
+- tapOn:
+    text: "Amount"
+    index: 1
 - eraseText: 100
 - inputText: "80.00"
 - scrollUntilVisible:
@@ -120,7 +138,7 @@ name: Template application draft
     direction: DOWN
 - assertVisible: 'Entry 2: E2E Rent Adjusted, \$80\.00, Bill, Manual Pay'
 
-- tapOn: "Back"
+- back
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000

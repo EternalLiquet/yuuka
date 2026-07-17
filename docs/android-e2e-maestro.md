@@ -84,6 +84,14 @@ Do not add `adb reverse tcp:8081 tcp:8081`, Metro status polling, or bundle prew
 
 `EXPO_PUBLIC_E2E=1` is compiled into the E2E APK and tells the app to hide React Native LogBox overlays. This is for test hygiene only; it must not hide failed app assertions.
 
+When rebuilding an E2E APK locally after changing an `EXPO_PUBLIC_*` value, Gradle may consider the existing release JavaScript bundle up to date. Force the bundle task before packaging again, or clean only the generated app build output:
+
+```sh
+cd mobile/android
+./gradlew :app:createBundleReleaseJsAndAssets --rerun-tasks
+./gradlew assembleRelease
+```
+
 Because the E2E APK is a release build, the app keeps the normal release requirement that API URLs use HTTPS. The E2E flag adds one narrow exception for the disposable CI backend: release builds with `EXPO_PUBLIC_E2E=1` may use HTTP only for explicit loopback hosts, `localhost` or `127.0.0.1`. Arbitrary production HTTP endpoints remain rejected, including in E2E mode.
 
 ## Emulator and Disk Pitfalls
@@ -117,6 +125,14 @@ Prefer user-visible labels and accessibility labels over coordinates. If a contr
     element: "Save entry"
     direction: DOWN
 - tapOn: "Save entry"
+```
+
+If a visible field label and its input share the same text in the accessibility tree, use the verified input occurrence instead of the shorthand selector. Otherwise Maestro can tap the non-interactive label and leave keyboard input focused in the previous field:
+
+```yaml
+- tapOn:
+    text: "Original amount owed"
+    index: 1
 ```
 
 After saving a form, assert a detail-screen control before continuing. Text from the form can remain visible briefly or be matched in an unexpected place.

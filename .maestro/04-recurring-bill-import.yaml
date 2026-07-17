@@ -5,11 +5,17 @@ name: Recurring Bill import into scratch draft
 - tapOn: "Open app menu"
 - tapOn: "Open Recurring Bills"
 - tapOn: "New recurring Bill"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Electric"
-- tapOn: "Typical amount"
+- tapOn:
+    text: "Typical amount"
+    index: 1
 - inputText: "120.00"
-- tapOn: "Monthly due day"
+- tapOn:
+    text: "Monthly due day"
+    index: 1
 - inputText: "21"
 - scrollUntilVisible:
     centerElement: true
@@ -30,11 +36,17 @@ name: Recurring Bill import into scratch draft
     visible: "New paycheck"
     timeout: 10000
 - tapOn: "New paycheck"
-- tapOn: "Name"
+- tapOn:
+    text: "Name"
+    index: 1
 - inputText: "E2E Recurring Import"
-- tapOn: "Exact paycheck amount"
+- tapOn:
+    text: "Exact paycheck amount"
+    index: 1
 - inputText: "200.00"
-- tapOn: "Income date"
+- tapOn:
+    text: "Income date"
+    index: 1
 - eraseText: 100
 - inputText: "2026-07-17"
 - scrollUntilVisible:
@@ -46,7 +58,9 @@ name: Recurring Bill import into scratch draft
     visible: "Edit amount for E2E Electric"
     timeout: 10000
 - tapOn: "Edit amount for E2E Electric"
-- tapOn: "Amount for this paycheck"
+- tapOn:
+    text: "Amount for this paycheck"
+    index: 1
 - eraseText: 100
 - inputText: "146.00"
 - scrollUntilVisible:
@@ -55,13 +69,11 @@ name: Recurring Bill import into scratch draft
     direction: DOWN
 - tapOn: "This paycheck only"
 - tapOn: "Add selected Bills (1)"
-- extendedWaitUntil:
-    visible: "Close"
-    timeout: 10000
-- tapOn: "Close"
-- extendedWaitUntil:
-    visible: "E2E Electric"
-    timeout: 10000
+- scrollUntilVisible:
+    centerElement: true
+    element: "Edit E2E Electric"
+    direction: DOWN
+- assertVisible: "Edit E2E Electric"
 - scrollUntilVisible:
     centerElement: true
     element: "Create paycheck"
