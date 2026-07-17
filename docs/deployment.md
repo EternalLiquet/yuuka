@@ -36,12 +36,15 @@ Keep `.env` readable only by the service administrator (`chmod 600 .env`). Do no
 ## Start and verify
 
 ```sh
+./ops/prod-preflight.sh
 docker compose pull
 docker compose up -d --build
 docker compose ps
 curl --fail http://127.0.0.1:8080/health/live
 curl --fail http://127.0.0.1:8080/health/ready
 ```
+
+Run the preflight before `docker compose up` and after every production `.env` change. It validates that the `prod` profile is active, database and JWT secrets are not development defaults, owner email/password hash/TOTP are present, the plaintext bootstrap password is blank, CORS origins are HTTPS-only and non-localhost, and the backend remains bound to `127.0.0.1`. The check reports setting names only and does not print secret values.
 
 Flyway runs before the application accepts requests. Production startup refuses default secrets, public registration, plaintext bootstrap passwords, missing TOTP, and localhost CORS entries.
 
@@ -77,6 +80,7 @@ Use Tailscale ACLs/grants so only your user and intended phone can reach the hom
 
 ```sh
 ./ops/backup.sh
+./ops/prod-preflight.sh
 docker compose pull
 docker compose build --pull backend
 docker compose up -d

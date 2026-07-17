@@ -113,6 +113,8 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7.0.0
+      - name: Production preflight validation logic
+        run: ./ops/prod-preflight-tests.sh
       - name: Validate Compose configuration
         run: docker compose config --quiet
       - name: Build hardened backend image
