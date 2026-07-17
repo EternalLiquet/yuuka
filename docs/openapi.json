@@ -907,6 +907,7 @@
           "schema" : {
             "type" : "integer",
             "format" : "int32",
+            "minimum" : 0,
             "default" : 0
           }
         }, {
@@ -916,6 +917,8 @@
           "schema" : {
             "type" : "integer",
             "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 1,
             "default" : 50
           }
         } ],

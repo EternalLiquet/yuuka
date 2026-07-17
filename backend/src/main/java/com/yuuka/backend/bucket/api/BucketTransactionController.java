@@ -6,6 +6,8 @@ import com.yuuka.backend.bucket.api.dto.UpdateBucketTransactionRequest;
 import com.yuuka.backend.bucket.application.BucketTransactionService;
 import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.security.AuthenticatedOwner;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -35,8 +37,10 @@ public class BucketTransactionController {
   public PageResponse<BucketTransactionResponse> list(
       @AuthenticationPrincipal Jwt jwt,
       @PathVariable UUID entryId,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "50") int size) {
+      @Parameter(schema = @Schema(minimum = "0")) @RequestParam(defaultValue = "0") int page,
+      @Parameter(schema = @Schema(minimum = "1", maximum = "100"))
+          @RequestParam(defaultValue = "50")
+          int size) {
     return service.list(AuthenticatedOwner.id(jwt), entryId, page, size);
   }
 

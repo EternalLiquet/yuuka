@@ -152,10 +152,10 @@ public interface JpaPaycheckRepository
           from paychecks p
           where p.owner_id = :ownerId
             and (:term = ''
-              or lower(p.name) like concat('%', :term, '%')
-              or lower(coalesce(p.source, '')) like concat('%', :term, '%'))
-            and (:fromDate is null or p.income_date >= cast(:fromDate as date))
-            and (:toDate is null or p.income_date <= cast(:toDate as date))
+              or position(:term in lower(p.name)) > 0
+              or position(:term in lower(coalesce(p.source, ''))) > 0)
+            and (cast(:fromDate as date) is null or p.income_date >= cast(:fromDate as date))
+            and (cast(:toDate as date) is null or p.income_date <= cast(:toDate as date))
             and (
               p.state <> 'ACTIVE'
               or (
@@ -217,10 +217,10 @@ public interface JpaPaycheckRepository
           from paychecks p
           where p.owner_id = :ownerId
             and (:term = ''
-              or lower(p.name) like concat('%', :term, '%')
-              or lower(coalesce(p.source, '')) like concat('%', :term, '%'))
-            and (:fromDate is null or p.income_date >= cast(:fromDate as date))
-            and (:toDate is null or p.income_date <= cast(:toDate as date))
+              or position(:term in lower(p.name)) > 0
+              or position(:term in lower(coalesce(p.source, ''))) > 0)
+            and (cast(:fromDate as date) is null or p.income_date >= cast(:fromDate as date))
+            and (cast(:toDate as date) is null or p.income_date <= cast(:toDate as date))
             and (
               p.state <> 'ACTIVE'
               or (
@@ -290,10 +290,10 @@ public interface JpaPaycheckRepository
           from paychecks p
           where p.owner_id = :ownerId
             and (:term = ''
-              or lower(p.name) like concat('%', :term, '%')
-              or lower(coalesce(p.source, '')) like concat('%', :term, '%'))
-            and (:fromDate is null or p.income_date >= cast(:fromDate as date))
-            and (:toDate is null or p.income_date <= cast(:toDate as date))
+              or position(:term in lower(p.name)) > 0
+              or position(:term in lower(coalesce(p.source, ''))) > 0)
+            and (cast(:fromDate as date) is null or p.income_date >= cast(:fromDate as date))
+            and (cast(:toDate as date) is null or p.income_date <= cast(:toDate as date))
             and (
               p.state <> 'ACTIVE'
               or (
@@ -355,10 +355,10 @@ public interface JpaPaycheckRepository
           from paychecks p
           where p.owner_id = :ownerId
             and (:term = ''
-              or lower(p.name) like concat('%', :term, '%')
-              or lower(coalesce(p.source, '')) like concat('%', :term, '%'))
-            and (:fromDate is null or p.income_date >= cast(:fromDate as date))
-            and (:toDate is null or p.income_date <= cast(:toDate as date))
+              or position(:term in lower(p.name)) > 0
+              or position(:term in lower(coalesce(p.source, ''))) > 0)
+            and (cast(:fromDate as date) is null or p.income_date >= cast(:fromDate as date))
+            and (cast(:toDate as date) is null or p.income_date <= cast(:toDate as date))
             and (
               p.state <> 'ACTIVE'
               or (
