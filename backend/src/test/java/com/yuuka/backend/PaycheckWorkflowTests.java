@@ -11,8 +11,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuuka.backend.bucket.domain.BucketCalculator;
+import com.yuuka.backend.bucket.domain.BucketMetrics;
+import com.yuuka.backend.paycheck.domain.AllocationLine;
+import com.yuuka.backend.paycheck.domain.EntryStatus;
+import com.yuuka.backend.paycheck.domain.PaycheckCalculator;
+import com.yuuka.backend.paycheck.domain.PaycheckMetrics;
 import com.yuuka.backend.support.AbstractIntegrationTest;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +34,8 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private PaycheckCalculator paycheckCalculator;
+  @Autowired private BucketCalculator bucketCalculator;
 
   @Test
   void createsExactCentPaycheckAndKeepsAllocatedButIncompleteWorkActive() throws Exception {
@@ -343,6 +352,68 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
         .perform(get("/api/v1/paychecks/active").header("Authorization", "Bearer " + token))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.totalItems").value(1));
+  }
+
+  @Test
+  void activeListBatchedDerivedMetricsMatchCurrentCalculators() throws Exception {
+    String token = registerAndGetAccessToken("active-list-batch@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Batch Metrics", 12000);
+    String paycheckId = paycheck.path("id").asText();
+    JsonNode bill = addEntry(token, paycheckId, "BILL", "Posted Bill", 3000);
+    JsonNode bucket = addEntry(token, paycheckId, "SPENDING_BUCKET", "Groceries", 4000);
+    JsonNode sinking = addEntry(token, paycheckId, "SINKING_FUND", "Insurance", 3000);
+
+    changeStatus(token, bill, "POSTED");
+    changeStatus(token, sinking, "PROCESSING");
+    addBucketTransaction(token, bucket.path("id").asText(), 1250, "Market");
+    addBucketTransaction(token, bucket.path("id").asText(), 800, "Bakery");
+
+    PaycheckMetrics expectedPaycheck =
+        paycheckCalculator.calculate(
+            12000,
+            List.of(
+                new AllocationLine(3000, EntryStatus.POSTED, false),
+                new AllocationLine(4000, EntryStatus.NOT_PAID, false),
+                new AllocationLine(3000, EntryStatus.PROCESSING, false)));
+    BucketMetrics expectedBucket = bucketCalculator.calculate(4000, List.of(1250L, 800L));
+
+    JsonNode activeList =
+        json(get("/api/v1/paychecks/active").header("Authorization", "Bearer " + token), 200);
+    JsonNode activePaycheck = itemById(activeList.path("items"), paycheckId);
+    assertThat(activePaycheck.path("allocatedMinor").asLong())
+        .isEqualTo(expectedPaycheck.allocatedMinor());
+    assertThat(activePaycheck.path("unallocatedMinor").asLong())
+        .isEqualTo(expectedPaycheck.unallocatedMinor());
+    assertThat(activePaycheck.path("postedMinor").asLong())
+        .isEqualTo(expectedPaycheck.postedMinor());
+    assertThat(activePaycheck.path("processingMinor").asLong())
+        .isEqualTo(expectedPaycheck.processingMinor());
+    assertThat(activePaycheck.path("notPaidMinor").asLong())
+        .isEqualTo(expectedPaycheck.notPaidMinor());
+    assertThat(activePaycheck.path("postedCount").asLong())
+        .isEqualTo(expectedPaycheck.postedCount());
+    assertThat(activePaycheck.path("processingCount").asLong())
+        .isEqualTo(expectedPaycheck.processingCount());
+    assertThat(activePaycheck.path("notPaidCount").asLong())
+        .isEqualTo(expectedPaycheck.notPaidCount());
+    assertThat(activePaycheck.path("allocationPercent").decimalValue())
+        .isEqualByComparingTo(expectedPaycheck.allocationPercent());
+    assertThat(activePaycheck.path("completionPercent").decimalValue())
+        .isEqualByComparingTo(expectedPaycheck.completionPercent());
+    assertThat(activePaycheck.path("requiresAttention").asBoolean())
+        .isEqualTo(expectedPaycheck.requiresAttention());
+
+    JsonNode bucketEntry = itemById(activePaycheck.path("entries"), bucket.path("id").asText());
+    assertThat(bucketEntry.path("spentMinor").asLong()).isEqualTo(expectedBucket.spentMinor());
+    assertThat(bucketEntry.path("remainingMinor").asLong())
+        .isEqualTo(expectedBucket.remainingMinor());
+    assertThat(bucketEntry.path("overBudget").asBoolean()).isEqualTo(expectedBucket.overBudget());
+    assertThat(activePaycheck.path("spendingBucketPerformance").path("budgetedMinor").asLong())
+        .isEqualTo(4000);
+    assertThat(activePaycheck.path("spendingBucketPerformance").path("spentMinor").asLong())
+        .isEqualTo(2050);
+    assertThat(activePaycheck.path("spendingBucketPerformance").path("netMinor").asLong())
+        .isEqualTo(1950);
   }
 
   @Test
@@ -963,9 +1034,32 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
         200);
   }
 
+  private JsonNode addBucketTransaction(
+      String token, String entryId, long amountMinor, String description) throws Exception {
+    return json(
+        post("/api/v1/entries/{id}/bucket-transactions", entryId)
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {"amountMinor":%d,"description":"%s","effectiveDate":"2026-07-17"}
+                """
+                    .formatted(amountMinor, description)),
+        201);
+  }
+
   private JsonNode getPaycheck(String token, String paycheckId) throws Exception {
     return json(
         get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", "Bearer " + token), 200);
+  }
+
+  private JsonNode itemById(JsonNode items, String id) {
+    for (JsonNode item : items) {
+      if (id.equals(item.path("id").asText())) {
+        return item;
+      }
+    }
+    throw new AssertionError("Missing response item " + id);
   }
 
   private JsonNode paycheckAudit(String token, String paycheckId) throws Exception {

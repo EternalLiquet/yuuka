@@ -2,9 +2,9 @@ package com.yuuka.backend.paycheck.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,7 +20,6 @@ import com.yuuka.backend.paycheck.api.dto.PaycheckResponse;
 import com.yuuka.backend.paycheck.domain.Paycheck;
 import com.yuuka.backend.paycheck.domain.PaycheckCalculator;
 import com.yuuka.backend.paycheck.domain.PaycheckState;
-import com.yuuka.backend.paycheck.domain.PaycheckVisibilityPolicy;
 import com.yuuka.backend.paycheck.domain.StatusTransitionPolicy;
 import com.yuuka.backend.paycheck.infrastructure.JpaEntryStatusEventRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
@@ -30,8 +29,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 class PaycheckServiceTests {
   private final JpaPaycheckRepository paychecks = mock(JpaPaycheckRepository.class);
@@ -40,7 +42,6 @@ class PaycheckServiceTests {
       mock(JpaEntryStatusEventRepository.class);
   private final JpaBucketTransactionRepository bucketTransactions =
       mock(JpaBucketTransactionRepository.class);
-  private final PaycheckVisibilityPolicy visibilityPolicy = mock(PaycheckVisibilityPolicy.class);
   private final StatusTransitionPolicy statusTransitionPolicy = mock(StatusTransitionPolicy.class);
   private final SpendingBucketPerformanceService spendingBucketPerformanceService =
       mock(SpendingBucketPerformanceService.class);
@@ -55,14 +56,12 @@ class PaycheckServiceTests {
     Paycheck first = paycheck(ownerId, UUID.randomUUID(), "First");
     Paycheck second = paycheck(ownerId, UUID.randomUUID(), "Second");
     when(ownerLocalDateService.currentDate(ownerId)).thenReturn(asOfDate);
-    when(paychecks.findAllByOwnerIdAndStateOrderByIncomeDateDescUpdatedAtDesc(
-            ownerId, PaycheckState.ACTIVE))
-        .thenReturn(List.of(first, second));
-    when(entries.findAllByPaycheckIdAndOwnerIdAndDeletedAtIsNullOrderByPosition(
-            any(UUID.class), eq(ownerId)))
-        .thenReturn(List.of());
-    when(visibilityPolicy.belongsInActive(eq(PaycheckState.ACTIVE), anyBoolean(), any()))
-        .thenReturn(true);
+    when(paychecks.findActivePage(eq(ownerId), any()))
+        .thenReturn(new PageImpl<>(List.of(first, second), PageRequest.of(0, 50), 2));
+    when(entries.findAllLiveByPaycheckIds(eq(ownerId), any())).thenReturn(List.of());
+    when(entries.aggregateMetricsByPaycheckIds(eq(ownerId), any())).thenReturn(List.of());
+    when(spendingBucketPerformanceService.paycheckSummaries(eq(ownerId), any(), eq(asOfDate)))
+        .thenReturn(Map.of());
 
     PageResponse<PaycheckResponse> response = service().active(ownerId, 0, 50);
 
@@ -71,22 +70,30 @@ class PaycheckServiceTests {
         .containsExactly("First", "Second");
     verify(ownerLocalDateService, times(1)).currentDate(ownerId);
     verify(spendingBucketPerformanceService, times(1))
-        .paycheckSummary(ownerId, first.getId(), asOfDate);
-    verify(spendingBucketPerformanceService, times(1))
-        .paycheckSummary(ownerId, second.getId(), asOfDate);
+        .paycheckSummaries(eq(ownerId), any(), eq(asOfDate));
+    verify(spendingBucketPerformanceService, never())
+        .paycheckSummary(eq(ownerId), any(UUID.class), eq(asOfDate));
   }
 
   private PaycheckService service() {
+    PaycheckResponseAssembler responseAssembler =
+        new PaycheckResponseAssembler(
+            entries,
+            bucketTransactions,
+            new PaycheckCalculator(),
+            new BucketCalculator(),
+            spendingBucketPerformanceService,
+            ownerLocalDateService);
+    PaycheckValidationHelper validations = new PaycheckValidationHelper();
     return new PaycheckService(
         paychecks,
         entries,
         statusEvents,
-        bucketTransactions,
-        new PaycheckCalculator(),
-        visibilityPolicy,
+        responseAssembler,
+        new PaycheckEntryMutationHelper(),
+        new PaycheckLifecycleTransitions(paychecks, responseAssembler, auditService),
+        validations,
         statusTransitionPolicy,
-        new BucketCalculator(),
-        spendingBucketPerformanceService,
         ownerLocalDateService,
         paybackService,
         auditService,

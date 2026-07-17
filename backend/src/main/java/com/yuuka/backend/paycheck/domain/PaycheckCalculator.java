@@ -56,6 +56,43 @@ public class PaycheckCalculator {
         percent(posted, allocated));
   }
 
+  public PaycheckMetrics calculateFromTotals(
+      long paycheckAmountMinor,
+      long allocated,
+      long posted,
+      long processing,
+      long notPaid,
+      long postedCount,
+      long processingCount,
+      long notPaidCount) {
+    if (paycheckAmountMinor < 0) {
+      throw new IllegalArgumentException("Paycheck amount must not be negative");
+    }
+    if (allocated < 0
+        || posted < 0
+        || processing < 0
+        || notPaid < 0
+        || postedCount < 0
+        || processingCount < 0
+        || notPaidCount < 0) {
+      throw new IllegalArgumentException("Paycheck totals must not be negative");
+    }
+    if (Math.addExact(Math.addExact(posted, processing), notPaid) != allocated) {
+      throw new IllegalArgumentException("Paycheck status totals must match allocation total");
+    }
+    return new PaycheckMetrics(
+        allocated,
+        Math.subtractExact(paycheckAmountMinor, allocated),
+        posted,
+        processing,
+        notPaid,
+        postedCount,
+        processingCount,
+        notPaidCount,
+        percent(allocated, paycheckAmountMinor),
+        percent(posted, allocated));
+  }
+
   private BigDecimal percent(long numerator, long denominator) {
     if (denominator == 0) {
       return BigDecimal.ZERO.setScale(2);

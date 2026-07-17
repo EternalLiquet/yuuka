@@ -2,13 +2,7 @@ package com.yuuka.backend.paycheck.application;
 
 import com.yuuka.backend.audit.application.AuditService;
 import com.yuuka.backend.auth.application.OwnerLocalDateService;
-import com.yuuka.backend.bucket.application.SpendingBucketPerformanceService;
-import com.yuuka.backend.bucket.domain.BucketCalculator;
-import com.yuuka.backend.bucket.domain.BucketMetrics;
-import com.yuuka.backend.bucket.domain.BucketTransaction;
-import com.yuuka.backend.bucket.infrastructure.JpaBucketTransactionRepository;
 import com.yuuka.backend.common.api.BusinessRuleException;
-import com.yuuka.backend.common.api.ConflictException;
 import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.api.ResourceNotFoundException;
 import com.yuuka.backend.payback.application.PaybackService;
@@ -24,20 +18,18 @@ import com.yuuka.backend.paycheck.api.dto.StatusEventResponse;
 import com.yuuka.backend.paycheck.api.dto.UpdateEntryRequest;
 import com.yuuka.backend.paycheck.api.dto.UpdatePaycheckRequest;
 import com.yuuka.backend.paycheck.domain.AllocationLine;
-import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryStatus;
 import com.yuuka.backend.paycheck.domain.EntryStatusEvent;
 import com.yuuka.backend.paycheck.domain.EntryType;
 import com.yuuka.backend.paycheck.domain.Paycheck;
-import com.yuuka.backend.paycheck.domain.PaycheckCalculator;
 import com.yuuka.backend.paycheck.domain.PaycheckEntry;
 import com.yuuka.backend.paycheck.domain.PaycheckMetrics;
 import com.yuuka.backend.paycheck.domain.PaycheckState;
-import com.yuuka.backend.paycheck.domain.PaycheckVisibilityPolicy;
 import com.yuuka.backend.paycheck.domain.StatusTransitionPolicy;
 import com.yuuka.backend.paycheck.infrastructure.JpaEntryStatusEventRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckRepository;
+import java.sql.Date;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -49,6 +41,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -59,12 +52,11 @@ public class PaycheckService {
   private final JpaPaycheckRepository paychecks;
   private final JpaPaycheckEntryRepository entries;
   private final JpaEntryStatusEventRepository statusEvents;
-  private final JpaBucketTransactionRepository bucketTransactions;
-  private final PaycheckCalculator paycheckCalculator;
-  private final PaycheckVisibilityPolicy visibilityPolicy;
+  private final PaycheckResponseAssembler responseAssembler;
+  private final PaycheckEntryMutationHelper entryMutations;
+  private final PaycheckLifecycleTransitions lifecycleTransitions;
+  private final PaycheckValidationHelper validations;
   private final StatusTransitionPolicy statusTransitionPolicy;
-  private final BucketCalculator bucketCalculator;
-  private final SpendingBucketPerformanceService spendingBucketPerformanceService;
   private final OwnerLocalDateService ownerLocalDateService;
   private final PaybackService paybackService;
   private final AuditService auditService;
@@ -74,12 +66,11 @@ public class PaycheckService {
       JpaPaycheckRepository paychecks,
       JpaPaycheckEntryRepository entries,
       JpaEntryStatusEventRepository statusEvents,
-      JpaBucketTransactionRepository bucketTransactions,
-      PaycheckCalculator paycheckCalculator,
-      PaycheckVisibilityPolicy visibilityPolicy,
+      PaycheckResponseAssembler responseAssembler,
+      PaycheckEntryMutationHelper entryMutations,
+      PaycheckLifecycleTransitions lifecycleTransitions,
+      PaycheckValidationHelper validations,
       StatusTransitionPolicy statusTransitionPolicy,
-      BucketCalculator bucketCalculator,
-      SpendingBucketPerformanceService spendingBucketPerformanceService,
       OwnerLocalDateService ownerLocalDateService,
       PaybackService paybackService,
       AuditService auditService,
@@ -87,12 +78,11 @@ public class PaycheckService {
     this.paychecks = paychecks;
     this.entries = entries;
     this.statusEvents = statusEvents;
-    this.bucketTransactions = bucketTransactions;
-    this.paycheckCalculator = paycheckCalculator;
-    this.visibilityPolicy = visibilityPolicy;
+    this.responseAssembler = responseAssembler;
+    this.entryMutations = entryMutations;
+    this.lifecycleTransitions = lifecycleTransitions;
+    this.validations = validations;
     this.statusTransitionPolicy = statusTransitionPolicy;
-    this.bucketCalculator = bucketCalculator;
-    this.spendingBucketPerformanceService = spendingBucketPerformanceService;
     this.ownerLocalDateService = ownerLocalDateService;
     this.paybackService = paybackService;
     this.auditService = auditService;
@@ -106,10 +96,10 @@ public class PaycheckService {
             new Paycheck(
                 ownerId,
                 request.name().trim(),
-                normalizeOptional(request.source()),
+                validations.normalizeOptional(request.source()),
                 request.amountMinor(),
                 request.incomeDate(),
-                normalizeOptional(request.notes()),
+                validations.normalizeOptional(request.notes()),
                 null));
     LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
     PaycheckResponse response = toResponse(paycheck, List.of(), asOfDate);
@@ -122,49 +112,28 @@ public class PaycheckService {
   public PaycheckResponse createFromDraft(UUID ownerId, CreatePaycheckFromDraftRequest request) {
     List<DraftPaycheckEntryRequest> requestedEntries = request.entries();
     PaycheckMetrics proposed =
-        paycheckCalculator.calculate(
+        responseAssembler.calculate(
             request.amountMinor(),
             requestedEntries.stream()
                 .map(entry -> new AllocationLine(entry.amountMinor(), EntryStatus.NOT_PAID, false))
                 .toList());
-    assertNotOverAllocated(proposed);
+    validations.assertNotOverAllocated(proposed);
 
     Paycheck paycheck =
         paychecks.saveAndFlush(
             new Paycheck(
                 ownerId,
                 request.name().trim(),
-                normalizeOptional(request.source()),
+                validations.normalizeOptional(request.source()),
                 request.amountMinor(),
                 request.incomeDate(),
-                normalizeOptional(request.notes()),
+                validations.normalizeOptional(request.notes()),
                 null));
     List<PaycheckEntry> createdEntries = new ArrayList<>();
     Instant now = clock.instant();
     for (int index = 0; index < requestedEntries.size(); index++) {
       DraftPaycheckEntryRequest source = requestedEntries.get(index);
-      PaycheckEntry entry =
-          new PaycheckEntry(
-              ownerId,
-              paycheck.getId(),
-              source.entryType(),
-              source.name().trim(),
-              source.amountMinor(),
-              index,
-              paymentMethodForCreate(source.entryType(), source.paymentMethod()),
-              billValue(source.entryType(), source.dueDate()),
-              billValue(source.entryType(), normalizeOptional(source.accountName())),
-              billValue(source.entryType(), normalizeOptional(source.payee())),
-              normalizeOptional(source.notes()),
-              sinkingValue(source.entryType(), source.targetMinor()),
-              sinkingValue(source.entryType(), source.targetDate()),
-              null);
-      validateRecurringSource(
-          source.entryType(),
-          source.sourceRecurringBillDefinitionId(),
-          source.sourceRecurringOccurrenceDate());
-      entry.setRecurringSource(
-          source.sourceRecurringBillDefinitionId(), source.sourceRecurringOccurrenceDate());
+      PaycheckEntry entry = entryMutations.draftEntry(ownerId, paycheck.getId(), source, index);
       entry = entries.saveAndFlush(entry);
       createdEntries.add(entry);
       statusEvents.save(
@@ -197,28 +166,20 @@ public class PaycheckService {
             .map(this::toEntryResponse)
             .sorted(entryComparator(sort, ascending))
             .toList();
-    return PaycheckResponse.from(
-        paycheck,
-        calculate(paycheck, liveEntries),
-        spendingBucketPerformanceService.paycheckSummary(ownerId, paycheckId, asOfDate),
-        responses);
+    return responseAssembler.toResponse(paycheck, liveEntries, asOfDate, responses);
   }
 
   @Transactional(readOnly = true)
   public PageResponse<PaycheckResponse> active(UUID ownerId, int page, int size) {
     LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
-    List<PaycheckResponse> results =
-        paychecks
-            .findAllByOwnerIdAndStateOrderByIncomeDateDescUpdatedAtDesc(
-                ownerId, PaycheckState.ACTIVE)
-            .stream()
-            .map(paycheck -> toResponse(paycheck, findEntries(ownerId, paycheck.getId()), asOfDate))
-            .filter(
-                paycheck ->
-                    visibilityPolicy.belongsInActive(
-                        paycheck.state(), paycheck.requiresAttention(), paycheck.reopenedAt()))
-            .toList();
-    return paginate(results, page, size);
+    Page<Paycheck> results = paychecks.findActivePage(ownerId, listPage(page, size));
+    return new PageResponse<>(
+        responseAssembler.toResponses(ownerId, results.getContent(), asOfDate),
+        results.getNumber(),
+        results.getSize(),
+        results.getTotalElements(),
+        results.getTotalPages(),
+        results.hasNext());
   }
 
   @Transactional(readOnly = true)
@@ -232,61 +193,52 @@ public class PaycheckService {
       int size) {
     String term = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
     LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
-    Comparator<Paycheck> comparator =
-        Comparator.comparing(Paycheck::getIncomeDate).thenComparing(Paycheck::getUpdatedAt);
-    if (!oldestFirst) {
-      comparator = comparator.reversed();
-    }
-
-    List<PaycheckResponse> results =
-        paychecks.findAllByOwnerId(ownerId).stream()
-            .filter(
-                paycheck ->
-                    term.isEmpty()
-                        || paycheck.getName().toLowerCase(Locale.ROOT).contains(term)
-                        || (paycheck.getSource() != null
-                            && paycheck.getSource().toLowerCase(Locale.ROOT).contains(term)))
-            .filter(paycheck -> from == null || !paycheck.getIncomeDate().isBefore(from))
-            .filter(paycheck -> to == null || !paycheck.getIncomeDate().isAfter(to))
-            .sorted(comparator)
-            .map(paycheck -> toResponse(paycheck, findEntries(ownerId, paycheck.getId()), asOfDate))
-            .filter(
-                paycheck ->
-                    visibilityPolicy.belongsInHistory(
-                        paycheck.state(), paycheck.requiresAttention(), paycheck.reopenedAt()))
-            .toList();
-    return paginate(results, page, size);
+    Page<Paycheck> results =
+        oldestFirst
+            ? paychecks.findHistoryPageOldest(
+                ownerId, term, nullableSqlDate(from), nullableSqlDate(to), listPage(page, size))
+            : paychecks.findHistoryPageNewest(
+                ownerId, term, nullableSqlDate(from), nullableSqlDate(to), listPage(page, size));
+    return new PageResponse<>(
+        responseAssembler.toResponses(ownerId, results.getContent(), asOfDate),
+        results.getNumber(),
+        results.getSize(),
+        results.getTotalElements(),
+        results.getTotalPages(),
+        results.hasNext());
   }
 
   @Transactional
   public PaycheckResponse update(UUID ownerId, UUID paycheckId, UpdatePaycheckRequest request) {
     Paycheck paycheck = requirePaycheck(ownerId, paycheckId);
-    requireActive(paycheck);
-    assertVersion(paycheck.getVersion(), request.version());
+    validations.requireActive(paycheck);
+    validations.assertVersion(paycheck.getVersion(), request.version());
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
     PaycheckMetrics proposed =
-        paycheckCalculator.calculate(request.amountMinor(), allocationLines(liveEntries));
-    assertNotOverAllocated(proposed);
+        responseAssembler.calculate(
+            request.amountMinor(), responseAssembler.allocationLines(liveEntries));
+    validations.assertNotOverAllocated(proposed);
     LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
     PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
     paycheck.update(
         request.name().trim(),
-        normalizeOptional(request.source()),
+        validations.normalizeOptional(request.source()),
         request.amountMinor(),
         request.incomeDate(),
-        normalizeOptional(request.notes()));
+        validations.normalizeOptional(request.notes()));
     paychecks.flush();
     PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
     auditService.append(ownerId, "PAYCHECK", paycheckId, "UPDATED", null, before, after, null);
-    closeAutomaticallyIfComplete(ownerId, paycheck, liveEntries, clock.instant(), asOfDate);
+    lifecycleTransitions.closeAutomaticallyIfComplete(
+        ownerId, paycheck, liveEntries, clock.instant(), asOfDate);
     return toResponse(paycheck, liveEntries, asOfDate);
   }
 
   @Transactional
   public EntryResponse allocateLeftover(UUID ownerId, UUID paycheckId, long paycheckVersion) {
     Paycheck paycheck = requirePaycheckForUpdate(ownerId, paycheckId);
-    requireActive(paycheck);
-    assertVersion(paycheck.getVersion(), paycheckVersion);
+    validations.requireActive(paycheck);
+    validations.assertVersion(paycheck.getVersion(), paycheckVersion);
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
     PaycheckMetrics metrics = calculate(paycheck, liveEntries);
     if (metrics.unallocatedMinor() <= 0) {
@@ -295,21 +247,11 @@ public class PaycheckService {
 
     PaycheckEntry entry =
         entries.saveAndFlush(
-            new PaycheckEntry(
+            entryMutations.leftoverEntry(
                 ownerId,
                 paycheckId,
-                EntryType.BILL,
-                "LEFTOVER",
                 metrics.unallocatedMinor(),
-                entries.findMaxLivePosition(paycheckId) + 1,
-                EntryPaymentMethod.AUTOPAY,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null));
+                entries.findMaxLivePosition(paycheckId) + 1));
     Instant recordedAt = clock.instant();
     statusEvents.save(
         new EntryStatusEvent(
@@ -337,28 +279,16 @@ public class PaycheckService {
   @Transactional
   public EntryResponse addEntry(UUID ownerId, UUID paycheckId, CreateEntryRequest request) {
     Paycheck paycheck = requirePaycheck(ownerId, paycheckId);
-    requireActive(paycheck);
+    validations.requireActive(paycheck);
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
-    List<AllocationLine> proposed = new ArrayList<>(allocationLines(liveEntries));
+    List<AllocationLine> proposed = new ArrayList<>(responseAssembler.allocationLines(liveEntries));
     proposed.add(new AllocationLine(request.amountMinor(), EntryStatus.NOT_PAID, false));
-    assertNotOverAllocated(paycheckCalculator.calculate(paycheck.getAmountMinor(), proposed));
+    validations.assertNotOverAllocated(
+        responseAssembler.calculate(paycheck.getAmountMinor(), proposed));
 
     PaycheckEntry entry =
-        new PaycheckEntry(
-            ownerId,
-            paycheckId,
-            request.entryType(),
-            request.name().trim(),
-            request.amountMinor(),
-            entries.findMaxLivePosition(paycheckId) + 1,
-            paymentMethodForCreate(request.entryType(), request.paymentMethod()),
-            billValue(request.entryType(), request.dueDate()),
-            billValue(request.entryType(), normalizeOptional(request.accountName())),
-            billValue(request.entryType(), normalizeOptional(request.payee())),
-            normalizeOptional(request.notes()),
-            sinkingValue(request.entryType(), request.targetMinor()),
-            sinkingValue(request.entryType(), request.targetDate()),
-            request.paybackId());
+        entryMutations.newEntry(
+            ownerId, paycheckId, request, entries.findMaxLivePosition(paycheckId) + 1);
     paybackService.validateAssignment(ownerId, entry, request.paybackId());
     entry = entries.saveAndFlush(entry);
     Instant recordedAt = clock.instant();
@@ -382,8 +312,8 @@ public class PaycheckService {
   public EntryResponse updateEntry(UUID ownerId, UUID entryId, UpdateEntryRequest request) {
     PaycheckEntry entry = requireEntry(ownerId, entryId);
     Paycheck paycheck = requirePaycheck(ownerId, entry.getPaycheckId());
-    requireActive(paycheck);
-    assertVersion(entry.getVersion(), request.version());
+    validations.requireActive(paycheck);
+    validations.assertVersion(entry.getVersion(), request.version());
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheck.getId());
     List<AllocationLine> proposed =
         liveEntries.stream()
@@ -396,23 +326,13 @@ public class PaycheckService {
                         candidate.getStatus(),
                         false))
             .toList();
-    assertNotOverAllocated(paycheckCalculator.calculate(paycheck.getAmountMinor(), proposed));
+    validations.assertNotOverAllocated(
+        responseAssembler.calculate(paycheck.getAmountMinor(), proposed));
     EntryResponse before = toEntryResponse(entry);
     UUID previousPaybackId = entry.getPaybackId();
     long previousAmountMinor = entry.getAmountMinor();
     EntryStatus previousStatus = entry.getStatus();
-    entry.update(
-        request.entryType(),
-        request.name().trim(),
-        request.amountMinor(),
-        paymentMethodForUpdate(entry, request.entryType(), request.paymentMethod()),
-        billValue(request.entryType(), request.dueDate()),
-        billValue(request.entryType(), normalizeOptional(request.accountName())),
-        billValue(request.entryType(), normalizeOptional(request.payee())),
-        normalizeOptional(request.notes()),
-        sinkingValue(request.entryType(), request.targetMinor()),
-        sinkingValue(request.entryType(), request.targetDate()),
-        request.paybackId());
+    entryMutations.update(entry, request);
     Instant recordedAt = clock.instant();
     paybackService.syncAfterEntryUpdate(
         ownerId, entry, previousPaybackId, previousAmountMinor, previousStatus, recordedAt);
@@ -420,7 +340,7 @@ public class PaycheckService {
     entries.flush();
     EntryResponse after = toEntryResponse(entry);
     auditService.append(ownerId, "PAYCHECK_ENTRY", entryId, "UPDATED", null, before, after, null);
-    closeAutomaticallyIfComplete(
+    lifecycleTransitions.closeAutomaticallyIfComplete(
         ownerId, paycheck, liveEntries, recordedAt, ownerLocalDateService.currentDate(ownerId));
     return after;
   }
@@ -429,8 +349,8 @@ public class PaycheckService {
   public void deleteEntry(UUID ownerId, UUID entryId, long version) {
     PaycheckEntry entry = requireEntry(ownerId, entryId);
     Paycheck paycheck = requirePaycheck(ownerId, entry.getPaycheckId());
-    requireActive(paycheck);
-    assertVersion(entry.getVersion(), version);
+    validations.requireActive(paycheck);
+    validations.assertVersion(entry.getVersion(), version);
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheck.getId());
     EntryResponse before = toEntryResponse(entry);
     Instant now = clock.instant();
@@ -443,7 +363,7 @@ public class PaycheckService {
         liveEntries.stream().filter(candidate -> !candidate.getId().equals(entryId)).toList();
     entries.flush();
     auditService.append(ownerId, "PAYCHECK_ENTRY", entryId, "DELETED", null, before, null, null);
-    closeAutomaticallyIfComplete(
+    lifecycleTransitions.closeAutomaticallyIfComplete(
         ownerId, paycheck, remainingEntries, now, ownerLocalDateService.currentDate(ownerId));
   }
 
@@ -451,9 +371,9 @@ public class PaycheckService {
   public EntryResponse changeStatus(UUID ownerId, UUID entryId, StatusChangeRequest request) {
     PaycheckEntry entry = requireEntry(ownerId, entryId);
     Paycheck paycheck = requirePaycheck(ownerId, entry.getPaycheckId());
-    requireActive(paycheck);
+    validations.requireActive(paycheck);
     if (request.version() != null) {
-      assertVersion(entry.getVersion(), request.version());
+      validations.assertVersion(entry.getVersion(), request.version());
     }
     statusTransitionPolicy.requireChange(entry.getStatus(), request.toStatus());
 
@@ -473,7 +393,7 @@ public class PaycheckService {
             request.toStatus(),
             request.effectiveAt(),
             recordedAt,
-            normalizeOptional(request.note())));
+            validations.normalizeOptional(request.note())));
     paycheck.touch(recordedAt);
     entries.flush();
     List<PaycheckEntry> updatedEntries = findEntries(ownerId, paycheck.getId());
@@ -487,7 +407,7 @@ public class PaycheckService {
         before,
         after,
         Map.of("note", request.note() == null ? "" : request.note()));
-    closeAutomaticallyIfComplete(
+    lifecycleTransitions.closeAutomaticallyIfComplete(
         ownerId, paycheck, updatedEntries, recordedAt, ownerLocalDateService.currentDate(ownerId));
     return after;
   }
@@ -510,8 +430,8 @@ public class PaycheckService {
   @Transactional
   public PaycheckResponse reorder(UUID ownerId, UUID paycheckId, ReorderEntriesRequest request) {
     Paycheck paycheck = requirePaycheck(ownerId, paycheckId);
-    requireActive(paycheck);
-    assertVersion(paycheck.getVersion(), request.paycheckVersion());
+    validations.requireActive(paycheck);
+    validations.assertVersion(paycheck.getVersion(), request.paycheckVersion());
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
     Set<UUID> expected =
         liveEntries.stream().map(PaycheckEntry::getId).collect(HashSet::new, Set::add, Set::addAll);
@@ -555,52 +475,32 @@ public class PaycheckService {
   @Transactional
   public PaycheckResponse close(UUID ownerId, UUID paycheckId, long version) {
     Paycheck paycheck = requirePaycheck(ownerId, paycheckId);
-    requireActive(paycheck);
-    assertVersion(paycheck.getVersion(), version);
+    validations.requireActive(paycheck);
+    validations.assertVersion(paycheck.getVersion(), version);
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
-    PaycheckMetrics metrics = calculate(paycheck, liveEntries);
-    if (!metrics.fullyAllocated() || !metrics.fullyPosted()) {
-      throw new BusinessRuleException(
-          "A paycheck can be closed only when fully allocated and fully Posted.");
-    }
     LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
-    PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
-    paycheck.close(clock.instant());
-    paychecks.flush();
-    PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
-    auditService.append(ownerId, "PAYCHECK", paycheckId, "CLOSED", null, before, after, null);
-    return after;
+    return lifecycleTransitions.close(ownerId, paycheck, liveEntries, clock.instant(), asOfDate);
   }
 
   @Transactional
   public PaycheckResponse reopen(UUID ownerId, UUID paycheckId, long version) {
     Paycheck paycheck = requirePaycheck(ownerId, paycheckId);
-    assertVersion(paycheck.getVersion(), version);
+    validations.assertVersion(paycheck.getVersion(), version);
     if (paycheck.getState() == PaycheckState.ACTIVE) {
       throw new BusinessRuleException("The paycheck is already active.");
     }
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
     LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
-    PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
-    paycheck.reopen(clock.instant());
-    paychecks.flush();
-    PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
-    auditService.append(ownerId, "PAYCHECK", paycheckId, "REOPENED", null, before, after, null);
-    return after;
+    return lifecycleTransitions.reopen(ownerId, paycheck, liveEntries, clock.instant(), asOfDate);
   }
 
   @Transactional
   public PaycheckResponse archive(UUID ownerId, UUID paycheckId, long version) {
     Paycheck paycheck = requirePaycheck(ownerId, paycheckId);
-    assertVersion(paycheck.getVersion(), version);
+    validations.assertVersion(paycheck.getVersion(), version);
     List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
     LocalDate asOfDate = ownerLocalDateService.currentDate(ownerId);
-    PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
-    paycheck.archive(clock.instant());
-    paychecks.flush();
-    PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
-    auditService.append(ownerId, "PAYCHECK", paycheckId, "ARCHIVED", null, before, after, null);
-    return after;
+    return lifecycleTransitions.archive(ownerId, paycheck, liveEntries, clock.instant(), asOfDate);
   }
 
   public Paycheck requirePaycheck(UUID ownerId, UUID paycheckId) {
@@ -622,34 +522,16 @@ public class PaycheckService {
   }
 
   public PaycheckResponse toResponse(Paycheck paycheck, List<PaycheckEntry> liveEntries) {
-    return toResponse(
-        paycheck, liveEntries, ownerLocalDateService.currentDate(paycheck.getOwnerId()));
+    return responseAssembler.toResponse(paycheck, liveEntries);
   }
 
   private PaycheckResponse toResponse(
       Paycheck paycheck, List<PaycheckEntry> liveEntries, LocalDate asOfDate) {
-    return PaycheckResponse.from(
-        paycheck,
-        calculate(paycheck, liveEntries),
-        spendingBucketPerformanceService.paycheckSummary(
-            paycheck.getOwnerId(), paycheck.getId(), asOfDate),
-        liveEntries.stream().map(this::toEntryResponse).toList());
+    return responseAssembler.toResponse(paycheck, liveEntries, asOfDate);
   }
 
   public EntryResponse toEntryResponse(PaycheckEntry entry) {
-    if (entry.getEntryType() != EntryType.SPENDING_BUCKET) {
-      return EntryResponse.from(entry, null, null, null);
-    }
-    List<Long> amounts =
-        bucketTransactions
-            .findAllByEntryIdAndOwnerIdAndDeletedAtIsNullOrderByEffectiveDateDescCreatedAtDesc(
-                entry.getId(), entry.getOwnerId())
-            .stream()
-            .map(BucketTransaction::getAmountMinor)
-            .toList();
-    BucketMetrics metrics = bucketCalculator.calculate(entry.getAmountMinor(), amounts);
-    return EntryResponse.from(
-        entry, metrics.spentMinor(), metrics.remainingMinor(), metrics.overBudget());
+    return responseAssembler.toEntryResponse(entry);
   }
 
   private List<PaycheckEntry> findEntries(UUID ownerId, UUID paycheckId) {
@@ -658,112 +540,7 @@ public class PaycheckService {
   }
 
   private PaycheckMetrics calculate(Paycheck paycheck, List<PaycheckEntry> liveEntries) {
-    return paycheckCalculator.calculate(paycheck.getAmountMinor(), allocationLines(liveEntries));
-  }
-
-  private void closeAutomaticallyIfComplete(
-      UUID ownerId,
-      Paycheck paycheck,
-      List<PaycheckEntry> liveEntries,
-      Instant recordedAt,
-      LocalDate asOfDate) {
-    if (paycheck.getState() != PaycheckState.ACTIVE || paycheck.getReopenedAt() != null) {
-      return;
-    }
-    PaycheckMetrics metrics = calculate(paycheck, liveEntries);
-    if (!metrics.fullyAllocated() || !metrics.fullyPosted()) {
-      return;
-    }
-
-    PaycheckResponse before = toResponse(paycheck, liveEntries, asOfDate);
-    paycheck.close(recordedAt);
-    paychecks.flush();
-    PaycheckResponse after = toResponse(paycheck, liveEntries, asOfDate);
-    auditService.append(
-        ownerId,
-        "PAYCHECK",
-        paycheck.getId(),
-        "CLOSED",
-        null,
-        before,
-        after,
-        Map.of("automatic", true));
-  }
-
-  private List<AllocationLine> allocationLines(List<PaycheckEntry> liveEntries) {
-    return liveEntries.stream()
-        .map(entry -> new AllocationLine(entry.getAmountMinor(), entry.getStatus(), false))
-        .toList();
-  }
-
-  private void assertNotOverAllocated(PaycheckMetrics metrics) {
-    if (metrics.unallocatedMinor() < 0) {
-      throw new BusinessRuleException(
-          "PAYCHECK_OVER_ALLOCATED",
-          "This would over-allocate the paycheck.",
-          Map.of("amountMinor", Math.abs(metrics.unallocatedMinor()), "currencyCode", "USD"));
-    }
-  }
-
-  private void assertVersion(long actual, long supplied) {
-    if (actual != supplied) {
-      throw new ConflictException(
-          "This record changed since it was loaded. Refresh and try again.");
-    }
-  }
-
-  private void requireActive(Paycheck paycheck) {
-    if (paycheck.getState() != PaycheckState.ACTIVE) {
-      throw new BusinessRuleException("Reopen the paycheck before changing it.");
-    }
-  }
-
-  private String normalizeOptional(String value) {
-    return value == null || value.isBlank() ? null : value.trim();
-  }
-
-  private <T> T billValue(EntryType type, T value) {
-    return type == EntryType.BILL ? value : null;
-  }
-
-  private EntryPaymentMethod paymentMethodForCreate(EntryType type, EntryPaymentMethod requested) {
-    if (type != EntryType.BILL) {
-      if (requested != null) {
-        throw new BusinessRuleException("Only Bills can have a payment method.");
-      }
-      return null;
-    }
-    return requested == null ? EntryPaymentMethod.AUTOPAY : requested;
-  }
-
-  private EntryPaymentMethod paymentMethodForUpdate(
-      PaycheckEntry existing, EntryType requestedType, EntryPaymentMethod requested) {
-    if (requestedType != EntryType.BILL) {
-      if (requested != null) {
-        throw new BusinessRuleException("Only Bills can have a payment method.");
-      }
-      return null;
-    }
-    if (requested != null) {
-      return requested;
-    }
-    return existing.getEntryType() == EntryType.BILL && existing.getPaymentMethod() != null
-        ? existing.getPaymentMethod()
-        : EntryPaymentMethod.AUTOPAY;
-  }
-
-  private <T> T sinkingValue(EntryType type, T value) {
-    return type == EntryType.SINKING_FUND ? value : null;
-  }
-
-  private void validateRecurringSource(
-      EntryType entryType, UUID definitionId, LocalDate occurrenceDate) {
-    if ((definitionId == null) != (occurrenceDate == null)) {
-      throw new BusinessRuleException("Recurring Bill provenance must be supplied together.");
-    }
-    if (definitionId != null && entryType != EntryType.BILL) {
-      throw new BusinessRuleException("Only Bills can have recurring provenance.");
-    }
+    return responseAssembler.calculate(paycheck, liveEntries);
   }
 
   private Comparator<EntryResponse> entryComparator(String sort, boolean ascending) {
@@ -780,13 +557,11 @@ public class PaycheckService {
     return ascending ? comparator : comparator.reversed();
   }
 
-  private <T> PageResponse<T> paginate(List<T> items, int requestedPage, int requestedSize) {
-    int page = Math.max(0, requestedPage);
-    int size = Math.min(Math.max(requestedSize, 1), 100);
-    int start = Math.min(page * size, items.size());
-    int end = Math.min(start + size, items.size());
-    int totalPages = items.isEmpty() ? 0 : (int) Math.ceil((double) items.size() / size);
-    return new PageResponse<>(
-        items.subList(start, end), page, size, items.size(), totalPages, page + 1 < totalPages);
+  private PageRequest listPage(int requestedPage, int requestedSize) {
+    return PageRequest.of(Math.max(0, requestedPage), Math.min(Math.max(requestedSize, 1), 100));
+  }
+
+  private Date nullableSqlDate(LocalDate date) {
+    return date == null ? null : Date.valueOf(date);
   }
 }

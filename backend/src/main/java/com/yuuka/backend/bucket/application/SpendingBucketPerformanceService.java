@@ -3,9 +3,13 @@ package com.yuuka.backend.bucket.application;
 import com.yuuka.backend.bucket.api.dto.RollingSpendingBucketPerformanceResponse;
 import com.yuuka.backend.bucket.api.dto.SpendingBucketPerformanceSummaryResponse;
 import com.yuuka.backend.bucket.infrastructure.JpaBucketTransactionRepository;
+import com.yuuka.backend.bucket.infrastructure.PaycheckSpendingBucketPerformanceProjection;
 import com.yuuka.backend.bucket.infrastructure.SpendingBucketPerformanceProjection;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +30,20 @@ public class SpendingBucketPerformanceService {
     SpendingBucketPerformanceProjection aggregate =
         transactions.aggregatePaycheckPerformance(ownerId, paycheckId, asOfDate);
     return toSummary(aggregate);
+  }
+
+  @Transactional(readOnly = true)
+  public Map<UUID, SpendingBucketPerformanceSummaryResponse> paycheckSummaries(
+      UUID ownerId, Collection<UUID> paycheckIds, LocalDate asOfDate) {
+    if (paycheckIds.isEmpty()) {
+      return Map.of();
+    }
+    return transactions
+        .aggregatePaycheckPerformanceByPaycheckIds(ownerId, paycheckIds, asOfDate)
+        .stream()
+        .collect(
+            Collectors.toMap(
+                PaycheckSpendingBucketPerformanceProjection::getPaycheckId, this::toSummary));
   }
 
   @Transactional(readOnly = true)
