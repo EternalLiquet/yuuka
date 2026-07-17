@@ -144,22 +144,28 @@ public class PaycheckService {
     for (int index = 0; index < requestedEntries.size(); index++) {
       DraftPaycheckEntryRequest source = requestedEntries.get(index);
       PaycheckEntry entry =
-          entries.saveAndFlush(
-              new PaycheckEntry(
-                  ownerId,
-                  paycheck.getId(),
-                  source.entryType(),
-                  source.name().trim(),
-                  source.amountMinor(),
-                  index,
-                  paymentMethodForCreate(source.entryType(), source.paymentMethod()),
-                  billValue(source.entryType(), source.dueDate()),
-                  billValue(source.entryType(), normalizeOptional(source.accountName())),
-                  billValue(source.entryType(), normalizeOptional(source.payee())),
-                  normalizeOptional(source.notes()),
-                  sinkingValue(source.entryType(), source.targetMinor()),
-                  sinkingValue(source.entryType(), source.targetDate()),
-                  null));
+          new PaycheckEntry(
+              ownerId,
+              paycheck.getId(),
+              source.entryType(),
+              source.name().trim(),
+              source.amountMinor(),
+              index,
+              paymentMethodForCreate(source.entryType(), source.paymentMethod()),
+              billValue(source.entryType(), source.dueDate()),
+              billValue(source.entryType(), normalizeOptional(source.accountName())),
+              billValue(source.entryType(), normalizeOptional(source.payee())),
+              normalizeOptional(source.notes()),
+              sinkingValue(source.entryType(), source.targetMinor()),
+              sinkingValue(source.entryType(), source.targetDate()),
+              null);
+      validateRecurringSource(
+          source.entryType(),
+          source.sourceRecurringBillDefinitionId(),
+          source.sourceRecurringOccurrenceDate());
+      entry.setRecurringSource(
+          source.sourceRecurringBillDefinitionId(), source.sourceRecurringOccurrenceDate());
+      entry = entries.saveAndFlush(entry);
       createdEntries.add(entry);
       statusEvents.save(
           new EntryStatusEvent(
@@ -748,6 +754,16 @@ public class PaycheckService {
 
   private <T> T sinkingValue(EntryType type, T value) {
     return type == EntryType.SINKING_FUND ? value : null;
+  }
+
+  private void validateRecurringSource(
+      EntryType entryType, UUID definitionId, LocalDate occurrenceDate) {
+    if ((definitionId == null) != (occurrenceDate == null)) {
+      throw new BusinessRuleException("Recurring Bill provenance must be supplied together.");
+    }
+    if (definitionId != null && entryType != EntryType.BILL) {
+      throw new BusinessRuleException("Only Bills can have recurring provenance.");
+    }
   }
 
   private Comparator<EntryResponse> entryComparator(String sort, boolean ascending) {

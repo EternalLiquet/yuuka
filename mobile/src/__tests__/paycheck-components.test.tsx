@@ -34,6 +34,8 @@ const entry: Entry = {
   notes: null,
   targetMinor: null,
   targetDate: null,
+  sourceRecurringBillDefinitionId: null,
+  sourceRecurringOccurrenceDate: null,
   spentMinor: 2145,
   remainingMinor: 2855,
   overBudget: false,

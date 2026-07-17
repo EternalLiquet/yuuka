@@ -23,7 +23,8 @@ When all flows are selected, the workflow shape is:
 build-e2e-apk
 |-- scratch-lifecycle
 |-- payback-delete-reassign
-`-- template-application
+|-- template-application
+`-- recurring-bill-import
 ```
 
 The flow jobs use `fail-fast: false`, so one Maestro failure does not cancel the other flows.
@@ -38,6 +39,7 @@ Manual runs can select one flow or all flows:
 gh workflow run android-e2e.yml --ref <branch> -f flow=scratch
 gh workflow run android-e2e.yml --ref <branch> -f flow=paybacks
 gh workflow run android-e2e.yml --ref <branch> -f flow=templates
+gh workflow run android-e2e.yml --ref <branch> -f flow=recurring
 gh workflow run android-e2e.yml --ref <branch> -f flow=all
 ```
 
@@ -63,7 +65,7 @@ artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/artifacts/android
 artifacts/android-e2e-<run-id>/android-e2e-scratch-diagnostics/artifacts/android-e2e/scratch-lifecycle/maestro-tests/<timestamp>/screenshot-*.png
 ```
 
-Payback and template diagnostics use the same structure under `android-e2e-paybacks-diagnostics` and `android-e2e-templates-diagnostics`.
+Payback, template, and recurring-Bill diagnostics use the same structure under `android-e2e-paybacks-diagnostics`, `android-e2e-templates-diagnostics`, and `android-e2e-recurring-diagnostics`.
 
 Always inspect the screenshot and `maestro.log` before changing a selector. The screenshot is usually the fastest way to tell whether the element is missing, off-screen, or blocked by an app overlay.
 
@@ -299,7 +301,7 @@ The app's detail routes hide the bottom tab bar. After saving inside a paycheck 
 - tapOn: "Paybacks tab"
 ```
 
-The bottom tabs currently expose `Active tab`, `History tab`, `Paybacks tab`, `Templates tab`, and `Settings tab`. Prefer those labels in Maestro. A raw `tapOn: "Active"` can match an `Active` status badge inside a payback card and open the wrong detail screen.
+The bottom tabs expose `Active tab` and `History tab`. Paybacks, Templates, Recurring Bills, and Settings are reached with `Open app menu` followed by their `Open <destination>` accessibility label. A raw `tapOn: "Active"` can match an `Active` status badge inside a payback card and open the wrong detail screen.
 
 When the last required entry is moved to `Posted`, the paycheck may immediately satisfy the lifecycle rules for a closed/history paycheck. In that state the detail action is `Reopen paycheck`, not `Close paycheck`. Assert the closed-state action before checking history or navigating back:
 

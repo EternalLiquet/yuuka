@@ -105,6 +105,28 @@ Bill due dates are shifted by preserving the source due-date offset from the sou
 date and applying it to the new income date. Sinking Fund target dates stay exact. Payback
 assignments are cleared by omission and the mobile draft reports how many were not copied.
 
+## Recurring Bill definitions
+
+A recurring Bill definition is an owner-scoped planning source, not a paycheck entry and not an
+automatic payment. The first supported recurrence is monthly. A definition stores its name,
+typical amount, Bill payment method, due day, optional account/payee/notes, and active state.
+
+Monthly occurrences are derived dynamically. If the configured due day does not exist in a month,
+the occurrence uses that month's final calendar day, including leap-year February. Occurrences are
+not persisted as jobs or materialized future records.
+
+Importing an occurrence creates an ordinary independent `BILL` snapshot in a paycheck. The snapshot
+starts Not Paid, reserves its full amount, preserves the selected occurrence date and optional
+definition provenance, and may be edited or deleted like any other Bill. Later definition changes,
+deactivation, or deletion do not mutate imported entries. Duplicate imports are allowed. Imports
+into an existing paycheck validate the full batch and allocation transactionally; a failure creates
+no entries. Importing into a local scratch, template, or duplicate draft remains local until the
+paycheck is created.
+
+The owner controls the suggestion window in days, from 1 through 31, with a default of 7. Suggested
+occurrences are derived relative to the paycheck income date. Selection is always explicit and the
+user may override only this paycheck's amount or also update the definition's typical amount.
+
 ## Entry types
 
 ### Bill

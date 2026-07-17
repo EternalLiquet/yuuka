@@ -42,6 +42,9 @@ public class UserAccount {
   @Column(nullable = false)
   private boolean enabled = true;
 
+  @Column(name = "recurring_bill_suggestion_days", nullable = false)
+  private int recurringBillSuggestionDays = 7;
+
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
 
@@ -107,6 +110,14 @@ public class UserAccount {
 
   public boolean isEnabled() {
     return enabled;
+  }
+
+  public int getRecurringBillSuggestionDays() {
+    return recurringBillSuggestionDays;
+  }
+
+  public void updateRecurringBillSuggestionDays(int recurringBillSuggestionDays) {
+    this.recurringBillSuggestionDays = recurringBillSuggestionDays;
   }
 
   public void updatePreferences(String displayName, String currencyCode, String timezone) {

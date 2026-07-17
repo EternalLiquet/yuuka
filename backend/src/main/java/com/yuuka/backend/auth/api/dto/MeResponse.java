@@ -10,6 +10,7 @@ public record MeResponse(
     String displayName,
     String currencyCode,
     String timezone,
+    int recurringBillSuggestionDays,
     Instant createdAt,
     Instant updatedAt) {
   public static MeResponse from(UserAccount account) {
@@ -19,6 +20,7 @@ public record MeResponse(
         account.getDisplayName(),
         account.getCurrencyCode(),
         account.getTimezone(),
+        account.getRecurringBillSuggestionDays(),
         account.getCreatedAt(),
         account.getUpdatedAt());
   }

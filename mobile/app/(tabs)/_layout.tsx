@@ -5,6 +5,7 @@ import { ColorValue } from 'react-native';
 
 import { useAuth } from '@/auth/auth-provider';
 import { Screen } from '@/components/screen';
+import { AppMenuButton } from '@/components/app-menu';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 function TabIcon({ icon: Icon, color }: { icon: LucideIcon; color: ColorValue }) {
@@ -26,7 +27,10 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
+        headerLeft: () => <AppMenuButton />,
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.text,
         sceneStyle: { backgroundColor: colors.background },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.muted,
@@ -56,6 +60,7 @@ export default function TabLayout() {
         name="paybacks"
         options={{
           title: 'Paybacks',
+          href: null,
           tabBarAccessibilityLabel: 'Paybacks tab',
           tabBarIcon: ({ color }) => <TabIcon icon={RotateCcw} color={color} />,
         }}
@@ -64,6 +69,7 @@ export default function TabLayout() {
         name="templates"
         options={{
           title: 'Templates',
+          href: null,
           tabBarAccessibilityLabel: 'Templates tab',
           tabBarIcon: ({ color }) => <TabIcon icon={LayoutTemplate} color={color} />,
         }}
@@ -72,6 +78,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: 'Settings',
+          href: null,
           tabBarAccessibilityLabel: 'Settings tab',
           tabBarIcon: ({ color }) => <TabIcon icon={Settings} color={color} />,
         }}

@@ -13,6 +13,94 @@
     "bearerAuth" : [ ]
   } ],
   "paths" : {
+    "/api/v1/recurring-bills/{definitionId}" : {
+      "get" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "get",
+        "parameters" : [ {
+          "name" : "definitionId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecurringBillResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "update",
+        "parameters" : [ {
+          "name" : "definitionId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateRecurringBillRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecurringBillResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "delete",
+        "parameters" : [ {
+          "name" : "definitionId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "version",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          }
+        }
+      }
+    },
     "/api/v1/templates" : {
       "get" : {
         "tags" : [ "template-controller" ],
@@ -250,10 +338,145 @@
         }
       }
     },
+    "/api/v1/recurring-bills" : {
+      "get" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "list_1",
+        "parameters" : [ {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "ACTIVE",
+            "enum" : [ "ACTIVE", "INACTIVE", "ALL" ]
+          }
+        }, {
+          "name" : "search",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecurringBillListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "create_1",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateRecurringBillRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecurringBillResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recurring-bills/{definitionId}/deactivate" : {
+      "post" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "deactivate",
+        "parameters" : [ {
+          "name" : "definitionId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecurringBillResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recurring-bills/{definitionId}/activate" : {
+      "post" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "activate",
+        "parameters" : [ {
+          "name" : "definitionId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecurringBillResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/paychecks" : {
       "post" : {
         "tags" : [ "paycheck-controller" ],
-        "operationId" : "create_1",
+        "operationId" : "create_2",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -296,6 +519,43 @@
             "application/json" : {
               "schema" : {
                 "$ref" : "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/paychecks/{paycheckId}/recurring-bill-imports" : {
+      "post" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "importIntoPaycheck",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecurringBillImportRequest"
               }
             }
           },
@@ -522,7 +782,7 @@
     "/api/v1/paybacks" : {
       "get" : {
         "tags" : [ "payback-controller" ],
-        "operationId" : "list_1",
+        "operationId" : "list_2",
         "responses" : {
           "200" : {
             "description" : "OK",
@@ -538,7 +798,7 @@
       },
       "post" : {
         "tags" : [ "payback-controller" ],
-        "operationId" : "create_2",
+        "operationId" : "create_3",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -631,7 +891,7 @@
     "/api/v1/entries/{entryId}/bucket-transactions" : {
       "get" : {
         "tags" : [ "bucket-transaction-controller" ],
-        "operationId" : "list_2",
+        "operationId" : "list_3",
         "parameters" : [ {
           "name" : "entryId",
           "in" : "path",
@@ -656,7 +916,7 @@
       },
       "post" : {
         "tags" : [ "bucket-transaction-controller" ],
-        "operationId" : "create_3",
+        "operationId" : "create_4",
         "parameters" : [ {
           "name" : "entryId",
           "in" : "path",
@@ -802,7 +1062,7 @@
     "/api/v1/templates/{templateId}" : {
       "get" : {
         "tags" : [ "template-controller" ],
-        "operationId" : "get",
+        "operationId" : "get_1",
         "parameters" : [ {
           "name" : "templateId",
           "in" : "path",
@@ -827,7 +1087,7 @@
       },
       "patch" : {
         "tags" : [ "template-controller" ],
-        "operationId" : "update",
+        "operationId" : "update_1",
         "parameters" : [ {
           "name" : "templateId",
           "in" : "path",
@@ -927,7 +1187,7 @@
     "/api/v1/paychecks/{paycheckId}" : {
       "get" : {
         "tags" : [ "paycheck-controller" ],
-        "operationId" : "get_1",
+        "operationId" : "get_2",
         "parameters" : [ {
           "name" : "paycheckId",
           "in" : "path",
@@ -1017,7 +1277,7 @@
       },
       "patch" : {
         "tags" : [ "paycheck-controller" ],
-        "operationId" : "update_1",
+        "operationId" : "update_2",
         "parameters" : [ {
           "name" : "paycheckId",
           "in" : "path",
@@ -1054,7 +1314,7 @@
     "/api/v1/paybacks/{paybackId}" : {
       "get" : {
         "tags" : [ "payback-controller" ],
-        "operationId" : "get_2",
+        "operationId" : "get_3",
         "parameters" : [ {
           "name" : "paybackId",
           "in" : "path",
@@ -1079,7 +1339,7 @@
       },
       "delete" : {
         "tags" : [ "payback-controller" ],
-        "operationId" : "delete",
+        "operationId" : "delete_1",
         "parameters" : [ {
           "name" : "paybackId",
           "in" : "path",
@@ -1105,7 +1365,7 @@
       },
       "patch" : {
         "tags" : [ "payback-controller" ],
-        "operationId" : "update_2",
+        "operationId" : "update_3",
         "parameters" : [ {
           "name" : "paybackId",
           "in" : "path",
@@ -1132,6 +1392,34 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/PaybackResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/settings" : {
+      "patch" : {
+        "tags" : [ "me-controller" ],
+        "operationId" : "updateSettings",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateOwnerSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MeResponse"
                 }
               }
             }
@@ -1205,7 +1493,7 @@
     "/api/v1/bucket-transactions/{transactionId}" : {
       "delete" : {
         "tags" : [ "bucket-transaction-controller" ],
-        "operationId" : "delete_1",
+        "operationId" : "delete_2",
         "parameters" : [ {
           "name" : "transactionId",
           "in" : "path",
@@ -1231,7 +1519,7 @@
       },
       "patch" : {
         "tags" : [ "bucket-transaction-controller" ],
-        "operationId" : "update_3",
+        "operationId" : "update_4",
         "parameters" : [ {
           "name" : "transactionId",
           "in" : "path",
@@ -1459,6 +1747,41 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/PageResponseEntrySearchResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recurring-bills/timeline" : {
+      "get" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "timeline",
+        "parameters" : [ {
+          "name" : "from",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "through",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecurringBillTimelineResponse"
                 }
               }
             }
@@ -1772,6 +2095,102 @@
   },
   "components" : {
     "schemas" : {
+      "UpdateRecurringBillRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "typicalAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
+          "dueDay" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 31,
+            "minimum" : 1
+          },
+          "accountName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "payee" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "name", "typicalAmountMinor" ]
+      },
+      "RecurringBillResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "typicalAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
+          "recurrenceType" : {
+            "type" : "string",
+            "enum" : [ "MONTHLY" ]
+          },
+          "dueDay" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "accountName" : {
+            "type" : "string"
+          },
+          "payee" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "active" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "CreateTemplateRequest" : {
         "type" : "object",
         "properties" : {
@@ -1995,6 +2414,46 @@
           }
         }
       },
+      "CreateRecurringBillRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "typicalAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
+          "dueDay" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 31,
+            "minimum" : 1
+          },
+          "accountName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "payee" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "name", "typicalAmountMinor" ]
+      },
       "CreatePaycheckRequest" : {
         "type" : "object",
         "properties" : {
@@ -2080,6 +2539,14 @@
             "format" : "int64"
           },
           "targetDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "sourceRecurringBillDefinitionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "sourceRecurringOccurrenceDate" : {
             "type" : "string",
             "format" : "date"
           },
@@ -2232,6 +2699,48 @@
             "format" : "int64"
           }
         }
+      },
+      "RecurringBillImportItemRequest" : {
+        "type" : "object",
+        "properties" : {
+          "definitionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "definitionVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "occurrenceDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "updateTypicalAmount" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "amountMinor", "definitionId", "occurrenceDate" ]
+      },
+      "RecurringBillImportRequest" : {
+        "type" : "object",
+        "properties" : {
+          "paycheckVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RecurringBillImportItemRequest"
+            },
+            "minItems" : 1
+          }
+        },
+        "required" : [ "items" ]
       },
       "AllocateLeftoverRequest" : {
         "type" : "object",
@@ -2400,6 +2909,14 @@
           "targetDate" : {
             "type" : "string",
             "format" : "date"
+          },
+          "sourceRecurringBillDefinitionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "sourceRecurringOccurrenceDate" : {
+            "type" : "string",
+            "format" : "date"
           }
         },
         "required" : [ "entryType", "name" ]
@@ -2483,6 +3000,14 @@
             "format" : "int64"
           },
           "targetDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "sourceRecurringBillDefinitionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "sourceRecurringOccurrenceDate" : {
             "type" : "string",
             "format" : "date"
           }
@@ -2899,6 +3424,50 @@
         },
         "required" : [ "borrowedDate", "name", "openingRemainingAmountMinor", "originalAmountMinor", "version" ]
       },
+      "UpdateOwnerSettingsRequest" : {
+        "type" : "object",
+        "properties" : {
+          "recurringBillSuggestionDays" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 31,
+            "minimum" : 1
+          }
+        }
+      },
+      "MeResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "currencyCode" : {
+            "type" : "string"
+          },
+          "timezone" : {
+            "type" : "string"
+          },
+          "recurringBillSuggestionDays" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
       "UpdateEntryRequest" : {
         "type" : "object",
         "properties" : {
@@ -3145,6 +3714,103 @@
           }
         }
       },
+      "RecurringBillListResponse" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RecurringBillResponse"
+            }
+          }
+        }
+      },
+      "RecurringBillImportSummaryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "entryId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "paycheckId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "paycheckName" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "NOT_PAID", "PROCESSING", "POSTED" ]
+          }
+        }
+      },
+      "RecurringBillOccurrenceResponse" : {
+        "type" : "object",
+        "properties" : {
+          "definitionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "definitionVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "occurrenceDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "typicalAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
+          "accountName" : {
+            "type" : "string"
+          },
+          "payee" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "importCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "imports" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RecurringBillImportSummaryResponse"
+            }
+          }
+        }
+      },
+      "RecurringBillTimelineResponse" : {
+        "type" : "object",
+        "properties" : {
+          "from" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "through" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RecurringBillOccurrenceResponse"
+            }
+          }
+        }
+      },
       "AuditEventResponse" : {
         "type" : "object",
         "properties" : {
@@ -3316,35 +3982,6 @@
           "version" : {
             "type" : "integer",
             "format" : "int64"
-          }
-        }
-      },
-      "MeResponse" : {
-        "type" : "object",
-        "properties" : {
-          "id" : {
-            "type" : "string",
-            "format" : "uuid"
-          },
-          "email" : {
-            "type" : "string"
-          },
-          "displayName" : {
-            "type" : "string"
-          },
-          "currencyCode" : {
-            "type" : "string"
-          },
-          "timezone" : {
-            "type" : "string"
-          },
-          "createdAt" : {
-            "type" : "string",
-            "format" : "date-time"
-          },
-          "updatedAt" : {
-            "type" : "string",
-            "format" : "date-time"
           }
         }
       },

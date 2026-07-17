@@ -70,6 +70,12 @@ public class PaycheckEntry {
   @Column(name = "target_date")
   private LocalDate targetDate;
 
+  @Column(name = "source_recurring_bill_definition_id")
+  private UUID sourceRecurringBillDefinitionId;
+
+  @Column(name = "source_recurring_occurrence_date")
+  private LocalDate sourceRecurringOccurrenceDate;
+
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
 
@@ -151,6 +157,21 @@ public class PaycheckEntry {
     this.targetMinor = targetMinor;
     this.targetDate = targetDate;
     this.paybackId = paybackId;
+    if (entryType != EntryType.BILL) {
+      sourceRecurringBillDefinitionId = null;
+      sourceRecurringOccurrenceDate = null;
+    }
+  }
+
+  public void setRecurringSource(UUID definitionId, LocalDate occurrenceDate) {
+    if (definitionId != null && entryType != EntryType.BILL) {
+      throw new IllegalStateException("Only Bills can have recurring provenance.");
+    }
+    if ((definitionId == null) != (occurrenceDate == null)) {
+      throw new IllegalArgumentException("Recurring provenance fields must be supplied together.");
+    }
+    sourceRecurringBillDefinitionId = definitionId;
+    sourceRecurringOccurrenceDate = occurrenceDate;
   }
 
   public void assignPayback(UUID paybackId) {
@@ -233,6 +254,14 @@ public class PaycheckEntry {
 
   public LocalDate getTargetDate() {
     return targetDate;
+  }
+
+  public UUID getSourceRecurringBillDefinitionId() {
+    return sourceRecurringBillDefinitionId;
+  }
+
+  public LocalDate getSourceRecurringOccurrenceDate() {
+    return sourceRecurringOccurrenceDate;
   }
 
   public Instant getCreatedAt() {

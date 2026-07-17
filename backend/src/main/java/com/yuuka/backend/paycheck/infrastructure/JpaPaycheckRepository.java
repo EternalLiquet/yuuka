@@ -23,6 +23,8 @@ public interface JpaPaycheckRepository
 
   List<Paycheck> findAllByOwnerId(UUID ownerId);
 
+  List<Paycheck> findAllByIdInAndOwnerId(java.util.Collection<UUID> ids, UUID ownerId);
+
   List<Paycheck> findAllByOwnerIdAndStateOrderByIncomeDateDescUpdatedAtDesc(
       UUID ownerId, PaycheckState state);
 

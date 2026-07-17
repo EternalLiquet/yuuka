@@ -2,7 +2,8 @@ appId: com.yuuka.mobile
 name: Template application draft
 ---
 - runFlow: shared/sign-in.yaml
-- tapOn: "Templates tab"
+- tapOn: "Open app menu"
+- tapOn: "Open Templates"
 - tapOn: "New template"
 - tapOn: "Name"
 - inputText: "E2E Template Draft"
@@ -123,7 +124,8 @@ name: Template application draft
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
-- tapOn: "Templates tab"
+- tapOn: "Open app menu"
+- tapOn: "Open Templates"
 - tapOn: "Open template E2E Template Draft"
 - extendedWaitUntil:
     visible: "E2E Template Draft"

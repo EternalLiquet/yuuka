@@ -1,0 +1,73 @@
+appId: com.yuuka.mobile
+name: Recurring Bill import into scratch draft
+---
+- runFlow: shared/sign-in.yaml
+- tapOn: "Open app menu"
+- tapOn: "Open Recurring Bills"
+- tapOn: "New recurring Bill"
+- tapOn: "Name"
+- inputText: "E2E Electric"
+- tapOn: "Typical amount"
+- inputText: "120.00"
+- tapOn: "Monthly due day"
+- inputText: "21"
+- hideKeyboard
+- tapOn: "I need to pay this manually"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create recurring Bill"
+    direction: DOWN
+- tapOn: "Create recurring Bill"
+- extendedWaitUntil:
+    visible: "Edit recurring Bill"
+    timeout: 10000
+- back
+- back
+- extendedWaitUntil:
+    visible: "New paycheck"
+    timeout: 10000
+- tapOn: "New paycheck"
+- tapOn: "Name"
+- inputText: "E2E Recurring Import"
+- tapOn: "Exact paycheck amount"
+- inputText: "200.00"
+- tapOn: "Income date"
+- eraseText: 100
+- inputText: "2026-07-17"
+- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Import recurring Bills"
+    direction: DOWN
+- tapOn: "Import recurring Bills"
+- extendedWaitUntil:
+    visible: "Edit amount for E2E Electric"
+    timeout: 10000
+- tapOn: "Edit amount for E2E Electric"
+- tapOn: "Amount for this paycheck"
+- eraseText: 100
+- inputText: "146.00"
+- hideKeyboard
+- tapOn: "This paycheck only"
+- tapOn: "Add selected Bills (1)"
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 10000
+- tapOn: "Close"
+- extendedWaitUntil:
+    visible: "E2E Electric"
+    timeout: 10000
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create paycheck"
+    direction: DOWN
+- tapOn: "Create paycheck"
+- extendedWaitUntil:
+    visible: "E2E Recurring Import"
+    timeout: 10000
+- scrollUntilVisible:
+    centerElement: true
+    element: 'Entry 1: E2E Electric, \$146\.00, Bill, Manual Pay'
+    direction: DOWN
+- assertVisible: 'Entry 1: E2E Electric, \$146\.00, Bill, Manual Pay'
+- assertVisible: "Status: Not Paid"

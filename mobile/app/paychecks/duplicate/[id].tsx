@@ -1,7 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowDown, ArrowLeft, ArrowUp, Pencil, Plus, Save, Trash2 } from 'lucide-react-native';
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Pencil,
+  Plus,
+  ReceiptText,
+  Save,
+  Trash2,
+} from 'lucide-react-native';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
@@ -17,10 +26,12 @@ import { formatMoney, minorToInput, parseMoneyToMinor } from '@/domain/money';
 import { PaycheckFormValues, paycheckFormSchema, today } from '@/features/paychecks/form-schemas';
 import {
   applicationEntriesFromDraft,
+  draftEntriesFromRecurringBills,
   draftEntriesFromPaycheck,
   draftTotalMinor,
   TemplateApplicationDraftEntry,
 } from '@/features/templates/application-draft';
+import { ImportRecurringBillsSheet } from '@/features/recurring-bills/import-recurring-bills-sheet';
 import { TemplateEntryEditor } from '@/features/templates/template-entry-editor';
 import type { TemplateEntryEditorEntry } from '@/features/templates/template-entry-editor';
 import { useSettings } from '@/settings/settings-provider';
@@ -49,6 +60,7 @@ export default function DuplicatePaycheckScreen() {
     null,
   );
   const [draftEditorVisible, setDraftEditorVisible] = useState(false);
+  const [recurringImportVisible, setRecurringImportVisible] = useState(false);
   const [submitLocked, setSubmitLocked] = useState(false);
   const query = useQuery({
     queryKey: duplicateSourceQueryKey,
@@ -254,6 +266,7 @@ export default function DuplicatePaycheckScreen() {
                 setEditingDraftEntry(entry);
                 setDraftEditorVisible(true);
               }}
+              onImport={() => setRecurringImportVisible(true)}
               onMove={(index, offset) => {
                 setDraftEntries((current) => moveDraftEntry(current, index, offset));
               }}
@@ -303,6 +316,14 @@ export default function DuplicatePaycheckScreen() {
             notes: payload.notes,
             payee: payload.payee,
             paymentMethod: payload.paymentMethod,
+            sourceRecurringBillDefinitionId:
+              payload.entryType === 'BILL'
+                ? (editingDraftEntry?.sourceRecurringBillDefinitionId ?? null)
+                : null,
+            sourceRecurringOccurrenceDate:
+              payload.entryType === 'BILL'
+                ? (editingDraftEntry?.sourceRecurringOccurrenceDate ?? null)
+                : null,
             targetDate: payload.targetDate,
             targetMinor: payload.targetMinor,
           };
@@ -318,6 +339,16 @@ export default function DuplicatePaycheckScreen() {
         title={editingDraftEntry ? 'Edit draft entry' : 'New draft entry'}
         visible={draftEditorVisible}
       />
+      <ImportRecurringBillsSheet
+        incomeDate={incomeDate}
+        localDraft
+        onClose={() => setRecurringImportVisible(false)}
+        onImport={(items) => {
+          setDraftEntries((current) => [...current, ...draftEntriesFromRecurringBills(items)]);
+          return Promise.resolve();
+        }}
+        visible={recurringImportVisible}
+      />
     </>
   );
 }
@@ -331,6 +362,7 @@ function DraftSummary({
   omittedLeftoverCount,
   onAdd,
   onEdit,
+  onImport,
   onMove,
   onRemove,
   totalMinor,
@@ -343,6 +375,7 @@ function DraftSummary({
   omittedLeftoverCount: number;
   onAdd: () => void;
   onEdit: (entry: TemplateApplicationDraftEntry) => void;
+  onImport: () => void;
   onMove: (index: number, offset: number) => void;
   onRemove: (clientId: string) => void;
   totalMinor: number;
@@ -377,6 +410,12 @@ function DraftSummary({
       ) : null}
       <View style={styles.actions}>
         <Button icon={Plus} label="Add draft entry" onPress={onAdd} variant="secondary" />
+        <Button
+          icon={ReceiptText}
+          label="Import recurring Bills"
+          onPress={onImport}
+          variant="secondary"
+        />
       </View>
       {draftEntries.map((entry, index) => (
         <View key={entry.clientId} style={[styles.previewEntry, { borderTopColor: colors.border }]}>

@@ -219,6 +219,18 @@ It must not:
 
 Non-Bill entries must not retain a Bill payment method.
 
+### Recurring Bill definitions
+
+Recurring Bill definitions are owner-scoped monthly planning sources, not scheduled payments or
+paycheck entries. Monthly occurrence dates are derived dynamically and clamp a missing due day to
+the final calendar day of that month.
+
+Importing creates an ordinary independent `BILL` snapshot. Later definition edits, deactivation,
+or deletion must not mutate imported paycheck entries. Provenance is optional and informational;
+duplicates are allowed. Existing-paycheck batch imports must validate allocation and persist all or
+none transactionally. The suggestion window is owner-backed, defaults to 7 days, and is restricted
+to 1 through 31.
+
 ### Spending Buckets
 
 A Spending Bucket reserves its full entry amount immediately.

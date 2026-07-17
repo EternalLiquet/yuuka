@@ -5,6 +5,7 @@ import type { PropsWithChildren } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { apiRequest, parseApiResponse } from '@/api/api-client';
+import { useYuukaApi } from '@/api/use-yuuka-api';
 import { versionResponseSchema } from '@/api/contracts';
 import { formatYuukaVersionFooter } from '@/api/version-format';
 import { useAuth } from '@/auth/auth-provider';
@@ -29,17 +30,24 @@ export default function SettingsScreen() {
   const { settings } = useSettings();
 
   return (
-    <SettingsDraft key={`${settings.apiBaseUrl}|${settings.timezone}|${settings.currencyCode}`} />
+    <SettingsDraft
+      key={`${settings.apiBaseUrl}|${settings.timezone}|${settings.currencyCode}|${settings.recurringBillSuggestionDays}`}
+    />
   );
 }
 
 function SettingsDraft() {
   const { signOut } = useAuth();
+  const api = useYuukaApi();
   const { settings, updateSettings } = useSettings();
   const { colors } = useAppTheme();
   const [apiBaseUrl, setApiBaseUrl] = useState(settings.apiBaseUrl);
   const [timezone, setTimezone] = useState(settings.timezone);
   const [currencyCode, setCurrencyCode] = useState(settings.currencyCode);
+  const [suggestionDays, setSuggestionDays] = useState(
+    String(settings.recurringBillSuggestionDays),
+  );
+  const suggestionInitialized = useRef(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const health = useQuery({
@@ -65,6 +73,12 @@ function SettingsDraft() {
     retry: false,
     staleTime: 300_000,
   });
+  const owner = useQuery({ queryKey: ['me'], queryFn: api.me });
+  useEffect(() => {
+    if (!owner.data || suggestionInitialized.current) return;
+    suggestionInitialized.current = true;
+    setSuggestionDays(String(owner.data.recurringBillSuggestionDays));
+  }, [owner.data]);
 
   async function save() {
     setSaving(true);
@@ -72,10 +86,20 @@ function SettingsDraft() {
     try {
       const normalized = normalizeApiBaseUrl(apiBaseUrl);
       const changedServer = normalized !== settings.apiBaseUrl;
+      const parsedSuggestionDays = Number(suggestionDays);
+      if (
+        !Number.isInteger(parsedSuggestionDays) ||
+        parsedSuggestionDays < 1 ||
+        parsedSuggestionDays > 31
+      ) {
+        throw new Error('Recurring Bill suggestion window must be from 1 through 31 days.');
+      }
+      await api.updateOwnerSettings(parsedSuggestionDays);
       await updateSettings({
         apiBaseUrl: normalized,
         timezone: timezone.trim(),
         currencyCode: currencyCode.trim().toUpperCase(),
+        recurringBillSuggestionDays: parsedSuggestionDays,
       });
       if (changedServer) await signOut();
     } catch (saveError) {
@@ -146,6 +170,19 @@ function SettingsDraft() {
           onChangeText={setCurrencyCode}
           value={currencyCode}
         />
+      </Section>
+
+      <Section title="Recurring Bills">
+        <TextField
+          keyboardType="number-pad"
+          label="Recurring Bill suggestion window"
+          maxLength={2}
+          onChangeText={setSuggestionDays}
+          value={suggestionDays}
+        />
+        <AppText style={{ color: colors.muted }} variant="caption">
+          Suggest Bills due within {suggestionDays || '7'} days after a paycheck.
+        </AppText>
       </Section>
 
       {error ? (

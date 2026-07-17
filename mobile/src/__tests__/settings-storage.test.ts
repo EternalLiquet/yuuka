@@ -54,6 +54,7 @@ describe('settings storage', () => {
     const stored = {
       apiBaseUrl: 'http://localhost:8080/api/v1',
       currencyCode: 'USD',
+      recurringBillSuggestionDays: 14,
       theme: 'light' as const,
       timezone: 'UTC',
     };
@@ -84,6 +85,7 @@ describe('settings storage', () => {
     const stored = {
       apiBaseUrl: 'http://localhost:8080/api/v1',
       currencyCode: 'USD',
+      recurringBillSuggestionDays: 7,
       theme: 'dark' as const,
       timezone: 'UTC',
     };

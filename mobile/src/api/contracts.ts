@@ -45,6 +45,8 @@ export const entrySchema = z.object({
   notes: z.string().nullable(),
   targetMinor: minor.nonnegative().nullable(),
   targetDate: date.nullable(),
+  sourceRecurringBillDefinitionId: uuid.nullable(),
+  sourceRecurringOccurrenceDate: date.nullable(),
   spentMinor: minor.nullable(),
   remainingMinor: minor.nullable(),
   overBudget: z.boolean().nullable(),
@@ -247,10 +249,63 @@ export const meSchema = z.object({
   displayName: z.string().nullable(),
   currencyCode: z.string().length(3),
   timezone: z.string(),
+  recurringBillSuggestionDays: z.number().int().min(1).max(31),
   createdAt: instant,
   updatedAt: instant,
 });
 export type Me = z.infer<typeof meSchema>;
+
+export const recurringBillRecurrenceTypeSchema = z.literal('MONTHLY');
+export const recurringBillStatusFilterSchema = z.enum(['ACTIVE', 'INACTIVE', 'ALL']);
+export type RecurringBillStatusFilter = z.infer<typeof recurringBillStatusFilterSchema>;
+
+export const recurringBillSchema = z.object({
+  id: uuid,
+  name: z.string(),
+  typicalAmountMinor: minor.nonnegative(),
+  paymentMethod: entryPaymentMethodSchema,
+  recurrenceType: recurringBillRecurrenceTypeSchema,
+  dueDay: z.number().int().min(1).max(31),
+  accountName: z.string().nullable(),
+  payee: z.string().nullable(),
+  notes: z.string().nullable(),
+  active: z.boolean(),
+  createdAt: instant,
+  updatedAt: instant,
+  version: z.number().int().nonnegative(),
+});
+export type RecurringBill = z.infer<typeof recurringBillSchema>;
+
+export const recurringBillListSchema = z.object({ items: z.array(recurringBillSchema) });
+
+export const recurringBillImportSummarySchema = z.object({
+  entryId: uuid,
+  paycheckId: uuid,
+  paycheckName: z.string(),
+  status: entryStatusSchema,
+});
+
+export const recurringBillOccurrenceSchema = z.object({
+  definitionId: uuid,
+  definitionVersion: z.number().int().nonnegative(),
+  occurrenceDate: date,
+  name: z.string(),
+  typicalAmountMinor: minor.nonnegative(),
+  paymentMethod: entryPaymentMethodSchema,
+  accountName: z.string().nullable(),
+  payee: z.string().nullable(),
+  notes: z.string().nullable(),
+  importCount: z.number().int().nonnegative(),
+  imports: z.array(recurringBillImportSummarySchema),
+});
+export type RecurringBillOccurrence = z.infer<typeof recurringBillOccurrenceSchema>;
+
+export const recurringBillTimelineSchema = z.object({
+  from: date,
+  through: date,
+  items: z.array(recurringBillOccurrenceSchema),
+});
+export type RecurringBillTimeline = z.infer<typeof recurringBillTimelineSchema>;
 
 export function pageSchema<T extends z.ZodTypeAny>(item: T) {
   return z.object({

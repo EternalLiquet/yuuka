@@ -38,6 +38,8 @@ const entry = {
   status: 'NOT_PAID',
   targetDate: null,
   targetMinor: null,
+  sourceRecurringBillDefinitionId: null,
+  sourceRecurringOccurrenceDate: null,
   updatedAt: '2026-07-10T12:30:00Z',
   version: 0,
 };
@@ -185,6 +187,7 @@ describe('API response contracts', () => {
         email: 'owner@yuuka.local',
         id: '11111111-1111-4111-8111-111111111123',
         timezone: 'America/Indianapolis',
+        recurringBillSuggestionDays: 7,
         updatedAt: '2026-07-10T12:00:00Z',
       }),
     ).toMatchObject({ email: 'owner@yuuka.local' });

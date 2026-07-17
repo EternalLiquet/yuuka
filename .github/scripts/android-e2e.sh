@@ -14,6 +14,9 @@ case "$flow" in
   templates)
     flow=".maestro/03-template-application-draft.yaml"
     ;;
+  recurring)
+    flow=".maestro/04-recurring-bill-import.yaml"
+    ;;
 esac
 
 if [ -z "$flow" ]; then

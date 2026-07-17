@@ -1,7 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';
-import { ArrowDown, ArrowUp, Check, Pencil, Plus, Save, Trash2 } from 'lucide-react-native';
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  Pencil,
+  Plus,
+  ReceiptText,
+  Save,
+  Trash2,
+} from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -19,10 +28,12 @@ import { formatMoney, parseMoneyToMinor } from '@/domain/money';
 import { PaycheckFormValues, paycheckFormSchema, today } from '@/features/paychecks/form-schemas';
 import {
   applicationEntriesFromDraft,
+  draftEntriesFromRecurringBills,
   draftEntriesFromTemplate,
   draftTotalMinor,
   TemplateApplicationDraftEntry,
 } from '@/features/templates/application-draft';
+import { ImportRecurringBillsSheet } from '@/features/recurring-bills/import-recurring-bills-sheet';
 import { TemplateEntryEditor } from '@/features/templates/template-entry-editor';
 import type { TemplateEntryEditorEntry } from '@/features/templates/template-entry-editor';
 import { useSettings } from '@/settings/settings-provider';
@@ -47,6 +58,7 @@ export default function NewPaycheckScreen() {
     null,
   );
   const [draftEditorVisible, setDraftEditorVisible] = useState(false);
+  const [recurringImportVisible, setRecurringImportVisible] = useState(false);
   const submitInFlight = useRef(false);
   const [submitLocked, setSubmitLocked] = useState(false);
   const templatesQuery = useQuery({
@@ -64,6 +76,7 @@ export default function NewPaycheckScreen() {
     defaultValues: { name: '', amount: '', incomeDate: today(), source: '', notes: '' },
   });
   const amountValue = useWatch({ control, name: 'amount' });
+  const incomeDate = useWatch({ control, name: 'incomeDate' });
   const effectiveSelectedTemplateId =
     mode === 'template' ? selectedTemplateId || templatesQuery.data?.items[0]?.id || '' : '';
   const selectedTemplate = useMemo(
@@ -86,14 +99,21 @@ export default function NewPaycheckScreen() {
   const overAllocated = differenceMinor != null && differenceMinor < 0;
 
   const scratchMutation = useMutation({
-    mutationFn: (values: PaycheckFormValues) =>
-      api.createPaycheck({
+    mutationFn: (values: PaycheckFormValues) => {
+      const details = {
         name: values.name.trim(),
         amountMinor: parseMoneyToMinor(values.amount),
         incomeDate: values.incomeDate,
         source: values.source.trim() || null,
         notes: values.notes.trim() || null,
-      }),
+      };
+      return draftEntries.length
+        ? api.createPaycheckFromDraft({
+            ...details,
+            entries: applicationEntriesFromDraft(values.incomeDate, draftEntries),
+          })
+        : api.createPaycheck(details);
+    },
     onSuccess: async (paycheck) => {
       await queryClient.invalidateQueries({ queryKey: ['paychecks'] });
       router.replace(`/paychecks/${paycheck.id}`);
@@ -178,7 +198,13 @@ export default function NewPaycheckScreen() {
           <AppText variant="label">Creation mode</AppText>
           <SegmentedControl
             label="Paycheck creation mode"
-            onChange={setMode}
+            onChange={(next) => {
+              setMode(next);
+              if (next === 'scratch') {
+                setDraftEntries([]);
+                setDraftTemplateId('');
+              }
+            }}
             options={modeOptions}
             value={mode}
           />
@@ -223,7 +249,7 @@ export default function NewPaycheckScreen() {
           <FormField control={control} label="Notes (optional)" multiline name="notes" />
         </View>
 
-        {mode === 'template' && selectedTemplate ? (
+        {mode === 'scratch' || selectedTemplate ? (
           <TemplateDraft
             differenceMinor={differenceMinor}
             draftEntries={draftEntries}
@@ -231,6 +257,7 @@ export default function NewPaycheckScreen() {
               setEditingDraftEntry(null);
               setDraftEditorVisible(true);
             }}
+            onImport={() => setRecurringImportVisible(true)}
             onEdit={(entry) => {
               setEditingDraftEntry(entry);
               setDraftEditorVisible(true);
@@ -241,11 +268,16 @@ export default function NewPaycheckScreen() {
             onRemove={(clientId) => {
               setDraftEntries((current) => current.filter((entry) => entry.clientId !== clientId));
             }}
-            onReset={() => {
-              setDraftEntries(draftEntriesFromTemplate(selectedTemplate));
-              setDraftTemplateId(selectedTemplate.id);
-            }}
+            onReset={
+              selectedTemplate
+                ? () => {
+                    setDraftEntries(draftEntriesFromTemplate(selectedTemplate));
+                    setDraftTemplateId(selectedTemplate.id);
+                  }
+                : undefined
+            }
             totalMinor={draftTotal}
+            title={mode === 'template' ? 'Template draft' : 'Paycheck draft'}
           />
         ) : null}
 
@@ -277,6 +309,14 @@ export default function NewPaycheckScreen() {
             notes: payload.notes,
             payee: payload.payee,
             paymentMethod: payload.paymentMethod,
+            sourceRecurringBillDefinitionId:
+              payload.entryType === 'BILL'
+                ? (editingDraftEntry?.sourceRecurringBillDefinitionId ?? null)
+                : null,
+            sourceRecurringOccurrenceDate:
+              payload.entryType === 'BILL'
+                ? (editingDraftEntry?.sourceRecurringOccurrenceDate ?? null)
+                : null,
             targetDate: payload.targetDate,
             targetMinor: payload.targetMinor,
           };
@@ -291,6 +331,16 @@ export default function NewPaycheckScreen() {
         }}
         title={editingDraftEntry ? 'Edit draft entry' : 'New draft entry'}
         visible={draftEditorVisible}
+      />
+      <ImportRecurringBillsSheet
+        incomeDate={incomeDate}
+        localDraft
+        onClose={() => setRecurringImportVisible(false)}
+        onImport={(items) => {
+          setDraftEntries((current) => [...current, ...draftEntriesFromRecurringBills(items)]);
+          return Promise.resolve();
+        }}
+        visible={recurringImportVisible}
       />
     </>
   );
@@ -366,19 +416,23 @@ function TemplateDraft({
   draftEntries,
   onAdd,
   onEdit,
+  onImport,
   onMove,
   onRemove,
   onReset,
   totalMinor,
+  title,
 }: {
   differenceMinor: number | null;
   draftEntries: TemplateApplicationDraftEntry[];
   onAdd: () => void;
   onEdit: (entry: TemplateApplicationDraftEntry) => void;
+  onImport: () => void;
   onMove: (index: number, offset: number) => void;
   onRemove: (clientId: string) => void;
-  onReset: () => void;
+  onReset?: () => void;
   totalMinor: number;
+  title: string;
 }) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
@@ -394,9 +448,9 @@ function TemplateDraft({
     <View style={[styles.preview, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.previewHeader}>
         <View>
-          <AppText variant="label">Template draft</AppText>
+          <AppText variant="label">{title}</AppText>
           <AppText style={{ color: colors.muted }} variant="caption">
-            {draftEntries.length} entries copied locally before creation
+            {draftEntries.length} editable entries before creation
           </AppText>
         </View>
         <AppText variant="money">{formatMoney(totalMinor, settings.currencyCode)}</AppText>
@@ -411,7 +465,13 @@ function TemplateDraft({
       </AppText>
       <View style={styles.actions}>
         <Button icon={Plus} label="Add draft entry" onPress={onAdd} variant="secondary" />
-        <Button label="Reset from template" onPress={onReset} variant="ghost" />
+        <Button
+          icon={ReceiptText}
+          label="Import recurring Bills"
+          onPress={onImport}
+          variant="secondary"
+        />
+        {onReset ? <Button label="Reset from template" onPress={onReset} variant="ghost" /> : null}
       </View>
       {draftEntries.map((entry, index) => (
         <View key={entry.clientId} style={[styles.previewEntry, { borderTopColor: colors.border }]}>

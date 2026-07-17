@@ -2,13 +2,14 @@
 
 ## Navigation
 
-Bottom tabs:
+Persistent bottom tabs:
 
 1. Active
 2. History
-3. Paybacks
-4. Templates
-5. Settings
+
+The app-menu drawer provides Active, History, Paybacks, Templates, Recurring Bills, and Settings.
+Keeping only the two highest-frequency destinations in the tab bar leaves the remaining feature
+routes available without compressing their labels or changing their route identities.
 
 A prominent create action is available from Active.
 
@@ -134,7 +135,9 @@ Collect:
 - optional source,
 - optional notes.
 
-After save, open paycheck detail with zero entries and the full amount shown as unallocated.
+The draft may import recurring Bill suggestions before save. If it has no entries, save opens
+paycheck detail with the full amount unallocated; otherwise the ordered draft entries are created
+transactionally with the paycheck.
 
 ### From template
 
@@ -212,7 +215,7 @@ detail controls.
 
 ## Templates
 
-The Templates tab exposes active and archived template lists with loading, empty, stale-data,
+The Templates menu destination exposes active and archived template lists with loading, empty, stale-data,
 pull-to-refresh, error, and retry states.
 
 Template cards show:
@@ -236,6 +239,21 @@ mutation controls, and supports restore and duplicate when permitted by the back
 recoverable lifecycle action, not permanent deletion. Template-entry order persists through saved
 reorder requests and stale writes surface conflict errors.
 
+## Recurring Bills
+
+The Recurring Bills menu destination opens a vertically scrollable occurrence timeline with an
+always-visible Today divider, month/date grouping, pull-to-refresh, and a Jump to today action.
+Definition management supports search, active/inactive filtering, create, edit, deactivate,
+reactivate, and delete. Monthly dates shown in the timeline come from the backend's clamped calendar
+policy.
+
+Scratch, template, duplicate, and existing-paycheck entry drafts expose Import recurring bills.
+Suggested results use the owner setting around the paycheck income date; All shows the relevant
+occurrence date near that income date. Nothing is preselected. Selecting uses the typical amount,
+and editing that selection offers This paycheck only or Update typical amount. Draft imports remain
+editable local snapshots. Existing-paycheck imports submit the full selection as one transactional
+request and retain the user's selection if validation or allocation fails.
+
 ## Settings
 
 At minimum:
@@ -245,6 +263,7 @@ At minimum:
 - theme preference,
 - timezone,
 - currency display,
+- recurring Bill suggestion days (1 through 31, default 7),
 - sign out,
 - backend release version from `/health/version`.
 

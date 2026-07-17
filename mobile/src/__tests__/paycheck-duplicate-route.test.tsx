@@ -463,6 +463,8 @@ function entry(overrides: Partial<Entry>): Entry {
     paymentMethod: 'AUTOPAY',
     position: 0,
     remainingMinor: null,
+    sourceRecurringBillDefinitionId: null,
+    sourceRecurringOccurrenceDate: null,
     spentMinor: null,
     status: 'POSTED',
     targetDate: null,

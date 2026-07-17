@@ -15,6 +15,7 @@ on:
           - scratch
           - paybacks
           - templates
+          - recurring
 
 permissions:
   contents: read
@@ -47,8 +48,11 @@ jobs:
             templates)
               flows='[{"id":"templates","name":"Template application","flow":".maestro/03-template-application-draft.yaml","artifact":"android-e2e-templates-diagnostics"}]'
               ;;
+            recurring)
+              flows='[{"id":"recurring","name":"Recurring Bill import","flow":".maestro/04-recurring-bill-import.yaml","artifact":"android-e2e-recurring-diagnostics"}]'
+              ;;
             all)
-              flows='[{"id":"scratch","name":"Scratch lifecycle","flow":".maestro/01-scratch-lifecycle.yaml","artifact":"android-e2e-scratch-diagnostics"},{"id":"paybacks","name":"Payback delete reassign","flow":".maestro/02-payback-delete-reassign.yaml","artifact":"android-e2e-paybacks-diagnostics"},{"id":"templates","name":"Template application","flow":".maestro/03-template-application-draft.yaml","artifact":"android-e2e-templates-diagnostics"}]'
+              flows='[{"id":"scratch","name":"Scratch lifecycle","flow":".maestro/01-scratch-lifecycle.yaml","artifact":"android-e2e-scratch-diagnostics"},{"id":"paybacks","name":"Payback delete reassign","flow":".maestro/02-payback-delete-reassign.yaml","artifact":"android-e2e-paybacks-diagnostics"},{"id":"templates","name":"Template application","flow":".maestro/03-template-application-draft.yaml","artifact":"android-e2e-templates-diagnostics"},{"id":"recurring","name":"Recurring Bill import","flow":".maestro/04-recurring-bill-import.yaml","artifact":"android-e2e-recurring-diagnostics"}]'
               ;;
             *)
               echo "Unsupported flow selection: $selection" >&2

@@ -16,6 +16,15 @@ Internal storage terminology such as "minor units" and API field names such as
 
 Applying a template copies entries in one database transaction. Paychecks retain only a source template ID for provenance; later edits in either direction cannot mutate the other aggregate.
 
+## Recurring Bills are dynamic definition sources
+
+Recurring Bills are owner-scoped definitions rather than scheduled paycheck entries. The backend
+derives monthly occurrence dates on demand and clamps missing due days to the month's final day.
+Imports create normal independent Bill snapshots; nullable definition-and-occurrence provenance is
+informational and never makes later definition edits cascade into a paycheck. Existing-paycheck
+batch imports lock the paycheck, validate optimistic version and total allocation, then persist all
+selected snapshots in one transaction.
+
 ## Immutable history
 
 Every status change appends an event with separate effective and recorded timestamps. Status and audit tables have PostgreSQL update/delete rejection triggers so application defects cannot rewrite history.

@@ -15,6 +15,7 @@ export const settingsSchema = z.object({
     .string()
     .length(3)
     .transform((value) => value.toUpperCase()),
+  recurringBillSuggestionDays: z.number().int().min(1).max(31).default(7),
 });
 export type AppSettings = z.infer<typeof settingsSchema>;
 
@@ -28,6 +29,7 @@ export const defaultSettings: AppSettings = {
   theme: 'dark',
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   currencyCode: 'USD',
+  recurringBillSuggestionDays: 7,
 };
 
 export async function loadSettings(): Promise<AppSettings> {
