@@ -9,6 +9,7 @@ import com.yuuka.backend.bucket.domain.BucketTransaction;
 import com.yuuka.backend.bucket.infrastructure.JpaBucketTransactionRepository;
 import com.yuuka.backend.common.api.BusinessRuleException;
 import com.yuuka.backend.common.api.ConflictException;
+import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.api.ResourceNotFoundException;
 import com.yuuka.backend.paycheck.domain.EntryType;
 import com.yuuka.backend.paycheck.domain.Paycheck;
@@ -22,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,14 +52,14 @@ public class BucketTransactionService {
   }
 
   @Transactional(readOnly = true)
-  public List<BucketTransactionResponse> list(UUID ownerId, UUID entryId) {
+  public PageResponse<BucketTransactionResponse> list(
+      UUID ownerId, UUID entryId, int page, int size) {
     requireBucket(ownerId, entryId);
-    return transactions
-        .findAllByEntryIdAndOwnerIdAndDeletedAtIsNullOrderByEffectiveDateDescCreatedAtDesc(
-            entryId, ownerId)
-        .stream()
-        .map(BucketTransactionResponse::from)
-        .toList();
+    return PageResponse.from(
+        transactions
+            .findAllByEntryIdAndOwnerIdAndDeletedAtIsNullOrderByEffectiveDateDescCreatedAtDescIdDesc(
+                entryId, ownerId, listPage(page, size))
+            .map(BucketTransactionResponse::from));
   }
 
   @Transactional
@@ -214,5 +216,9 @@ public class BucketTransactionService {
 
   private String normalizeOptional(String value) {
     return value == null || value.isBlank() ? null : value.trim();
+  }
+
+  private PageRequest listPage(int requestedPage, int requestedSize) {
+    return PageRequest.of(Math.max(0, requestedPage), Math.min(Math.max(requestedSize, 1), 100));
   }
 }

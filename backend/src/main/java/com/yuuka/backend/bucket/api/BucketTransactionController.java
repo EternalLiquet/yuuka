@@ -33,8 +33,11 @@ public class BucketTransactionController {
 
   @GetMapping("/entries/{entryId}/bucket-transactions")
   public PageResponse<BucketTransactionResponse> list(
-      @AuthenticationPrincipal Jwt jwt, @PathVariable UUID entryId) {
-    return PageResponse.singlePage(service.list(AuthenticatedOwner.id(jwt), entryId));
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID entryId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "50") int size) {
+    return service.list(AuthenticatedOwner.id(jwt), entryId, page, size);
   }
 
   @PostMapping("/entries/{entryId}/bucket-transactions")
