@@ -17,6 +17,7 @@ import com.yuuka.backend.payback.domain.PaybackRepayment;
 import com.yuuka.backend.payback.domain.PaybackState;
 import com.yuuka.backend.payback.infrastructure.JpaPaybackRepaymentRepository;
 import com.yuuka.backend.payback.infrastructure.JpaPaybackRepository;
+import com.yuuka.backend.payback.infrastructure.PaybackRepaymentAggregateProjection;
 import com.yuuka.backend.paycheck.domain.EntryStatus;
 import com.yuuka.backend.paycheck.domain.Paycheck;
 import com.yuuka.backend.paycheck.domain.PaycheckEntry;
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,9 +62,13 @@ public class PaybackService {
 
   @Transactional(readOnly = true)
   public PaybackListResponse list(UUID ownerId) {
+    List<Payback> livePaybacks = paybacks.findAllByOwnerIdAndDeletedAtIsNull(ownerId);
+    Map<UUID, RepaymentAggregate> repaymentAggregates =
+        repaymentAggregates(
+            ownerId, livePaybacks.stream().map(Payback::getId).collect(Collectors.toSet()));
     List<PaybackResponse> items =
-        paybacks.findAllByOwnerIdAndDeletedAtIsNull(ownerId).stream()
-            .map(this::toResponse)
+        livePaybacks.stream()
+            .map(payback -> toResponse(payback, repaymentAggregates.get(payback.getId())))
             .sorted(
                 Comparator.comparing(
                         (PaybackResponse response) -> response.state() != PaybackState.ACTIVE)
@@ -240,11 +246,11 @@ public class PaybackService {
   public PageResponse<PaybackRepaymentResponse> repayments(
       UUID ownerId, UUID paybackId, int page, int size) {
     requirePayback(ownerId, paybackId);
-    List<PaybackRepaymentResponse> rows =
-        repayments.findAllByPaybackIdAndOwnerIdOrderByAppliedAtDesc(paybackId, ownerId).stream()
-            .map(repayment -> toRepaymentResponse(ownerId, repayment))
-            .toList();
-    return paginate(rows, page, size);
+    return PageResponse.from(
+        repayments
+            .findAllByPaybackIdAndOwnerIdOrderByAppliedAtDescIdDesc(
+                paybackId, ownerId, listPage(page, size))
+            .map(repayment -> toRepaymentResponse(ownerId, repayment)));
   }
 
   @Transactional
@@ -361,6 +367,26 @@ public class PaybackService {
         repayments.countByPaybackIdAndOwnerId(payback.getId(), payback.getOwnerId()));
   }
 
+  private PaybackResponse toResponse(Payback payback, RepaymentAggregate aggregate) {
+    RepaymentAggregate totals = aggregate == null ? RepaymentAggregate.ZERO : aggregate;
+    return PaybackResponse.from(payback, totals.activeRepaidMinor(), totals.repaymentCount());
+  }
+
+  private Map<UUID, RepaymentAggregate> repaymentAggregates(
+      UUID ownerId, java.util.Collection<UUID> paybackIds) {
+    if (paybackIds.isEmpty()) {
+      return Map.of();
+    }
+    return repayments.aggregateByPaybackIds(ownerId, paybackIds).stream()
+        .collect(
+            Collectors.toMap(
+                PaybackRepaymentAggregateProjection::getPaybackId,
+                projection ->
+                    new RepaymentAggregate(
+                        value(projection.getActiveRepaidMinor()),
+                        value(projection.getRepaymentCount()))));
+  }
+
   private PaybackRepaymentResponse toRepaymentResponse(UUID ownerId, PaybackRepayment repayment) {
     PaycheckEntry entry =
         entries
@@ -391,6 +417,10 @@ public class PaybackService {
 
   private long activeRepaidMinor(Payback payback) {
     return repayments.sumActiveAmountByPaybackIdAndOwnerId(payback.getId(), payback.getOwnerId());
+  }
+
+  private long value(Long value) {
+    return value == null ? 0 : value;
   }
 
   private void validateBaseline(long originalAmountMinor, long openingRemainingAmountMinor) {
@@ -424,20 +454,11 @@ public class PaybackService {
     return left == null ? right == null : left.equals(right);
   }
 
-  private <T> PageResponse<T> paginate(List<T> results, int page, int size) {
-    int normalizedSize = Math.min(Math.max(size, 1), 100);
-    int normalizedPage = Math.max(page, 0);
-    int from = Math.min(normalizedPage * normalizedSize, results.size());
-    int to = Math.min(from + normalizedSize, results.size());
-    long totalItems = results.size();
-    int totalPages =
-        totalItems == 0 ? 0 : (int) Math.ceil((double) totalItems / (double) normalizedSize);
-    return new PageResponse<>(
-        results.subList(from, to),
-        normalizedPage,
-        normalizedSize,
-        totalItems,
-        totalPages,
-        normalizedPage + 1 < totalPages);
+  private record RepaymentAggregate(long activeRepaidMinor, long repaymentCount) {
+    private static final RepaymentAggregate ZERO = new RepaymentAggregate(0, 0);
+  }
+
+  private PageRequest listPage(int requestedPage, int requestedSize) {
+    return PageRequest.of(Math.max(0, requestedPage), Math.min(Math.max(requestedSize, 1), 100));
   }
 }
