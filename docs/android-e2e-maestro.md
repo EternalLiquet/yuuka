@@ -270,6 +270,17 @@ After typing into a field inside a bottom sheet, assume the Android keyboard may
 
 Use the same pattern before bottom-sheet save buttons when the sheet content can extend below the fold.
 
+On the hosted AOSP numeric keyboard, scrolling a long entry form directly after `inputText` can leave the keyboard open and consume the gesture. When the focused field is single-line, press Enter before scrolling to an action below later controls such as the Payback selector:
+
+```yaml
+- inputText: "150.00"
+- pressKey: Enter
+- scrollUntilVisible:
+    centerElement: true
+    element: "Save entry"
+    direction: DOWN
+```
+
 First confirm that the sheet is actually scrollable. The fixed status editor is not: `scrollUntilVisible` can move its visible card away and leave only the dark modal backdrop. Fill the multiline note before the single-line effective timestamp, then use Enter to dismiss the timestamp keyboard and tap the already-visible save action:
 
 ```yaml

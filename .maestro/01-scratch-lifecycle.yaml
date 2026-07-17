@@ -51,6 +51,7 @@ name: Scratch paycheck lifecycle
     text: "Budget amount"
     index: 1
 - inputText: "150.00"
+- pressKey: Enter
 - scrollUntilVisible:
     centerElement: true
     element: "Save entry"
