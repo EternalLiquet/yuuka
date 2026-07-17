@@ -1,5 +1,6 @@
 package com.yuuka.backend.payback.api.dto;
 
+import com.yuuka.backend.common.api.MoneyArithmetic;
 import com.yuuka.backend.payback.domain.Payback;
 import com.yuuka.backend.payback.domain.PaybackState;
 import java.time.Instant;
@@ -24,7 +25,8 @@ public record PaybackResponse(
     Instant updatedAt,
     long version) {
   public static PaybackResponse from(Payback payback, long repaidMinor, long repaymentCount) {
-    long remainingMinor = payback.getOpeningRemainingAmountMinor() - repaidMinor;
+    long remainingMinor =
+        MoneyArithmetic.subtract(payback.getOpeningRemainingAmountMinor(), repaidMinor);
     double progress =
         payback.getOpeningRemainingAmountMinor() == 0
             ? 100

@@ -3,6 +3,7 @@ package com.yuuka.backend.payback.application;
 import com.yuuka.backend.audit.application.AuditService;
 import com.yuuka.backend.common.api.BusinessRuleException;
 import com.yuuka.backend.common.api.ConflictException;
+import com.yuuka.backend.common.api.MoneyArithmetic;
 import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.api.ResourceNotFoundException;
 import com.yuuka.backend.payback.api.dto.CreatePaybackRequest;
@@ -71,12 +72,13 @@ public class PaybackService {
                     .thenComparing(PaybackResponse::id))
             .toList();
     long totalRemaining =
-        items.stream()
-            .filter(item -> item.state() == PaybackState.ACTIVE)
-            .mapToLong(PaybackResponse::remainingMinor)
-            .sum();
-    long totalOriginal = items.stream().mapToLong(PaybackResponse::originalAmountMinor).sum();
-    long totalRepaid = items.stream().mapToLong(PaybackResponse::repaidMinor).sum();
+        MoneyArithmetic.sum(
+            items.stream()
+                .filter(item -> item.state() == PaybackState.ACTIVE)
+                .mapToLong(PaybackResponse::remainingMinor));
+    long totalOriginal =
+        MoneyArithmetic.sum(items.stream().mapToLong(PaybackResponse::originalAmountMinor));
+    long totalRepaid = MoneyArithmetic.sum(items.stream().mapToLong(PaybackResponse::repaidMinor));
     int activeCount =
         (int) items.stream().filter(item -> item.state() == PaybackState.ACTIVE).count();
     return new PaybackListResponse(
@@ -379,7 +381,9 @@ public class PaybackService {
   }
 
   private long remainingMinor(Payback payback) {
-    long remainingMinor = payback.getOpeningRemainingAmountMinor() - activeRepaidMinor(payback);
+    long remainingMinor =
+        MoneyArithmetic.subtract(
+            payback.getOpeningRemainingAmountMinor(), activeRepaidMinor(payback));
     if (remainingMinor < 0) {
       throw new BusinessRuleException(
           "PAYBACK_REMAINING_NEGATIVE",

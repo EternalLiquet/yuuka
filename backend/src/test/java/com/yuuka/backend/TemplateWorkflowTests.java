@@ -163,6 +163,38 @@ class TemplateWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void templateDefaultTotalOverflowUsesBusinessRuleEnvelope() throws Exception {
+    String token = registerAndGetAccessToken("templates-overflow@yuuka.local");
+    long templateCountBefore = tableCount("templates");
+    long templateEntryCountBefore = tableCount("template_entries");
+    long createdAuditCountBefore = templateCreationAuditCount();
+
+    mockMvc
+        .perform(
+            post("/api/v1/templates")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"Huge Template",
+                      "entries":[
+                        {"entryType":"BILL","name":"Huge Bill","defaultAmountMinor":%d},
+                        {"entryType":"SPENDING_BUCKET","name":"Huge Bucket","defaultAmountMinor":1}
+                      ]
+                    }
+                    """
+                        .formatted(Long.MAX_VALUE)))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("MONEY_AMOUNT_OVERFLOW"))
+        .andExpect(jsonPath("$.details.currencyCode").value("USD"));
+
+    assertThat(tableCount("templates")).isEqualTo(templateCountBefore);
+    assertThat(tableCount("template_entries")).isEqualTo(templateEntryCountBefore);
+    assertThat(templateCreationAuditCount()).isEqualTo(createdAuditCountBefore);
+  }
+
+  @Test
   void appliesTemplateTransactionallyAndCreatesIndependentOrderedSnapshots() throws Exception {
     String token = registerAndGetAccessToken("templates-apply@yuuka.local");
     JsonNode template = createTemplate(token, "Utilities", 70000);
@@ -466,6 +498,16 @@ class TemplateWorkflowTests extends AbstractIntegrationTest {
 
   private long paycheckCount() {
     return jdbcTemplate.queryForObject("select count(*) from paychecks", Long.class);
+  }
+
+  private long tableCount(String tableName) {
+    return jdbcTemplate.queryForObject("select count(*) from " + tableName, Long.class);
+  }
+
+  private long templateCreationAuditCount() {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from audit_events where entity_type = 'TEMPLATE' and action = 'CREATED'",
+        Long.class);
   }
 
   private long auditCount(String entityType, UUID entityId, String action) {

@@ -11,11 +11,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuuka.backend.support.AbstractIntegrationTest;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -29,6 +36,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @AutoConfigureMockMvc
 class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
@@ -36,6 +44,7 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
   @Autowired private MutableClock clock;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private TransactionTemplate transactionTemplate;
 
   @BeforeEach
   void resetClock() {
@@ -371,6 +380,241 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void perPaycheckSpentTotalAtInt64LimitWorksWithoutWrappingNegativeNet() throws Exception {
+    String token = register("bucket-paycheck-spent-limit@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Huge Purchase", 1, "2026-07-14");
+    JsonNode bucket =
+        addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Tiny Budget", 1);
+    addBucketTransaction(token, bucket.path("id").asText(), Long.MAX_VALUE, "2026-07-14");
+
+    JsonNode response =
+        json(
+            get("/api/v1/paychecks/{id}", paycheck.path("id").asText())
+                .header("Authorization", bearer(token)),
+            200);
+
+    assertThat(response.path("spendingBucketPerformance").path("budgetedMinor").asLong())
+        .isEqualTo(1);
+    assertThat(response.path("spendingBucketPerformance").path("spentMinor").asLong())
+        .isEqualTo(Long.MAX_VALUE);
+    assertThat(response.path("spendingBucketPerformance").path("netMinor").asLong())
+        .isEqualTo(1L - Long.MAX_VALUE);
+  }
+
+  @Test
+  void perPaycheckSpentTotalOverflowUsesBusinessRuleEnvelope() throws Exception {
+    String token = register("bucket-paycheck-spent-overflow@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Per Paycheck Overflow", 2, "2026-07-14");
+    JsonNode first = addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "First", 1);
+    JsonNode second = addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Second", 1);
+    addBucketTransaction(token, first.path("id").asText(), Long.MAX_VALUE, "2026-07-14");
+    addBucketTransaction(token, second.path("id").asText(), 1, "2026-07-14");
+
+    JsonNode error =
+        json(
+            get("/api/v1/paychecks/{id}", paycheck.path("id").asText())
+                .header("Authorization", bearer(token)),
+            422);
+
+    assertOverflowEnvelope(error);
+  }
+
+  @Test
+  void rollingBudgetTotalAtInt64LimitWorksAndIgnoresOtherOwners() throws Exception {
+    String token = register("bucket-rolling-budget-limit@yuuka.local");
+    String otherToken = register("bucket-rolling-budget-other@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Limit Budget", Long.MAX_VALUE, "2026-07-14");
+    addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Limit", Long.MAX_VALUE);
+    JsonNode otherPaycheck = createPaycheck(otherToken, "Other Budget", 1, "2026-07-14");
+    addEntry(otherToken, otherPaycheck.path("id").asText(), "SPENDING_BUCKET", "Other", 1);
+
+    JsonNode response = rollingPerformance(token, 200);
+
+    assertThat(response.path("paycheckCount").asLong()).isEqualTo(1);
+    assertThat(response.path("summary").path("budgetedMinor").asLong()).isEqualTo(Long.MAX_VALUE);
+    assertThat(response.path("summary").path("spentMinor").asLong()).isZero();
+    assertThat(response.path("summary").path("netMinor").asLong()).isEqualTo(Long.MAX_VALUE);
+  }
+
+  @Test
+  void rollingBudgetTotalOverflowUsesBusinessRuleEnvelope() throws Exception {
+    String token = register("bucket-rolling-budget-overflow@yuuka.local");
+    JsonNode first = createPaycheck(token, "Huge Budget", Long.MAX_VALUE, "2026-07-14");
+    addEntry(token, first.path("id").asText(), "SPENDING_BUCKET", "Huge", Long.MAX_VALUE);
+    JsonNode second = createPaycheck(token, "Small Budget", 1, "2026-07-15");
+    addEntry(token, second.path("id").asText(), "SPENDING_BUCKET", "Small", 1);
+
+    JsonNode error = rollingPerformance(token, 422);
+
+    assertOverflowEnvelope(error);
+  }
+
+  @Test
+  void rollingSpentTotalAtInt64LimitWorksAndIgnoresOtherOwners() throws Exception {
+    String token = register("bucket-rolling-spent-limit@yuuka.local");
+    String otherToken = register("bucket-rolling-spent-other@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Huge Spent", 1, "2026-07-14");
+    JsonNode bucket = addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Tiny", 1);
+    addBucketTransaction(token, bucket.path("id").asText(), Long.MAX_VALUE, "2026-07-14");
+    JsonNode otherPaycheck = createPaycheck(otherToken, "Other Spent", 1, "2026-07-14");
+    JsonNode otherBucket =
+        addEntry(otherToken, otherPaycheck.path("id").asText(), "SPENDING_BUCKET", "Other", 1);
+    addBucketTransaction(otherToken, otherBucket.path("id").asText(), 1, "2026-07-14");
+
+    JsonNode response = rollingPerformance(token, 200);
+
+    assertThat(response.path("summary").path("budgetedMinor").asLong()).isEqualTo(1);
+    assertThat(response.path("summary").path("spentMinor").asLong()).isEqualTo(Long.MAX_VALUE);
+    assertThat(response.path("summary").path("netMinor").asLong()).isEqualTo(1L - Long.MAX_VALUE);
+  }
+
+  @Test
+  void rollingSpentTotalOverflowUsesBusinessRuleEnvelope() throws Exception {
+    String token = register("bucket-rolling-spent-overflow@yuuka.local");
+    JsonNode first = createPaycheck(token, "Huge Spent", 1, "2026-07-14");
+    JsonNode firstBucket = addEntry(token, first.path("id").asText(), "SPENDING_BUCKET", "Huge", 1);
+    addBucketTransaction(token, firstBucket.path("id").asText(), Long.MAX_VALUE, "2026-07-14");
+    JsonNode second = createPaycheck(token, "Small Spent", 1, "2026-07-15");
+    JsonNode secondBucket =
+        addEntry(token, second.path("id").asText(), "SPENDING_BUCKET", "Small", 1);
+    addBucketTransaction(token, secondBucket.path("id").asText(), 1, "2026-07-15");
+
+    JsonNode error = rollingPerformance(token, 422);
+
+    assertOverflowEnvelope(error);
+  }
+
+  @Test
+  void concurrentOverflowingCreatesOnSameBucketSerializeAtBucketEntryLock() throws Exception {
+    String token = register("bucket-concurrent-create@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Concurrent Creates", 1, "2026-07-14");
+    JsonNode bucket =
+        addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Concurrent", 1);
+    UUID entryId = UUID.fromString(bucket.path("id").asText());
+    UUID ownerId = ownerIdForEntry(entryId);
+
+    List<ConcurrentResponse> responses =
+        createTwoTransactionsBehindEntryLock(token, entryId, Long.MAX_VALUE, 1);
+
+    assertThat(responses.stream().map(ConcurrentResponse::status))
+        .containsExactlyInAnyOrder(201, 422);
+    assertOverflowEnvelope(onlyResponseWithStatus(responses, 422).body());
+    assertThat(bucketTransactionCount(entryId)).isEqualTo(1);
+    assertThat(bucketTransactionSum(entryId))
+        .isBetween(BigDecimal.ONE, BigDecimal.valueOf(Long.MAX_VALUE));
+    assertThat(bucketTransactionAuditCount(ownerId, "CREATED")).isEqualTo(1);
+  }
+
+  @Test
+  void concurrentOverflowingUpdatesOnSameBucketSerializeAtBucketEntryLock() throws Exception {
+    String token = register("bucket-concurrent-update@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Concurrent Updates", 2, "2026-07-14");
+    JsonNode bucket =
+        addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Concurrent", 2);
+    UUID entryId = UUID.fromString(bucket.path("id").asText());
+    UUID ownerId = ownerIdForEntry(entryId);
+    JsonNode first = addBucketTransaction(token, bucket.path("id").asText(), 1, "2026-07-14");
+    JsonNode second = addBucketTransaction(token, bucket.path("id").asText(), 1, "2026-07-14");
+    long updatedAuditCountBefore = bucketTransactionAuditCount(ownerId, "UPDATED");
+
+    List<ConcurrentResponse> responses =
+        updateTwoTransactionsBehindEntryLock(
+            entryId,
+            token,
+            UUID.fromString(first.path("id").asText()),
+            Long.MAX_VALUE - 1,
+            first.path("version").asLong(),
+            UUID.fromString(second.path("id").asText()),
+            2,
+            second.path("version").asLong());
+
+    assertThat(responses.stream().map(ConcurrentResponse::status))
+        .containsExactlyInAnyOrder(200, 422);
+    assertOverflowEnvelope(onlyResponseWithStatus(responses, 422).body());
+    assertThat(bucketTransactionCount(entryId)).isEqualTo(2);
+    assertThat(bucketTransactionSum(entryId))
+        .isBetween(BigDecimal.valueOf(3), BigDecimal.valueOf(Long.MAX_VALUE));
+    assertThat(bucketTransactionAuditCount(ownerId, "UPDATED"))
+        .isEqualTo(updatedAuditCountBefore + 1);
+  }
+
+  @Test
+  void bucketEntryLockDoesNotGloballySerializeWritesToDifferentBuckets() throws Exception {
+    String token = register("bucket-different-locks@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Different Buckets", 2, "2026-07-14");
+    JsonNode lockedBucket =
+        addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Locked", 1);
+    JsonNode freeBucket =
+        addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Free", 1);
+    UUID lockedEntryId = UUID.fromString(lockedBucket.path("id").asText());
+    UUID freeEntryId = UUID.fromString(freeBucket.path("id").asText());
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+
+    try {
+      Future<ConcurrentResponse> lockedWrite =
+          executor.submit(
+              () -> {
+                ready.countDown();
+                await(start);
+                return createBucketTransactionResponse(token, lockedEntryId, 1, "2026-07-14");
+              });
+      Future<ConcurrentResponse> freeWrite =
+          executor.submit(
+              () -> {
+                ready.countDown();
+                await(start);
+                return createBucketTransactionResponse(token, freeEntryId, 1, "2026-07-14");
+              });
+
+      transactionTemplate.executeWithoutResult(
+          status -> {
+            lockEntry(lockedEntryId);
+            await(ready);
+            start.countDown();
+            assertThat(getFuture(freeWrite).status()).isEqualTo(201);
+            assertThat(lockedWrite.isDone()).isFalse();
+          });
+
+      assertThat(getFuture(lockedWrite).status()).isEqualTo(201);
+      assertThat(bucketTransactionCount(lockedEntryId)).isEqualTo(1);
+      assertThat(bucketTransactionCount(freeEntryId)).isEqualTo(1);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
+  void bucketEntryLockRemainsOwnerScopedForCrossOwnerWrites() throws Exception {
+    String token = register("bucket-owner-lock@yuuka.local");
+    String otherToken = register("bucket-owner-lock-other@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Owner Bucket", 1, "2026-07-14");
+    JsonNode bucket =
+        addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Owner Only", 1);
+    UUID entryId = UUID.fromString(bucket.path("id").asText());
+    UUID ownerId = ownerIdForEntry(entryId);
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    try {
+      transactionTemplate.executeWithoutResult(
+          status -> {
+            lockEntry(entryId);
+            Future<ConcurrentResponse> crossOwnerWrite =
+                executor.submit(
+                    () -> createBucketTransactionResponse(otherToken, entryId, 1, "2026-07-14"));
+
+            assertThat(getFuture(crossOwnerWrite).status()).isEqualTo(404);
+          });
+
+      assertThat(bucketTransactionCount(entryId)).isZero();
+      assertThat(bucketTransactionAuditCount(ownerId, "CREATED")).isZero();
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
   void reopenedPaycheckRemainsInRollingSnapshotUntilExplicitClose() throws Exception {
     String token = register("bucket-performance-reopen@yuuka.local");
     JsonNode closed = closeBucketPaycheck(token, "Reopen", "2026-07-01", 1000, 300, "2026-07-01");
@@ -493,6 +737,24 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.summary.netMinor").value(netMinor));
   }
 
+  private JsonNode rollingPerformance(String token, int expectedStatus) throws Exception {
+    return json(
+        get("/api/v1/spending-buckets/performance/rolling")
+            .param("days", "90")
+            .param("asOfDate", "2026-07-15")
+            .header("Authorization", bearer(token)),
+        expectedStatus);
+  }
+
+  private void assertOverflowEnvelope(JsonNode error) {
+    assertThat(error.path("code").asText()).isEqualTo("MONEY_AMOUNT_OVERFLOW");
+    assertThat(error.path("message").asText())
+        .isEqualTo("The amounts in this request are too large to calculate safely.");
+    assertThat(error.path("fieldErrors").isObject()).isTrue();
+    assertThat(error.path("details").path("currencyCode").asText()).isEqualTo("USD");
+    assertThat(error.path("traceId").asText()).isNotBlank();
+  }
+
   private JsonNode createPaycheck(String token, String name, long amount, String incomeDate)
       throws Exception {
     return json(
@@ -534,6 +796,182 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
                 """
                     .formatted(amount, effectiveDate)),
         201);
+  }
+
+  private List<ConcurrentResponse> createTwoTransactionsBehindEntryLock(
+      String token, UUID entryId, long firstAmount, long secondAmount) {
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      Future<ConcurrentResponse> first =
+          executor.submit(
+              () -> {
+                ready.countDown();
+                await(start);
+                return createBucketTransactionResponse(token, entryId, firstAmount, "2026-07-14");
+              });
+      Future<ConcurrentResponse> second =
+          executor.submit(
+              () -> {
+                ready.countDown();
+                await(start);
+                return createBucketTransactionResponse(token, entryId, secondAmount, "2026-07-14");
+              });
+
+      transactionTemplate.executeWithoutResult(
+          status -> {
+            lockEntry(entryId);
+            await(ready);
+            start.countDown();
+          });
+
+      return List.of(getFuture(first), getFuture(second));
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  private List<ConcurrentResponse> updateTwoTransactionsBehindEntryLock(
+      UUID entryId,
+      String token,
+      UUID firstTransactionId,
+      long firstAmount,
+      long firstVersion,
+      UUID secondTransactionId,
+      long secondAmount,
+      long secondVersion) {
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      Future<ConcurrentResponse> first =
+          executor.submit(
+              () -> {
+                ready.countDown();
+                await(start);
+                return updateBucketTransactionResponse(
+                    token, firstTransactionId, firstAmount, firstVersion);
+              });
+      Future<ConcurrentResponse> second =
+          executor.submit(
+              () -> {
+                ready.countDown();
+                await(start);
+                return updateBucketTransactionResponse(
+                    token, secondTransactionId, secondAmount, secondVersion);
+              });
+
+      transactionTemplate.executeWithoutResult(
+          status -> {
+            lockEntry(entryId);
+            await(ready);
+            start.countDown();
+          });
+
+      return List.of(getFuture(first), getFuture(second));
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  private ConcurrentResponse createBucketTransactionResponse(
+      String token, UUID entryId, long amount, String effectiveDate) throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/api/v1/entries/{id}/bucket-transactions", entryId)
+                    .header("Authorization", bearer(token))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"amountMinor":%d,"effectiveDate":"%s"}
+                        """
+                            .formatted(amount, effectiveDate)))
+            .andReturn();
+    return response(result);
+  }
+
+  private ConcurrentResponse updateBucketTransactionResponse(
+      String token, UUID transactionId, long amount, long version) throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                patch("/api/v1/bucket-transactions/{id}", transactionId)
+                    .header("Authorization", bearer(token))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"amountMinor":%d,"effectiveDate":"2026-07-14","version":%d}
+                        """
+                            .formatted(amount, version)))
+            .andReturn();
+    return response(result);
+  }
+
+  private ConcurrentResponse response(MvcResult result) throws Exception {
+    String body = result.getResponse().getContentAsString();
+    JsonNode json = body.isBlank() ? objectMapper.createObjectNode() : objectMapper.readTree(body);
+    return new ConcurrentResponse(result.getResponse().getStatus(), json);
+  }
+
+  private ConcurrentResponse onlyResponseWithStatus(
+      List<ConcurrentResponse> responses, int status) {
+    List<ConcurrentResponse> matches =
+        responses.stream().filter(response -> response.status() == status).toList();
+    assertThat(matches).hasSize(1);
+    return matches.getFirst();
+  }
+
+  private void lockEntry(UUID entryId) {
+    jdbcTemplate.queryForObject(
+        "select id from paycheck_entries where id = ? for update", UUID.class, entryId);
+  }
+
+  private UUID ownerIdForEntry(UUID entryId) {
+    return jdbcTemplate.queryForObject(
+        "select owner_id from paycheck_entries where id = ?", UUID.class, entryId);
+  }
+
+  private long bucketTransactionCount(UUID entryId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from bucket_transactions where entry_id = ? and deleted_at is null",
+        Long.class,
+        entryId);
+  }
+
+  private BigDecimal bucketTransactionSum(UUID entryId) {
+    return jdbcTemplate.queryForObject(
+        "select coalesce(sum(amount_minor), 0) from bucket_transactions "
+            + "where entry_id = ? and deleted_at is null",
+        BigDecimal.class,
+        entryId);
+  }
+
+  private long bucketTransactionAuditCount(UUID ownerId, String action) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from audit_events "
+            + "where owner_id = ? and entity_type = 'BUCKET_TRANSACTION' and action = ?",
+        Long.class,
+        ownerId,
+        action);
+  }
+
+  private <T> T getFuture(Future<T> future) {
+    try {
+      return future.get(5, TimeUnit.SECONDS);
+    } catch (Exception exception) {
+      throw new AssertionError(exception);
+    }
+  }
+
+  private void await(CountDownLatch latch) {
+    try {
+      assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue();
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError(exception);
+    }
   }
 
   private JsonNode changeStatus(String token, String entryId, long version) throws Exception {
@@ -597,6 +1035,8 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
   private String bearer(String token) {
     return "Bearer " + token;
   }
+
+  private record ConcurrentResponse(int status, JsonNode body) {}
 
   @TestConfiguration
   static class ClockConfiguration {

@@ -3,6 +3,7 @@ package com.yuuka.backend.paycheck.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.yuuka.backend.common.api.BusinessRuleException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -76,5 +77,19 @@ class PaycheckCalculatorTests {
     assertThatThrownBy(() -> calculator.calculate(-1, List.of()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("Paycheck amount must not be negative");
+  }
+
+  @Test
+  void rejectsAllocationTotalsThatExceedInt64MoneyRange() {
+    assertThatThrownBy(
+            () ->
+                calculator.calculate(
+                    Long.MAX_VALUE,
+                    List.of(
+                        new AllocationLine(Long.MAX_VALUE, EntryStatus.NOT_PAID, false),
+                        new AllocationLine(1, EntryStatus.NOT_PAID, false))))
+        .isInstanceOfSatisfying(
+            BusinessRuleException.class,
+            exception -> assertThat(exception.code()).isEqualTo("MONEY_AMOUNT_OVERFLOW"));
   }
 }

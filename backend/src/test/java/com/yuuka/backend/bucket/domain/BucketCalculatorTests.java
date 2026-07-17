@@ -3,6 +3,7 @@ package com.yuuka.backend.bucket.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.yuuka.backend.common.api.BusinessRuleException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -32,5 +33,13 @@ class BucketCalculatorTests {
     assertThatThrownBy(() -> calculator.calculate(-1, List.of()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("Bucket budget must not be negative");
+  }
+
+  @Test
+  void rejectsSpentTotalsThatExceedInt64MoneyRange() {
+    assertThatThrownBy(() -> calculator.calculate(Long.MAX_VALUE, List.of(Long.MAX_VALUE, 1L)))
+        .isInstanceOfSatisfying(
+            BusinessRuleException.class,
+            exception -> assertThat(exception.code()).isEqualTo("MONEY_AMOUNT_OVERFLOW"));
   }
 }

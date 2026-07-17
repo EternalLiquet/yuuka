@@ -71,6 +71,20 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void paybackSummaryOverflowUsesBusinessRuleEnvelope() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-summary-overflow@yuuka.local");
+
+    createPayback(token, "Huge one", Long.MAX_VALUE, Long.MAX_VALUE);
+    createPayback(token, "Huge two", Long.MAX_VALUE, Long.MAX_VALUE);
+
+    mockMvc
+        .perform(get("/api/v1/paybacks").header("Authorization", "Bearer " + token))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("MONEY_AMOUNT_OVERFLOW"))
+        .andExpect(jsonPath("$.details.currencyCode").value("USD"));
+  }
+
+  @Test
   void deletesUnusedPaybackAndRemovesItFromNormalReads() throws Exception {
     String token = registerAndGetAccessToken("paybacks-delete-unused@yuuka.local");
     JsonNode payback = createPayback(token, "Unused", 10000, 10000);

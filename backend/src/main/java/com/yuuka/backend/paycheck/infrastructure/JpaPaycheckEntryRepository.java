@@ -15,6 +15,14 @@ public interface JpaPaycheckEntryRepository extends JpaRepository<PaycheckEntry,
 
   Optional<PaycheckEntry> findByIdAndOwnerIdAndDeletedAtIsNull(UUID id, UUID ownerId);
 
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select entry from PaycheckEntry entry "
+          + "where entry.id = :id and entry.ownerId = :ownerId "
+          + "and entry.deletedAt is null")
+  Optional<PaycheckEntry> findLiveByIdAndOwnerIdForUpdate(
+      @Param("id") UUID id, @Param("ownerId") UUID ownerId);
+
   List<PaycheckEntry> findAllByPaycheckIdAndOwnerIdAndDeletedAtIsNullOrderByPosition(
       UUID paycheckId, UUID ownerId);
 
