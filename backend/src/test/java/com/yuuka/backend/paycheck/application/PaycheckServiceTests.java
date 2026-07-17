@@ -77,16 +77,24 @@ class PaycheckServiceTests {
   }
 
   private PaycheckService service() {
+    PaycheckResponseAssembler responseAssembler =
+        new PaycheckResponseAssembler(
+            bucketTransactions,
+            new PaycheckCalculator(),
+            new BucketCalculator(),
+            spendingBucketPerformanceService,
+            ownerLocalDateService);
+    PaycheckValidationHelper validations = new PaycheckValidationHelper();
     return new PaycheckService(
         paychecks,
         entries,
         statusEvents,
-        bucketTransactions,
-        new PaycheckCalculator(),
+        responseAssembler,
+        new PaycheckEntryMutationHelper(),
+        new PaycheckLifecycleTransitions(paychecks, responseAssembler, auditService),
+        validations,
         visibilityPolicy,
         statusTransitionPolicy,
-        new BucketCalculator(),
-        spendingBucketPerformanceService,
         ownerLocalDateService,
         paybackService,
         auditService,
