@@ -72,6 +72,11 @@ name: Scratch paycheck lifecycle
     text: "Note (optional)"
     index: 1
 - inputText: "Scheduled"
+- runFlow:
+    when:
+      visible: "Return"
+    commands:
+      - hideKeyboard
 - tapOn:
     text: "Effective date and time"
     point: "90%,50%"

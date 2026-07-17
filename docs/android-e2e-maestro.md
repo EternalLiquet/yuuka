@@ -281,13 +281,18 @@ On the hosted AOSP numeric keyboard, scrolling a long entry form directly after 
     direction: DOWN
 ```
 
-First confirm that the sheet is actually scrollable. The fixed status editor is not: `scrollUntilVisible` can move its visible card away and leave only the dark modal backdrop. Fill the multiline note before the single-line effective timestamp, then use Enter to dismiss the timestamp keyboard and tap the already-visible save action:
+First confirm that the sheet is actually scrollable. The fixed status editor is not: `scrollUntilVisible` can move its visible card away and leave only the dark modal backdrop. The hosted AOSP keyboard can remain open after Maestro fills the multiline note, while Gboard may already be gone. Conditionally hide the keyboard only when its `Return` key is visible, then edit the single-line effective timestamp. Use Enter to dismiss the timestamp keyboard and tap the already-visible save action:
 
 ```yaml
 - tapOn:
     text: "Note (optional)"
     index: 1
 - inputText: "Scheduled"
+- runFlow:
+    when:
+      visible: "Return"
+    commands:
+      - hideKeyboard
 - tapOn:
     text: "Effective date and time"
     point: "90%,50%"
