@@ -371,6 +371,34 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void bucketTransactionOverflowUsesBusinessRuleEnvelope() throws Exception {
+    String token = register("bucket-transaction-overflow@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Huge Bucket", Long.MAX_VALUE, "2026-07-14");
+    JsonNode bucket =
+        addEntry(
+            token,
+            paycheck.path("id").asText(),
+            "SPENDING_BUCKET",
+            "Huge Spending Bucket",
+            Long.MAX_VALUE);
+    addBucketTransaction(token, bucket.path("id").asText(), Long.MAX_VALUE, "2026-07-14");
+
+    JsonNode error =
+        json(
+            post("/api/v1/entries/{id}/bucket-transactions", bucket.path("id").asText())
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"amountMinor":1,"effectiveDate":"2026-07-14"}
+                    """),
+            422);
+
+    assertThat(error.path("code").asText()).isEqualTo("MONEY_AMOUNT_OVERFLOW");
+    assertThat(error.path("details").path("currencyCode").asText()).isEqualTo("USD");
+  }
+
+  @Test
   void reopenedPaycheckRemainsInRollingSnapshotUntilExplicitClose() throws Exception {
     String token = register("bucket-performance-reopen@yuuka.local");
     JsonNode closed = closeBucketPaycheck(token, "Reopen", "2026-07-01", 1000, 300, "2026-07-01");

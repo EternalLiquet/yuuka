@@ -1,5 +1,6 @@
 package com.yuuka.backend.bucket.domain;
 
+import com.yuuka.backend.common.api.MoneyArithmetic;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -11,8 +12,8 @@ public class BucketCalculator {
     }
     long spent = 0;
     for (long amount : transactionAmountsMinor) {
-      spent = Math.addExact(spent, amount);
+      spent = MoneyArithmetic.add(spent, amount);
     }
-    return new BucketMetrics(budgetMinor, spent, Math.subtractExact(budgetMinor, spent));
+    return new BucketMetrics(budgetMinor, spent, MoneyArithmetic.subtract(budgetMinor, spent));
   }
 }

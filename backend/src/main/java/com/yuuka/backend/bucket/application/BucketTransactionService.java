@@ -4,6 +4,7 @@ import com.yuuka.backend.audit.application.AuditService;
 import com.yuuka.backend.bucket.api.dto.BucketTransactionResponse;
 import com.yuuka.backend.bucket.api.dto.CreateBucketTransactionRequest;
 import com.yuuka.backend.bucket.api.dto.UpdateBucketTransactionRequest;
+import com.yuuka.backend.bucket.domain.BucketCalculator;
 import com.yuuka.backend.bucket.domain.BucketTransaction;
 import com.yuuka.backend.bucket.infrastructure.JpaBucketTransactionRepository;
 import com.yuuka.backend.common.api.BusinessRuleException;
@@ -17,8 +18,10 @@ import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +30,7 @@ public class BucketTransactionService {
   private final JpaBucketTransactionRepository transactions;
   private final JpaPaycheckEntryRepository entries;
   private final JpaPaycheckRepository paychecks;
+  private final BucketCalculator bucketCalculator;
   private final AuditService auditService;
   private final Clock clock;
 
@@ -34,11 +38,13 @@ public class BucketTransactionService {
       JpaBucketTransactionRepository transactions,
       JpaPaycheckEntryRepository entries,
       JpaPaycheckRepository paychecks,
+      BucketCalculator bucketCalculator,
       AuditService auditService,
       Clock clock) {
     this.transactions = transactions;
     this.entries = entries;
     this.paychecks = paychecks;
+    this.bucketCalculator = bucketCalculator;
     this.auditService = auditService;
     this.clock = clock;
   }
@@ -59,6 +65,7 @@ public class BucketTransactionService {
       UUID ownerId, UUID entryId, CreateBucketTransactionRequest request) {
     PaycheckEntry entry = requireMutableBucket(ownerId, entryId);
     rejectNonPositive(request.amountMinor());
+    validateAggregateFitsInt64(entry, null, request.amountMinor());
     BucketTransaction transaction =
         transactions.saveAndFlush(
             new BucketTransaction(
@@ -89,6 +96,7 @@ public class BucketTransactionService {
     PaycheckEntry entry = requireMutableBucket(ownerId, transaction.getEntryId());
     assertVersion(transaction.getVersion(), request.version());
     rejectNonPositive(request.amountMinor());
+    validateAggregateFitsInt64(entry, transaction.getId(), request.amountMinor());
     BucketTransactionResponse before = BucketTransactionResponse.from(transaction);
     transaction.update(
         request.amountMinor(),
@@ -170,6 +178,23 @@ public class BucketTransactionService {
     if (amountMinor <= 0) {
       throw new BusinessRuleException("A bucket transaction must be a positive purchase amount.");
     }
+  }
+
+  private void validateAggregateFitsInt64(
+      PaycheckEntry entry, UUID replacingTransactionId, long nextAmountMinor) {
+    List<Long> amounts =
+        transactions
+            .findAllByEntryIdAndOwnerIdAndDeletedAtIsNullOrderByEffectiveDateDescCreatedAtDesc(
+                entry.getId(), entry.getOwnerId())
+            .stream()
+            .filter(
+                transaction ->
+                    replacingTransactionId == null
+                        || !transaction.getId().equals(replacingTransactionId))
+            .map(BucketTransaction::getAmountMinor)
+            .collect(Collectors.toCollection(ArrayList::new));
+    amounts.add(nextAmountMinor);
+    bucketCalculator.calculate(entry.getAmountMinor(), amounts);
   }
 
   private String normalizeOptional(String value) {

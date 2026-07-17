@@ -1,5 +1,6 @@
 package com.yuuka.backend.template.api.dto;
 
+import com.yuuka.backend.common.api.MoneyArithmetic;
 import com.yuuka.backend.template.domain.BudgetTemplate;
 import com.yuuka.backend.template.domain.TemplateEntry;
 import java.time.Instant;
@@ -26,7 +27,8 @@ public record TemplateResponse(
         template.getDescription(),
         template.isArchived(),
         templateEntries.size(),
-        templateEntries.stream().mapToLong(TemplateEntry::getDefaultAmountMinor).sum(),
+        MoneyArithmetic.sum(
+            templateEntries.stream().mapToLong(TemplateEntry::getDefaultAmountMinor)),
         templateEntries.stream().map(TemplateEntryResponse::from).toList(),
         template.getCreatedAt(),
         template.getUpdatedAt(),

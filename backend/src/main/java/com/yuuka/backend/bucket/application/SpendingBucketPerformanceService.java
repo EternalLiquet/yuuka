@@ -4,6 +4,7 @@ import com.yuuka.backend.bucket.api.dto.RollingSpendingBucketPerformanceResponse
 import com.yuuka.backend.bucket.api.dto.SpendingBucketPerformanceSummaryResponse;
 import com.yuuka.backend.bucket.infrastructure.JpaBucketTransactionRepository;
 import com.yuuka.backend.bucket.infrastructure.SpendingBucketPerformanceProjection;
+import com.yuuka.backend.common.api.MoneyArithmetic;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -57,7 +58,8 @@ public class SpendingBucketPerformanceService {
     }
     long budgeted = value(aggregate.getBudgetedMinor());
     long spent = value(aggregate.getSpentMinor());
-    return new SpendingBucketPerformanceSummaryResponse(budgeted, spent, budgeted - spent);
+    return new SpendingBucketPerformanceSummaryResponse(
+        budgeted, spent, MoneyArithmetic.subtract(budgeted, spent));
   }
 
   private long value(Long value) {

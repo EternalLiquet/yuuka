@@ -638,6 +638,30 @@ class PaycheckWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void allocationOverflowUsesBusinessRuleEnvelope() throws Exception {
+    String token = registerAndGetAccessToken("paycheck-overflow@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Huge Paycheck", Long.MAX_VALUE);
+
+    addEntry(token, paycheck.path("id").asText(), "BILL", "Huge Bill", Long.MAX_VALUE);
+
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/{id}/entries", paycheck.path("id").asText())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"entryType":"BILL","name":"Overflow Penny","amountMinor":1}
+                    """))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("MONEY_AMOUNT_OVERFLOW"))
+        .andExpect(
+            jsonPath("$.message")
+                .value("The amounts in this request are too large to calculate safely."))
+        .andExpect(jsonPath("$.details.currencyCode").value("USD"));
+  }
+
+  @Test
   void rejectsMissingMoneyAmountsInsteadOfDefaultingToZero() throws Exception {
     String token = registerAndGetAccessToken("amount-required@yuuka.local");
 

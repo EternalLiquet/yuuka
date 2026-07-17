@@ -1,5 +1,6 @@
 package com.yuuka.backend.paycheck.domain;
 
+import com.yuuka.backend.common.api.MoneyArithmetic;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -26,18 +27,18 @@ public class PaycheckCalculator {
       if (line.deleted()) {
         continue;
       }
-      allocated = Math.addExact(allocated, line.amountMinor());
+      allocated = MoneyArithmetic.add(allocated, line.amountMinor());
       switch (line.status()) {
         case POSTED -> {
-          posted = Math.addExact(posted, line.amountMinor());
+          posted = MoneyArithmetic.add(posted, line.amountMinor());
           postedCount++;
         }
         case PROCESSING -> {
-          processing = Math.addExact(processing, line.amountMinor());
+          processing = MoneyArithmetic.add(processing, line.amountMinor());
           processingCount++;
         }
         case NOT_PAID -> {
-          notPaid = Math.addExact(notPaid, line.amountMinor());
+          notPaid = MoneyArithmetic.add(notPaid, line.amountMinor());
           notPaidCount++;
         }
       }
@@ -45,7 +46,7 @@ public class PaycheckCalculator {
 
     return new PaycheckMetrics(
         allocated,
-        Math.subtractExact(paycheckAmountMinor, allocated),
+        MoneyArithmetic.subtract(paycheckAmountMinor, allocated),
         posted,
         processing,
         notPaid,
