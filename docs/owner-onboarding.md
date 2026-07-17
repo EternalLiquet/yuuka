@@ -53,7 +53,7 @@ Remove-Item Env:YUUKA_PASSWORD_TO_HASH
 Copy only the generated hash into `.env`:
 
 ```sh
-YUUKA_OWNER_PASSWORD_HASH=$2a$12$...
+YUUKA_OWNER_PASSWORD_HASH='$2a$12$...'
 ```
 
 For local-only bootstrap, you can temporarily use:
@@ -91,7 +91,7 @@ For production, use the `prod` Spring profile and set:
 ```sh
 SPRING_PROFILES_ACTIVE=prod
 YUUKA_OWNER_EMAIL=you@example.com
-YUUKA_OWNER_PASSWORD_HASH=$2a$12$...
+YUUKA_OWNER_PASSWORD_HASH='$2a$12$...'
 YUUKA_OWNER_TOTP_SECRET=BASE32SECRET
 YUUKA_AUTH_REGISTRATION_ENABLED=false
 YUUKA_JWT_SECRET=<long-random-secret>
