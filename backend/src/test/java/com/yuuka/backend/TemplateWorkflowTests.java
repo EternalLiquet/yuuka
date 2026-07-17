@@ -165,7 +165,9 @@ class TemplateWorkflowTests extends AbstractIntegrationTest {
   @Test
   void templateDefaultTotalOverflowUsesBusinessRuleEnvelope() throws Exception {
     String token = registerAndGetAccessToken("templates-overflow@yuuka.local");
-    long templateCountBefore = templateCount();
+    long templateCountBefore = tableCount("templates");
+    long templateEntryCountBefore = tableCount("template_entries");
+    long createdAuditCountBefore = templateCreationAuditCount();
 
     mockMvc
         .perform(
@@ -187,7 +189,9 @@ class TemplateWorkflowTests extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.code").value("MONEY_AMOUNT_OVERFLOW"))
         .andExpect(jsonPath("$.details.currencyCode").value("USD"));
 
-    assertThat(templateCount()).isEqualTo(templateCountBefore);
+    assertThat(tableCount("templates")).isEqualTo(templateCountBefore);
+    assertThat(tableCount("template_entries")).isEqualTo(templateEntryCountBefore);
+    assertThat(templateCreationAuditCount()).isEqualTo(createdAuditCountBefore);
   }
 
   @Test
@@ -496,8 +500,14 @@ class TemplateWorkflowTests extends AbstractIntegrationTest {
     return jdbcTemplate.queryForObject("select count(*) from paychecks", Long.class);
   }
 
-  private long templateCount() {
-    return jdbcTemplate.queryForObject("select count(*) from budget_templates", Long.class);
+  private long tableCount(String tableName) {
+    return jdbcTemplate.queryForObject("select count(*) from " + tableName, Long.class);
+  }
+
+  private long templateCreationAuditCount() {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from audit_events where entity_type = 'TEMPLATE' and action = 'CREATED'",
+        Long.class);
   }
 
   private long auditCount(String entityType, UUID entityId, String action) {

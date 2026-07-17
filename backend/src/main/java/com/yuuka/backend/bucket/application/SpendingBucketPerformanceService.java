@@ -56,8 +56,8 @@ public class SpendingBucketPerformanceService {
     if (value(aggregate.getBucketCount()) == 0) {
       return null;
     }
-    long budgeted = value(aggregate.getBudgetedMinor());
-    long spent = value(aggregate.getSpentMinor());
+    long budgeted = MoneyArithmetic.toLongExact(aggregate.getBudgetedMinor());
+    long spent = MoneyArithmetic.toLongExact(aggregate.getSpentMinor());
     return new SpendingBucketPerformanceSummaryResponse(
         budgeted, spent, MoneyArithmetic.subtract(budgeted, spent));
   }

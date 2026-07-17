@@ -1,5 +1,6 @@
 package com.yuuka.backend.common.api;
 
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.stream.LongStream;
 
@@ -24,6 +25,17 @@ public final class MoneyArithmetic {
 
   public static long sum(LongStream values) {
     return values.reduce(0, MoneyArithmetic::add);
+  }
+
+  public static long toLongExact(BigDecimal value) {
+    if (value == null) {
+      return 0;
+    }
+    try {
+      return value.toBigIntegerExact().longValueExact();
+    } catch (ArithmeticException exception) {
+      throw overflow();
+    }
   }
 
   public static BusinessRuleException overflow() {

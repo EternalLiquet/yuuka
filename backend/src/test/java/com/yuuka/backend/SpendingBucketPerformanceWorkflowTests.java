@@ -371,31 +371,108 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
-  void bucketTransactionOverflowUsesBusinessRuleEnvelope() throws Exception {
-    String token = register("bucket-transaction-overflow@yuuka.local");
-    JsonNode paycheck = createPaycheck(token, "Huge Bucket", Long.MAX_VALUE, "2026-07-14");
+  void perPaycheckSpentTotalAtInt64LimitWorksWithoutWrappingNegativeNet() throws Exception {
+    String token = register("bucket-paycheck-spent-limit@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Huge Purchase", 1, "2026-07-14");
     JsonNode bucket =
-        addEntry(
-            token,
-            paycheck.path("id").asText(),
-            "SPENDING_BUCKET",
-            "Huge Spending Bucket",
-            Long.MAX_VALUE);
+        addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Tiny Budget", 1);
     addBucketTransaction(token, bucket.path("id").asText(), Long.MAX_VALUE, "2026-07-14");
+
+    JsonNode response =
+        json(
+            get("/api/v1/paychecks/{id}", paycheck.path("id").asText())
+                .header("Authorization", bearer(token)),
+            200);
+
+    assertThat(response.path("spendingBucketPerformance").path("budgetedMinor").asLong())
+        .isEqualTo(1);
+    assertThat(response.path("spendingBucketPerformance").path("spentMinor").asLong())
+        .isEqualTo(Long.MAX_VALUE);
+    assertThat(response.path("spendingBucketPerformance").path("netMinor").asLong())
+        .isEqualTo(1L - Long.MAX_VALUE);
+  }
+
+  @Test
+  void perPaycheckSpentTotalOverflowUsesBusinessRuleEnvelope() throws Exception {
+    String token = register("bucket-paycheck-spent-overflow@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Per Paycheck Overflow", 2, "2026-07-14");
+    JsonNode first = addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "First", 1);
+    JsonNode second = addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Second", 1);
+    addBucketTransaction(token, first.path("id").asText(), Long.MAX_VALUE, "2026-07-14");
+    addBucketTransaction(token, second.path("id").asText(), 1, "2026-07-14");
 
     JsonNode error =
         json(
-            post("/api/v1/entries/{id}/bucket-transactions", bucket.path("id").asText())
-                .header("Authorization", bearer(token))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    """
-                    {"amountMinor":1,"effectiveDate":"2026-07-14"}
-                    """),
+            get("/api/v1/paychecks/{id}", paycheck.path("id").asText())
+                .header("Authorization", bearer(token)),
             422);
 
-    assertThat(error.path("code").asText()).isEqualTo("MONEY_AMOUNT_OVERFLOW");
-    assertThat(error.path("details").path("currencyCode").asText()).isEqualTo("USD");
+    assertOverflowEnvelope(error);
+  }
+
+  @Test
+  void rollingBudgetTotalAtInt64LimitWorksAndIgnoresOtherOwners() throws Exception {
+    String token = register("bucket-rolling-budget-limit@yuuka.local");
+    String otherToken = register("bucket-rolling-budget-other@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Limit Budget", Long.MAX_VALUE, "2026-07-14");
+    addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Limit", Long.MAX_VALUE);
+    JsonNode otherPaycheck = createPaycheck(otherToken, "Other Budget", 1, "2026-07-14");
+    addEntry(otherToken, otherPaycheck.path("id").asText(), "SPENDING_BUCKET", "Other", 1);
+
+    JsonNode response = rollingPerformance(token, 200);
+
+    assertThat(response.path("paycheckCount").asLong()).isEqualTo(1);
+    assertThat(response.path("summary").path("budgetedMinor").asLong()).isEqualTo(Long.MAX_VALUE);
+    assertThat(response.path("summary").path("spentMinor").asLong()).isZero();
+    assertThat(response.path("summary").path("netMinor").asLong()).isEqualTo(Long.MAX_VALUE);
+  }
+
+  @Test
+  void rollingBudgetTotalOverflowUsesBusinessRuleEnvelope() throws Exception {
+    String token = register("bucket-rolling-budget-overflow@yuuka.local");
+    JsonNode first = createPaycheck(token, "Huge Budget", Long.MAX_VALUE, "2026-07-14");
+    addEntry(token, first.path("id").asText(), "SPENDING_BUCKET", "Huge", Long.MAX_VALUE);
+    JsonNode second = createPaycheck(token, "Small Budget", 1, "2026-07-15");
+    addEntry(token, second.path("id").asText(), "SPENDING_BUCKET", "Small", 1);
+
+    JsonNode error = rollingPerformance(token, 422);
+
+    assertOverflowEnvelope(error);
+  }
+
+  @Test
+  void rollingSpentTotalAtInt64LimitWorksAndIgnoresOtherOwners() throws Exception {
+    String token = register("bucket-rolling-spent-limit@yuuka.local");
+    String otherToken = register("bucket-rolling-spent-other@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Huge Spent", 1, "2026-07-14");
+    JsonNode bucket = addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Tiny", 1);
+    addBucketTransaction(token, bucket.path("id").asText(), Long.MAX_VALUE, "2026-07-14");
+    JsonNode otherPaycheck = createPaycheck(otherToken, "Other Spent", 1, "2026-07-14");
+    JsonNode otherBucket =
+        addEntry(otherToken, otherPaycheck.path("id").asText(), "SPENDING_BUCKET", "Other", 1);
+    addBucketTransaction(otherToken, otherBucket.path("id").asText(), 1, "2026-07-14");
+
+    JsonNode response = rollingPerformance(token, 200);
+
+    assertThat(response.path("summary").path("budgetedMinor").asLong()).isEqualTo(1);
+    assertThat(response.path("summary").path("spentMinor").asLong()).isEqualTo(Long.MAX_VALUE);
+    assertThat(response.path("summary").path("netMinor").asLong()).isEqualTo(1L - Long.MAX_VALUE);
+  }
+
+  @Test
+  void rollingSpentTotalOverflowUsesBusinessRuleEnvelope() throws Exception {
+    String token = register("bucket-rolling-spent-overflow@yuuka.local");
+    JsonNode first = createPaycheck(token, "Huge Spent", 1, "2026-07-14");
+    JsonNode firstBucket = addEntry(token, first.path("id").asText(), "SPENDING_BUCKET", "Huge", 1);
+    addBucketTransaction(token, firstBucket.path("id").asText(), Long.MAX_VALUE, "2026-07-14");
+    JsonNode second = createPaycheck(token, "Small Spent", 1, "2026-07-15");
+    JsonNode secondBucket =
+        addEntry(token, second.path("id").asText(), "SPENDING_BUCKET", "Small", 1);
+    addBucketTransaction(token, secondBucket.path("id").asText(), 1, "2026-07-15");
+
+    JsonNode error = rollingPerformance(token, 422);
+
+    assertOverflowEnvelope(error);
   }
 
   @Test
@@ -519,6 +596,24 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.summary.budgetedMinor").value(budgetedMinor))
         .andExpect(jsonPath("$.summary.spentMinor").value(spentMinor))
         .andExpect(jsonPath("$.summary.netMinor").value(netMinor));
+  }
+
+  private JsonNode rollingPerformance(String token, int expectedStatus) throws Exception {
+    return json(
+        get("/api/v1/spending-buckets/performance/rolling")
+            .param("days", "90")
+            .param("asOfDate", "2026-07-15")
+            .header("Authorization", bearer(token)),
+        expectedStatus);
+  }
+
+  private void assertOverflowEnvelope(JsonNode error) {
+    assertThat(error.path("code").asText()).isEqualTo("MONEY_AMOUNT_OVERFLOW");
+    assertThat(error.path("message").asText())
+        .isEqualTo("The amounts in this request are too large to calculate safely.");
+    assertThat(error.path("fieldErrors").isObject()).isTrue();
+    assertThat(error.path("details").path("currencyCode").asText()).isEqualTo("USD");
+    assertThat(error.path("traceId").asText()).isNotBlank();
   }
 
   private JsonNode createPaycheck(String token, String name, long amount, String incomeDate)

@@ -1,11 +1,13 @@
 package com.yuuka.backend.bucket.infrastructure;
 
+import java.math.BigDecimal;
+
 public interface SpendingBucketPerformanceProjection {
   Long getBucketCount();
 
   Long getPaycheckCount();
 
-  Long getBudgetedMinor();
+  BigDecimal getBudgetedMinor();
 
-  Long getSpentMinor();
+  BigDecimal getSpentMinor();
 }
