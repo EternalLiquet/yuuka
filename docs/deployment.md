@@ -5,6 +5,7 @@ Yuuka is designed to keep PostgreSQL private and expose only the API through you
 ## Host prerequisites
 
 - A Linux homelab host with Docker Engine and Docker Compose v2
+- Python 3 for the production preflight's resolved Compose JSON validation
 - Tailscale installed on the host and phone
 - HTTPS enabled for the tailnet
 - A current backup destination outside the Docker volume
@@ -23,7 +24,7 @@ SPRING_DATASOURCE_PASSWORD=<same-database-password>
 YUUKA_JWT_SECRET=<independent-random-secret>
 YUUKA_JWT_ACCESS_TOKEN_TTL=PT15M
 YUUKA_OWNER_EMAIL=you@example.com
-YUUKA_OWNER_PASSWORD_HASH=$2a$12$...
+YUUKA_OWNER_PASSWORD_HASH='$2a$12$...'
 YUUKA_OWNER_TOTP_SECRET=<generated-base32-secret>
 YUUKA_OWNER_BOOTSTRAP_PASSWORD=
 YUUKA_AUTH_REGISTRATION_ENABLED=false
@@ -31,17 +32,20 @@ YUUKA_BIND_ADDRESS=127.0.0.1
 YUUKA_CORS_ALLOWED_ORIGINS=https://your-homelab-node.your-tailnet.ts.net
 ```
 
-Keep `.env` readable only by the service administrator (`chmod 600 .env`). Do not commit it.
+Keep `.env` readable only by the service administrator (`chmod 600 .env`). Do not commit it. Quote BCrypt hashes with single quotes as shown so Docker Compose does not treat `$` characters as interpolation markers.
 
 ## Start and verify
 
 ```sh
+./ops/prod-preflight.sh
 docker compose pull
 docker compose up -d --build
 docker compose ps
 curl --fail http://127.0.0.1:8080/health/live
 curl --fail http://127.0.0.1:8080/health/ready
 ```
+
+Run the preflight before `docker compose up` and after every production `.env` or Compose change. It rejects `.env` files that are readable or writable by group or others, validates Docker Compose syntax, then inspects the resolved Compose configuration without printing it. It verifies that the backend does not use host networking, publishes only container port `8080`, binds that port only to `127.0.0.1`, and has no public or wildcard bypass binding. It also validates the resolved container environment: `prod` profile active, registration explicitly disabled, database and JWT secrets non-default and long enough, PostgreSQL and backend datasource passwords matching, owner email/password hash/TOTP present and well-formed, plaintext bootstrap password blank, and CORS origins HTTPS-only and non-localhost. The check reports setting names only and does not print secret values.
 
 Flyway runs before the application accepts requests. Production startup refuses default secrets, public registration, plaintext bootstrap passwords, missing TOTP, and localhost CORS entries.
 
@@ -77,6 +81,7 @@ Use Tailscale ACLs/grants so only your user and intended phone can reach the hom
 
 ```sh
 ./ops/backup.sh
+./ops/prod-preflight.sh
 docker compose pull
 docker compose build --pull backend
 docker compose up -d
