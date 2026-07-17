@@ -12,7 +12,10 @@ name: Payback delete unassigns entry
 - tapOn: "Balance when tracking began"
 - eraseText
 - inputText: "40.00"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create Payback"
+    direction: DOWN
 - tapOn: "Create Payback"
 - extendedWaitUntil:
     visible: "E2E Delete Source"
@@ -27,7 +30,10 @@ name: Payback delete unassigns entry
 - tapOn: "Balance when tracking began"
 - eraseText
 - inputText: "40.00"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create Payback"
+    direction: DOWN
 - tapOn: "Create Payback"
 - extendedWaitUntil:
     visible: "E2E Delete Target"
@@ -42,7 +48,10 @@ name: Payback delete unassigns entry
 - inputText: "E2E Payback Assign"
 - tapOn: "Exact paycheck amount"
 - inputText: "40.00"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "Create paycheck"
+    direction: DOWN
 - tapOn: "Create paycheck"
 - extendedWaitUntil:
     visible: "E2E Payback Assign"
@@ -52,7 +61,6 @@ name: Payback delete unassigns entry
 - inputText: "Repay Payback"
 - tapOn: "Amount"
 - inputText: "10.00"
-- hideKeyboard
 - scrollUntilVisible:
     centerElement: true
     element: "Apply to Payback, selected No Payback"
@@ -65,7 +73,7 @@ name: Payback delete unassigns entry
     direction: DOWN
 - tapOn: "Save entry"
 - extendedWaitUntil:
-    visible: "Repay Payback"
+    visible: "Add entry"
     timeout: 10000
 
 - tapOn: "Back"

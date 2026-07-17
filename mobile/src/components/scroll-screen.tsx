@@ -22,6 +22,7 @@ export function ScrollScreen({
     >
       <ScrollView
         contentContainerStyle={[styles.content, contentContainerStyle]}
+        keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         refreshControl={refreshControl}
       >

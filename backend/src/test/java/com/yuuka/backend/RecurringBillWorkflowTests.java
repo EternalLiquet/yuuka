@@ -12,9 +12,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuuka.backend.common.api.ConflictException;
+import com.yuuka.backend.paycheck.api.dto.PaycheckResponse;
+import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
+import com.yuuka.backend.recurring.api.dto.RecurringBillImportItemRequest;
+import com.yuuka.backend.recurring.api.dto.RecurringBillImportRequest;
+import com.yuuka.backend.recurring.api.dto.RecurringBillResponse;
+import com.yuuka.backend.recurring.api.dto.UpdateRecurringBillRequest;
+import com.yuuka.backend.recurring.application.RecurringBillService;
 import com.yuuka.backend.support.AbstractIntegrationTest;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -23,12 +39,15 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @AutoConfigureMockMvc
 class RecurringBillWorkflowTests extends AbstractIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private RecurringBillService recurringBillService;
+  @Autowired private TransactionTemplate transactionTemplate;
 
   @Test
   void managesOwnerScopedDefinitionsWithSearchLifecycleAndOptimisticLocking() throws Exception {
@@ -204,6 +223,186 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
                 Long.class,
                 UUID.fromString(paycheck.path("id").asText())))
         .isZero();
+  }
+
+  @Test
+  void validatesTypicalAmountUpdatesForTheWholeImportBeforeWriting() throws Exception {
+    String token = register("recurring-typical-batch@yuuka.local");
+    JsonNode first = createDefinition(token, "First", 1000, 31, "AUTOPAY");
+    JsonNode second = createDefinition(token, "Second", 2000, 28, "MANUAL");
+
+    JsonNode duplicateOccurrencesPaycheck =
+        createPaycheck(token, "Duplicate occurrences", 10000, "2026-01-15");
+    JsonNode duplicateOccurrences =
+        importBatch(
+            token,
+            duplicateOccurrencesPaycheck,
+            List.of(
+                importItem(first, "2026-01-31", 1100, false),
+                importItem(first, "2026-02-28", 1200, false)),
+            200);
+    assertThat(duplicateOccurrences.path("entries").size()).isEqualTo(2);
+
+    JsonNode oneUpdatePaycheck = createPaycheck(token, "One update", 10000, "2026-01-15");
+    importBatch(
+        token,
+        oneUpdatePaycheck,
+        List.of(
+            importItem(first, "2026-01-31", 1300, true),
+            importItem(first, "2026-02-28", 1200, false)),
+        200);
+    JsonNode refreshedFirst = getDefinition(token, first.path("id").asText());
+    assertThat(refreshedFirst.path("typicalAmountMinor").asLong()).isEqualTo(1300);
+
+    JsonNode rejectedPaycheck = createPaycheck(token, "Rejected updates", 10000, "2026-01-15");
+    importBatch(
+        token,
+        rejectedPaycheck,
+        List.of(
+            importItem(refreshedFirst, "2026-01-31", 1400, true),
+            importItem(refreshedFirst, "2026-02-28", 1500, true)),
+        422);
+    assertThat(entryCount(rejectedPaycheck)).isZero();
+    assertThat(
+            auditCount(
+                "RECURRING_BILL_DEFINITION",
+                UUID.fromString(first.path("id").asText()),
+                "TYPICAL_AMOUNT_UPDATED_DURING_IMPORT"))
+        .isEqualTo(1);
+    assertThat(getDefinition(token, first.path("id").asText()).path("typicalAmountMinor").asLong())
+        .isEqualTo(1300);
+
+    JsonNode distinctUpdatesPaycheck =
+        createPaycheck(token, "Distinct updates", 10000, "2026-01-15");
+    importBatch(
+        token,
+        distinctUpdatesPaycheck,
+        List.of(
+            importItem(refreshedFirst, "2026-01-31", 1600, true),
+            importItem(second, "2026-01-28", 2600, true)),
+        200);
+    assertThat(entryCount(distinctUpdatesPaycheck)).isEqualTo(2);
+  }
+
+  @Test
+  void staleImportRevalidatesDefinitionAfterWaitingForItsLock() throws Exception {
+    String token = register("recurring-stale-lock@yuuka.local");
+    JsonNode definition = createDefinition(token, "Locked stale", 12000, 21, "AUTOPAY");
+    JsonNode paycheck = createPaycheck(token, "Locked stale paycheck", 50000, "2026-07-17");
+    UUID definitionId = UUID.fromString(definition.path("id").asText());
+    UUID paycheckId = UUID.fromString(paycheck.path("id").asText());
+    UUID ownerId = ownerIdForDefinition(definitionId);
+    RecurringBillImportRequest request =
+        importRequest(paycheck, definition, "2026-07-21", 12000, false);
+    CountDownLatch lockHeld = new CountDownLatch(1);
+    CountDownLatch importStarted = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+
+    try {
+      Future<?> update =
+          executor.submit(
+              () ->
+                  transactionTemplate.executeWithoutResult(
+                      status -> {
+                        lockDefinition(definitionId);
+                        lockHeld.countDown();
+                        await(importStarted);
+                        jdbcTemplate.update(
+                            "update recurring_bill_definitions "
+                                + "set name = 'Updated before import', version = version + 1 "
+                                + "where id = ?",
+                            definitionId);
+                      }));
+      Future<String> importResult =
+          executor.submit(
+              () -> {
+                await(lockHeld);
+                importStarted.countDown();
+                try {
+                  recurringBillService.importIntoPaycheck(ownerId, paycheckId, request);
+                  return "IMPORTED";
+                } catch (ConflictException ex) {
+                  return "CONFLICT";
+                }
+              });
+
+      update.get(5, TimeUnit.SECONDS);
+      assertThat(importResult.get(5, TimeUnit.SECONDS)).isEqualTo("CONFLICT");
+      assertThat(entryCount(paycheck)).isZero();
+      assertThat(actionAuditCount(ownerId, "RECURRING_BILL_IMPORTED")).isZero();
+      assertThat(getDefinition(token, definition.path("id").asText()).path("name").asText())
+          .isEqualTo("Updated before import");
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
+  void importHoldsDefinitionLockThroughSnapshotCreationWithoutTypicalUpdate() throws Exception {
+    String token = register("recurring-snapshot-lock@yuuka.local");
+    JsonNode definition = createDefinition(token, "Locked snapshot", 12000, 21, "AUTOPAY");
+    JsonNode paycheck = createPaycheck(token, "Locked snapshot paycheck", 50000, "2026-07-17");
+    UUID definitionId = UUID.fromString(definition.path("id").asText());
+    UUID paycheckId = UUID.fromString(paycheck.path("id").asText());
+    UUID ownerId = ownerIdForDefinition(definitionId);
+    RecurringBillImportRequest request =
+        importRequest(paycheck, definition, "2026-07-21", 12000, false);
+    UpdateRecurringBillRequest updateRequest =
+        new UpdateRecurringBillRequest(
+            "Changed after snapshot",
+            13000L,
+            EntryPaymentMethod.MANUAL,
+            22,
+            "Changed account",
+            "Changed payee",
+            "Changed notes",
+            definition.path("version").asLong());
+    CountDownLatch tableLockHeld = new CountDownLatch(1);
+    CountDownLatch releaseTableLock = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(3);
+
+    try {
+      Future<?> tableLock =
+          executor.submit(
+              () ->
+                  transactionTemplate.executeWithoutResult(
+                      status -> {
+                        jdbcTemplate.execute("lock table paycheck_entries in share mode");
+                        tableLockHeld.countDown();
+                        await(releaseTableLock);
+                      }));
+      await(tableLockHeld);
+      Future<PaycheckResponse> importResult =
+          executor.submit(
+              () -> recurringBillService.importIntoPaycheck(ownerId, paycheckId, request));
+      awaitDatabaseLock("insert into paycheck_entries%");
+
+      Future<RecurringBillResponse> updateResult =
+          executor.submit(() -> recurringBillService.update(ownerId, definitionId, updateRequest));
+      awaitDatabaseLock("update recurring_bill_definitions%");
+      assertThat(importResult.isDone()).isFalse();
+      assertThat(updateResult.isDone()).isFalse();
+
+      releaseTableLock.countDown();
+      PaycheckResponse imported = importResult.get(5, TimeUnit.SECONDS);
+      RecurringBillResponse updated = updateResult.get(5, TimeUnit.SECONDS);
+      tableLock.get(5, TimeUnit.SECONDS);
+
+      assertThat(imported.entries()).hasSize(1);
+      assertThat(imported.entries().getFirst().name()).isEqualTo("Locked snapshot");
+      assertThat(imported.entries().getFirst().paymentMethod())
+          .isEqualTo(EntryPaymentMethod.AUTOPAY);
+      assertThat(updated.name()).isEqualTo("Changed after snapshot");
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "select name from paycheck_entries where paycheck_id = ?",
+                  String.class,
+                  paycheckId))
+          .isEqualTo("Locked snapshot");
+    } finally {
+      releaseTableLock.countDown();
+      executor.shutdownNow();
+    }
   }
 
   @Test
@@ -411,6 +610,106 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
                         amountMinor,
                         updateTypical)),
         expectedStatus);
+  }
+
+  private JsonNode importBatch(
+      String token, JsonNode paycheck, List<Map<String, Object>> items, int expectedStatus)
+      throws Exception {
+    return requestJson(
+        post("/api/v1/paychecks/{id}/recurring-bill-imports", paycheck.path("id").asText())
+            .header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                objectMapper.writeValueAsString(
+                    Map.of("paycheckVersion", paycheck.path("version").asLong(), "items", items))),
+        expectedStatus);
+  }
+
+  private Map<String, Object> importItem(
+      JsonNode definition, String occurrenceDate, long amountMinor, boolean updateTypicalAmount) {
+    return Map.of(
+        "definitionId", definition.path("id").asText(),
+        "definitionVersion", definition.path("version").asLong(),
+        "occurrenceDate", occurrenceDate,
+        "amountMinor", amountMinor,
+        "updateTypicalAmount", updateTypicalAmount);
+  }
+
+  private RecurringBillImportRequest importRequest(
+      JsonNode paycheck,
+      JsonNode definition,
+      String occurrenceDate,
+      long amountMinor,
+      boolean updateTypicalAmount) {
+    return new RecurringBillImportRequest(
+        paycheck.path("version").asLong(),
+        List.of(
+            new RecurringBillImportItemRequest(
+                UUID.fromString(definition.path("id").asText()),
+                definition.path("version").asLong(),
+                LocalDate.parse(occurrenceDate),
+                amountMinor,
+                updateTypicalAmount)));
+  }
+
+  private long entryCount(JsonNode paycheck) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from paycheck_entries where paycheck_id = ?",
+        Long.class,
+        UUID.fromString(paycheck.path("id").asText()));
+  }
+
+  private long auditCount(String entityType, UUID entityId, String action) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from audit_events where entity_type = ? and entity_id = ? and action = ?",
+        Long.class,
+        entityType,
+        entityId,
+        action);
+  }
+
+  private long actionAuditCount(UUID ownerId, String action) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from audit_events where owner_id = ? and action = ?",
+        Long.class,
+        ownerId,
+        action);
+  }
+
+  private UUID ownerIdForDefinition(UUID definitionId) {
+    return jdbcTemplate.queryForObject(
+        "select owner_id from recurring_bill_definitions where id = ?", UUID.class, definitionId);
+  }
+
+  private void lockDefinition(UUID definitionId) {
+    jdbcTemplate.queryForObject(
+        "select id from recurring_bill_definitions where id = ? for update",
+        UUID.class,
+        definitionId);
+  }
+
+  private void awaitDatabaseLock(String queryPattern) {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+    while (System.nanoTime() < deadline) {
+      Long blocked =
+          jdbcTemplate.queryForObject(
+              "select count(*) from pg_stat_activity "
+                  + "where datname = current_database() and wait_event_type = 'Lock' and query like ?",
+              Long.class,
+              queryPattern);
+      if (blocked != null && blocked > 0) return;
+      LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10));
+    }
+    throw new AssertionError("Timed out waiting for database lock: " + queryPattern);
+  }
+
+  private void await(CountDownLatch latch) {
+    try {
+      assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue();
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError(ex);
+    }
   }
 
   private JsonNode getDefinition(String token, String id) throws Exception {

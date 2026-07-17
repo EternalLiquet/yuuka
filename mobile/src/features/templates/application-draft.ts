@@ -134,8 +134,9 @@ export function applicationEntriesFromDraft(
     paymentMethod: entry.entryType === 'BILL' ? (entry.paymentMethod ?? 'AUTOPAY') : null,
     dueDate:
       entry.entryType === 'BILL'
-        ? (entry.sourceRecurringOccurrenceDate ??
-          dueDateFromOffset(incomeDate, entry.defaultDueOffsetDays))
+        ? entry.defaultDueOffsetDays == null
+          ? entry.sourceRecurringOccurrenceDate
+          : dueDateFromOffset(incomeDate, entry.defaultDueOffsetDays)
         : null,
     accountName: entry.entryType === 'BILL' ? entry.accountName : null,
     payee: entry.entryType === 'BILL' ? entry.payee : null,

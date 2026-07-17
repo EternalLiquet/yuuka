@@ -11,7 +11,10 @@ name: Recurring Bill import into scratch draft
 - inputText: "120.00"
 - tapOn: "Monthly due day"
 - inputText: "21"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "I need to pay this manually"
+    direction: DOWN
 - tapOn: "I need to pay this manually"
 - scrollUntilVisible:
     centerElement: true
@@ -34,7 +37,6 @@ name: Recurring Bill import into scratch draft
 - tapOn: "Income date"
 - eraseText: 100
 - inputText: "2026-07-17"
-- hideKeyboard
 - scrollUntilVisible:
     centerElement: true
     element: "Import recurring Bills"
@@ -47,7 +49,10 @@ name: Recurring Bill import into scratch draft
 - tapOn: "Amount for this paycheck"
 - eraseText: 100
 - inputText: "146.00"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "This paycheck only"
+    direction: DOWN
 - tapOn: "This paycheck only"
 - tapOn: "Add selected Bills (1)"
 - extendedWaitUntil:

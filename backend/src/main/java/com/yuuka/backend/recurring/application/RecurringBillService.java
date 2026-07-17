@@ -255,6 +255,7 @@ public class RecurringBillService {
       throw new BusinessRuleException("Reopen the paycheck before changing it.");
     }
     assertVersion(paycheck.getVersion(), request.paycheckVersion());
+    validateTypicalAmountUpdates(request.items());
 
     List<PaycheckEntry> liveEntries =
         entries.findAllByPaycheckIdAndOwnerIdAndDeletedAtIsNullOrderByPosition(paycheckId, ownerId);
@@ -277,9 +278,19 @@ public class RecurringBillService {
     }
 
     Map<UUID, RecurringBillDefinition> loaded = new HashMap<>();
+    request.items().stream()
+        .map(RecurringBillImportItemRequest::definitionId)
+        .distinct()
+        .sorted()
+        .forEach(
+            definitionId ->
+                loaded.put(
+                    definitionId,
+                    definitions
+                        .findByIdAndOwnerIdForUpdate(definitionId, ownerId)
+                        .orElseThrow(ResourceNotFoundException::new)));
     for (RecurringBillImportItemRequest item : request.items()) {
-      RecurringBillDefinition definition =
-          loaded.computeIfAbsent(item.definitionId(), id -> requireDefinition(ownerId, id));
+      RecurringBillDefinition definition = loaded.get(item.definitionId());
       if (!definition.isActive()) {
         throw new BusinessRuleException("Activate the recurring Bill before importing it.");
       }
@@ -355,6 +366,17 @@ public class RecurringBillService {
     List<PaycheckEntry> allEntries = new ArrayList<>(liveEntries);
     allEntries.addAll(created);
     return paycheckService.toResponse(paycheck, allEntries);
+  }
+
+  private void validateTypicalAmountUpdates(List<RecurringBillImportItemRequest> items) {
+    Set<UUID> definitionsWithTypicalAmountUpdate = new HashSet<>();
+    for (RecurringBillImportItemRequest item : items) {
+      if (item.updateTypicalAmount()
+          && !definitionsWithTypicalAmountUpdate.add(item.definitionId())) {
+        throw new BusinessRuleException(
+            "Choose Update typical amount for at most one occurrence of each recurring Bill.");
+      }
+    }
   }
 
   private RecurringBillResponse changeActive(

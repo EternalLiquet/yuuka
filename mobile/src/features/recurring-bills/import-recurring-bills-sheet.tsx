@@ -41,7 +41,6 @@ export function ImportRecurringBillsSheet({
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [draftAdded, setDraftAdded] = useState(false);
   const definitions = useQuery({
     queryKey: ['recurring-bills', 'definitions', 'active'],
     queryFn: () => api.recurringBills('ACTIVE'),
@@ -81,7 +80,6 @@ export function ImportRecurringBillsSheet({
     setSelected({});
     setEditing(null);
     setError('');
-    setDraftAdded(false);
     onClose();
   }
 
@@ -109,14 +107,15 @@ export function ImportRecurringBillsSheet({
     if (!editing) return;
     try {
       const amountMinor = parseMoneyToMinor(amount);
-      setSelected((current) => ({
-        ...current,
-        [selectionKey(editing)]: recurringImportSelection(
+      setSelected((current) =>
+        updateRecurringAmountSelection(
+          current,
           editing,
           amountMinor,
           updateTypicalAmount,
+          localDraft,
         ),
-      }));
+      );
       setEditing(null);
       setError('');
     } catch (amountError) {
@@ -126,16 +125,16 @@ export function ImportRecurringBillsSheet({
 
   async function importSelected() {
     const items = Object.values(selected);
-    if (!items.length || saving || draftAdded) return;
+    if (!items.length || saving) return;
     setSaving(true);
     setError('');
-    let addedToDraft = false;
     try {
-      await onImport(items);
       if (localDraft) {
-        addedToDraft = true;
-        setDraftAdded(true);
-        for (const item of items.filter((value) => value.updateTypicalAmount)) {
+        const typicalUpdates = items.filter((value) => value.updateTypicalAmount);
+        if (typicalUpdates.length > 1) {
+          throw new Error('Update only one recurring Bill typical amount at a time.');
+        }
+        for (const item of typicalUpdates) {
           const definition = definitions.data?.items.find(
             (value) => value.id === item.definitionId,
           );
@@ -152,22 +151,37 @@ export function ImportRecurringBillsSheet({
             version: definition.version,
           });
         }
-        await queryClient.invalidateQueries({ queryKey: ['recurring-bills'] });
       }
+      await onImport(items);
+      if (localDraft) await queryClient.invalidateQueries({ queryKey: ['recurring-bills'] });
       resetAndClose();
     } catch (importError) {
       setError(
-        addedToDraft
-          ? 'The Bills remain in this draft, but the typical amount could not be updated. Refresh Recurring Bills before trying again.'
-          : displayError(importError, settings.currencyCode, 'Recurring Bills were not imported.'),
+        displayError(importError, settings.currencyCode, 'Recurring Bills were not imported.'),
       );
     } finally {
       setSaving(false);
     }
   }
 
-  const loading = definitions.isPending || timeline.isPending;
-  const loadError = definitions.error ?? timeline.error;
+  const definitionsMissing = !definitions.data;
+  const timelineMissing = !timeline.data;
+  const loading =
+    (definitionsMissing && definitions.isPending) || (timelineMissing && timeline.isPending);
+  const blockingError =
+    (definitionsMissing ? definitions.error : null) ?? (timelineMissing ? timeline.error : null);
+  const staleError =
+    (!definitionsMissing && definitions.error) || (!timelineMissing && timeline.error);
+  const ready = !definitionsMissing && !timelineMissing;
+  const retryFailedRequiredQueries = () => {
+    const retries: Promise<unknown>[] = [];
+    if (definitions.error) retries.push(definitions.refetch());
+    if (timeline.error) retries.push(timeline.refetch());
+    if (!retries.length) {
+      retries.push(definitions.refetch(), timeline.refetch());
+    }
+    return Promise.all(retries);
+  };
   return (
     <>
       <Modal animationType="slide" onRequestClose={resetAndClose} visible={visible}>
@@ -188,18 +202,35 @@ export function ImportRecurringBillsSheet({
             </Pressable>
           </View>
           {loading ? <YuukaLoadingState message="Loading recurring Bills..." /> : null}
-          {loadError && !timeline.data ? (
+          {blockingError || (!loading && !ready) ? (
             <ErrorState
               message={displayError(
-                loadError,
+                blockingError,
                 settings.currencyCode,
                 'Recurring Bills could not load.',
               )}
-              retry={() => void Promise.all([definitions.refetch(), timeline.refetch()])}
+              retry={() => void retryFailedRequiredQueries()}
             />
           ) : null}
-          {!loading && !loadError ? (
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {ready ? (
+            <ScrollView
+              contentContainerStyle={styles.content}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
+            >
+              {staleError ? (
+                <View style={[styles.staleWarning, { borderColor: colors.border }]}>
+                  <AppText variant="label">Showing saved recurring Bill data</AppText>
+                  <AppText style={{ color: colors.muted }} variant="caption">
+                    Some recurring Bill data could not refresh.
+                  </AppText>
+                  <Button
+                    label="Retry recurring Bill data"
+                    onPress={() => void retryFailedRequiredQueries()}
+                    variant="secondary"
+                  />
+                </View>
+              ) : null}
               <OccurrenceSection
                 items={suggested}
                 onEdit={editAmount}
@@ -220,17 +251,13 @@ export function ImportRecurringBillsSheet({
                   {error}
                 </AppText>
               ) : null}
-              {draftAdded ? (
-                <Button label="Close" onPress={resetAndClose} />
-              ) : (
-                <Button
-                  disabled={!Object.keys(selected).length}
-                  icon={Plus}
-                  label={`Add selected Bills (${Object.keys(selected).length})`}
-                  loading={saving}
-                  onPress={importSelected}
-                />
-              )}
+              <Button
+                disabled={!Object.keys(selected).length}
+                icon={Plus}
+                label={`Add selected Bills (${Object.keys(selected).length})`}
+                loading={saving}
+                onPress={importSelected}
+              />
             </ScrollView>
           ) : null}
         </View>
@@ -392,6 +419,31 @@ export function recurringImportSelection(
   return { ...occurrence, amountMinor, updateTypicalAmount };
 }
 
+export function updateRecurringAmountSelection(
+  current: Record<string, RecurringBillImportSelection>,
+  occurrence: RecurringBillOccurrence,
+  amountMinor: number,
+  updateTypicalAmount: boolean,
+  singleTypicalUpdateAcrossImport: boolean,
+): Record<string, RecurringBillImportSelection> {
+  const next = Object.fromEntries(
+    Object.entries(current).map(([key, item]) => [
+      key,
+      updateTypicalAmount &&
+      item.updateTypicalAmount &&
+      (singleTypicalUpdateAcrossImport || item.definitionId === occurrence.definitionId)
+        ? { ...item, updateTypicalAmount: false }
+        : item,
+    ]),
+  );
+  next[selectionKey(occurrence)] = recurringImportSelection(
+    occurrence,
+    amountMinor,
+    updateTypicalAmount,
+  );
+  return next;
+}
+
 function addDays(date: string, days: number) {
   const value = new Date(`${date}T00:00:00Z`);
   value.setUTCDate(value.getUTCDate() + days);
@@ -456,4 +508,5 @@ const styles = StyleSheet.create({
   optionText: { flex: 1, gap: 4 },
   screen: { flex: 1 },
   section: { gap: 10 },
+  staleWarning: { borderRadius: 8, borderWidth: 1, gap: 8, padding: 12 },
 });

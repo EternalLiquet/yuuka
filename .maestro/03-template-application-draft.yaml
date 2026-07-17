@@ -17,7 +17,10 @@ name: Template application draft
 - inputText: "E2E Rent"
 - tapOn: "Amount"
 - inputText: "130.00"
-- hideKeyboard
+- scrollUntilVisible:
+    centerElement: true
+    element: "I need to pay this manually"
+    direction: DOWN
 - tapOn: "I need to pay this manually"
 - scrollUntilVisible:
     centerElement: true
@@ -35,7 +38,6 @@ name: Template application draft
 - inputText: "E2E Food"
 - tapOn: "Budget amount"
 - inputText: "70.00"
-- hideKeyboard
 - scrollUntilVisible:
     centerElement: true
     element: "Save template entry"
@@ -61,7 +63,6 @@ name: Template application draft
 - inputText: "E2E From Template"
 - tapOn: "Exact paycheck amount"
 - inputText: "150.00"
-- hideKeyboard
 - scrollUntilVisible:
     centerElement: true
     element: '\$50\.00 over-allocated\.'
@@ -84,7 +85,6 @@ name: Template application draft
 - tapOn: "Amount"
 - eraseText: 100
 - inputText: "80.00"
-- hideKeyboard
 - scrollUntilVisible:
     centerElement: true
     element: "Save template entry"

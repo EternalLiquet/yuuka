@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Pencil, Power, Trash2 } from 'lucide-react-native';
-import { StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
@@ -20,6 +21,7 @@ export default function RecurringBillDetailScreen() {
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const deleteInFlight = useRef(false);
   const query = useQuery({
     queryKey: ['recurring-bill', id],
     queryFn: () => api.recurringBill(id),
@@ -48,7 +50,30 @@ export default function RecurringBillDetailScreen() {
       await queryClient.invalidateQueries({ queryKey: ['recurring-bills'] });
       router.replace('/recurring-bills/manage');
     },
+    onSettled: () => {
+      deleteInFlight.current = false;
+    },
   });
+
+  const confirmDelete = () => {
+    if (deleteInFlight.current || !query.data) return;
+    Alert.alert(
+      `Delete "${query.data.name}"?`,
+      'Delete this recurring Bill definition? Existing imported paycheck entries remain unchanged.',
+      [
+        { style: 'cancel', text: 'Cancel' },
+        {
+          onPress: () => {
+            if (deleteInFlight.current) return;
+            deleteInFlight.current = true;
+            deleteMutation.mutate();
+          },
+          style: 'destructive',
+          text: 'Delete',
+        },
+      ],
+    );
+  };
 
   if (query.isPending) return <YuukaLoadingState message="Loading recurring Bill..." />;
   if (query.isError || !query.data) {
@@ -112,7 +137,7 @@ export default function RecurringBillDetailScreen() {
           icon={Trash2}
           label="Delete recurring Bill"
           loading={deleteMutation.isPending}
-          onPress={() => deleteMutation.mutate()}
+          onPress={confirmDelete}
           variant="danger"
         />
         {activeMutation.error || deleteMutation.error ? (

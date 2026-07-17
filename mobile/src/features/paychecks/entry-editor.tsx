@@ -137,7 +137,11 @@ export function EntryEditor({
             <X color={colors.text} size={23} />
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.form}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+        >
           <Controller
             control={control}
             name="entryType"
