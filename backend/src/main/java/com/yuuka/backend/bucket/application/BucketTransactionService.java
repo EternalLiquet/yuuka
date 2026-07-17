@@ -63,7 +63,7 @@ public class BucketTransactionService {
   @Transactional
   public BucketTransactionResponse create(
       UUID ownerId, UUID entryId, CreateBucketTransactionRequest request) {
-    PaycheckEntry entry = requireMutableBucket(ownerId, entryId);
+    PaycheckEntry entry = requireMutableBucketForUpdate(ownerId, entryId);
     rejectNonPositive(request.amountMinor());
     validateAggregateFitsInt64(entry, null, request.amountMinor());
     BucketTransaction transaction =
@@ -93,7 +93,7 @@ public class BucketTransactionService {
   public BucketTransactionResponse update(
       UUID ownerId, UUID transactionId, UpdateBucketTransactionRequest request) {
     BucketTransaction transaction = requireTransaction(ownerId, transactionId);
-    PaycheckEntry entry = requireMutableBucket(ownerId, transaction.getEntryId());
+    PaycheckEntry entry = requireMutableBucketForUpdate(ownerId, transaction.getEntryId());
     assertVersion(transaction.getVersion(), request.version());
     rejectNonPositive(request.amountMinor());
     validateAggregateFitsInt64(entry, transaction.getId(), request.amountMinor());
@@ -144,6 +144,21 @@ public class BucketTransactionService {
 
   private PaycheckEntry requireMutableBucket(UUID ownerId, UUID entryId) {
     PaycheckEntry entry = requireBucket(ownerId, entryId);
+    Paycheck paycheck = requirePaycheck(ownerId, entry.getPaycheckId());
+    if (paycheck.getState() != PaycheckState.ACTIVE) {
+      throw new BusinessRuleException("Reopen the paycheck before changing it.");
+    }
+    return entry;
+  }
+
+  private PaycheckEntry requireMutableBucketForUpdate(UUID ownerId, UUID entryId) {
+    PaycheckEntry entry =
+        entries
+            .findLiveByIdAndOwnerIdForUpdate(entryId, ownerId)
+            .orElseThrow(ResourceNotFoundException::new);
+    if (entry.getEntryType() != EntryType.SPENDING_BUCKET) {
+      throw new BusinessRuleException("Bucket transactions require a Spending Bucket entry.");
+    }
     Paycheck paycheck = requirePaycheck(ownerId, entry.getPaycheckId());
     if (paycheck.getState() != PaycheckState.ACTIVE) {
       throw new BusinessRuleException("Reopen the paycheck before changing it.");
