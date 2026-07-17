@@ -37,8 +37,25 @@ public class BucketTransactionController {
   public PageResponse<BucketTransactionResponse> list(
       @AuthenticationPrincipal Jwt jwt,
       @PathVariable UUID entryId,
-      @Parameter(schema = @Schema(minimum = "0")) @RequestParam(defaultValue = "0") int page,
-      @Parameter(schema = @Schema(minimum = "1", maximum = "100"))
+      @Parameter(
+              schema =
+                  @Schema(
+                      implementation = Integer.class,
+                      type = "integer",
+                      format = "int32",
+                      minimum = "0",
+                      defaultValue = "0"))
+          @RequestParam(defaultValue = "0")
+          int page,
+      @Parameter(
+              schema =
+                  @Schema(
+                      implementation = Integer.class,
+                      type = "integer",
+                      format = "int32",
+                      minimum = "1",
+                      maximum = "100",
+                      defaultValue = "50"))
           @RequestParam(defaultValue = "50")
           int size) {
     return service.list(AuthenticatedOwner.id(jwt), entryId, page, size);

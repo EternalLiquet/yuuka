@@ -111,6 +111,35 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     assertThat(compatibilityParameters.get(0).path("name").asText()).isEqualTo("asOfDate");
     assertThat(compatibilityParameters.get(0).path("required").asBoolean()).isFalse();
 
+    JsonNode bucketTransactionParameters =
+        generated
+            .path("paths")
+            .path("/api/v1/entries/{entryId}/bucket-transactions")
+            .path("get")
+            .path("parameters");
+    assertThat(bucketTransactionParameters.findValuesAsText("name")).contains("page", "size");
+    JsonNode pageParameter = parameterNamed(bucketTransactionParameters, "page");
+    JsonNode pageSchema = pageParameter.path("schema");
+    assertThat(pageParameter.path("required").asBoolean()).isFalse();
+    assertThat(pageSchema.path("type").asText()).isEqualTo("integer");
+    assertThat(pageSchema.path("format").asText()).isEqualTo("int32");
+    assertThat(pageSchema.path("minimum").isNumber()).isTrue();
+    assertThat(pageSchema.path("minimum").asInt()).isEqualTo(0);
+    assertThat(pageSchema.path("default").isInt()).isTrue();
+    assertThat(pageSchema.path("default").asInt()).isEqualTo(0);
+
+    JsonNode sizeParameter = parameterNamed(bucketTransactionParameters, "size");
+    JsonNode sizeSchema = sizeParameter.path("schema");
+    assertThat(sizeParameter.path("required").asBoolean()).isFalse();
+    assertThat(sizeSchema.path("type").asText()).isEqualTo("integer");
+    assertThat(sizeSchema.path("format").asText()).isEqualTo("int32");
+    assertThat(sizeSchema.path("minimum").isNumber()).isTrue();
+    assertThat(sizeSchema.path("minimum").asInt()).isEqualTo(1);
+    assertThat(sizeSchema.path("maximum").isNumber()).isTrue();
+    assertThat(sizeSchema.path("maximum").asInt()).isEqualTo(100);
+    assertThat(sizeSchema.path("default").isInt()).isTrue();
+    assertThat(sizeSchema.path("default").asInt()).isEqualTo(50);
+
     Path generatedPath = Path.of("build", "generated", "openapi.json");
     Files.createDirectories(generatedPath.getParent());
     objectMapper.writerWithDefaultPrettyPrinter().writeValue(generatedPath.toFile(), generated);
@@ -118,5 +147,14 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     Path committedPath = Path.of("..", "docs", "openapi.json");
     assertThat(committedPath).exists();
     assertThat(objectMapper.readTree(committedPath.toFile())).isEqualTo(generated);
+  }
+
+  private JsonNode parameterNamed(JsonNode parameters, String name) {
+    for (JsonNode parameter : parameters) {
+      if (name.equals(parameter.path("name").asText())) {
+        return parameter;
+      }
+    }
+    throw new AssertionError("Missing OpenAPI parameter: " + name);
   }
 }
