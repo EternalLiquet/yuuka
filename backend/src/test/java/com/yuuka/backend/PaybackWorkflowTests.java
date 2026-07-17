@@ -304,6 +304,61 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void paybackListBatchedRepaymentAggregatesMatchDetailResponses() throws Exception {
+    String token = registerAndGetAccessToken("paybacks-list-batch@yuuka.local");
+    JsonNode activePayback = createPayback(token, "Active aggregate", 10000, 10000);
+    JsonNode reversedPayback = createPayback(token, "Reversed aggregate", 10000, 10000);
+    JsonNode paycheck = createPaycheck(token, 20000);
+
+    JsonNode activeEntry =
+        createEntry(
+            token,
+            paycheck.path("id").asText(),
+            "Active repayment",
+            4000,
+            activePayback.path("id").asText());
+    changeStatus(
+        token, activeEntry.path("id").asText(), "POSTED", activeEntry.path("version").asLong());
+
+    JsonNode reversedEntry =
+        createEntry(
+            token,
+            paycheck.path("id").asText(),
+            "Reversed repayment",
+            2500,
+            reversedPayback.path("id").asText());
+    JsonNode postedReversed =
+        changeStatus(
+            token,
+            reversedEntry.path("id").asText(),
+            "POSTED",
+            reversedEntry.path("version").asLong());
+    changeStatus(
+        token,
+        reversedEntry.path("id").asText(),
+        "PROCESSING",
+        postedReversed.path("version").asLong());
+
+    JsonNode list =
+        objectMapper.readTree(
+            mockMvc
+                .perform(get("/api/v1/paybacks").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    JsonNode activeDetail = getPayback(token, activePayback.path("id").asText());
+    JsonNode reversedDetail = getPayback(token, reversedPayback.path("id").asText());
+    assertPaybackListItemMatchesDetail(
+        itemById(list.path("items"), activePayback.path("id").asText()), activeDetail);
+    assertPaybackListItemMatchesDetail(
+        itemById(list.path("items"), reversedPayback.path("id").asText()), reversedDetail);
+    assertThat(list.path("summary").path("totalRepaidMinor").asLong()).isEqualTo(4000);
+    assertThat(list.path("summary").path("totalRemainingMinor").asLong()).isEqualTo(16000);
+    assertThat(list.path("summary").path("activeCount").asInt()).isEqualTo(2);
+  }
+
+  @Test
   void repaymentApplyAndReverseAdvancePaybackVersionEvenWhenStillActive() throws Exception {
     String token = registerAndGetAccessToken("paybacks-version@yuuka.local");
     JsonNode payback = createPayback(token, "Partial repayment", 10000, 10000);
@@ -848,6 +903,27 @@ class PaybackWorkflowTests extends AbstractIntegrationTest {
       }
     }
     throw new AssertionError("Entry not found in paycheck response: " + entryId);
+  }
+
+  private JsonNode itemById(JsonNode items, String id) {
+    for (JsonNode item : items) {
+      if (id.equals(item.path("id").asText())) {
+        return item;
+      }
+    }
+    throw new AssertionError("Missing response item " + id);
+  }
+
+  private void assertPaybackListItemMatchesDetail(JsonNode listItem, JsonNode detail) {
+    assertThat(listItem.path("repaidMinor").asLong())
+        .isEqualTo(detail.path("repaidMinor").asLong());
+    assertThat(listItem.path("remainingMinor").asLong())
+        .isEqualTo(detail.path("remainingMinor").asLong());
+    assertThat(listItem.path("progressPercent").asDouble())
+        .isEqualTo(detail.path("progressPercent").asDouble());
+    assertThat(listItem.path("state").asText()).isEqualTo(detail.path("state").asText());
+    assertThat(listItem.path("repaymentCount").asLong())
+        .isEqualTo(detail.path("repaymentCount").asLong());
   }
 
   private void deletePayback(String token, String paybackId, long version, int expectedStatus)
