@@ -27,6 +27,18 @@ describe('committed backend contract', () => {
     ['/api/v1/paybacks/{paybackId}', 'get'],
     ['/api/v1/paybacks/{paybackId}', 'patch'],
     ['/api/v1/paybacks/{paybackId}/repayments', 'get'],
+    ['/api/v1/expense-ledgers', 'get'],
+    ['/api/v1/expense-ledgers', 'post'],
+    ['/api/v1/expense-ledgers/{ledgerId}', 'get'],
+    ['/api/v1/expense-ledgers/{ledgerId}', 'patch'],
+    ['/api/v1/expense-ledgers/{ledgerId}', 'delete'],
+    ['/api/v1/expense-ledgers/{ledgerId}/items', 'post'],
+    ['/api/v1/expense-ledgers/items/{itemId}', 'patch'],
+    ['/api/v1/expense-ledgers/items/{itemId}', 'delete'],
+    ['/api/v1/expense-ledgers/{ledgerId}/finalize', 'post'],
+    ['/api/v1/expense-ledgers/{ledgerId}/reopen', 'post'],
+    ['/api/v1/expense-ledgers/{ledgerId}/settle/bill', 'post'],
+    ['/api/v1/expense-ledgers/{ledgerId}/settle/payback', 'post'],
     ['/api/v1/templates', 'get'],
   ])('contains %s %s', (path, method) => {
     expect(contract.paths[path]?.[method]).toBeDefined();

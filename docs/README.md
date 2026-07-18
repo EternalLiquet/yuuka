@@ -2,6 +2,10 @@
 
 The numbered files are the authoritative Yuuka product and engineering specification.
 
+Current implemented domains include authentication, Paychecks, entries, Templates, Recurring Bills,
+Spending Bucket transactions/performance, Paybacks, global entry search, audit history, and Expense
+Ledgers.
+
 Operational guides:
 
 - `architecture-decisions.md` - implemented system boundaries and invariants.

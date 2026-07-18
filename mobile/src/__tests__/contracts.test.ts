@@ -6,6 +6,7 @@ import {
   entryPaymentMethodSchema,
   entryStatusSchema,
   entryTypeSchema,
+  expenseLedgerSettlementSchema,
   meSchema,
   pageSchema,
   paycheckSchema,
@@ -146,6 +147,21 @@ describe('API response contracts', () => {
   });
 
   it('parses secondary API resources and pages', () => {
+    expect(
+      expenseLedgerSettlementSchema.parse({
+        createdAt: '2026-07-10T12:00:00Z',
+        id: '11111111-1111-4111-8111-111111111126',
+        ledgerId: '11111111-1111-4111-8111-111111111127',
+        settledAt: '2026-07-10T12:00:00Z',
+        settlementAmountMinor: 5000,
+        settlementType: 'BILL',
+        targetId: '11111111-1111-4111-8111-111111111128',
+        targetPaycheckId: '11111111-1111-4111-8111-111111111129',
+      }),
+    ).toMatchObject({
+      settlementType: 'BILL',
+      targetPaycheckId: '11111111-1111-4111-8111-111111111129',
+    });
     expect(
       bucketTransactionSchema.parse({
         amountMinor: 500,

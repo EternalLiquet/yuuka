@@ -144,6 +144,33 @@ Posted same-fund contribution replacements are validated against the final prosp
 holding the fund lock; cross-fund moves, unlinking, and entry-type changes must pass the full old
 contribution reversal rule.
 
+### Expense Ledgers
+
+- `GET /expense-ledgers?state=OPEN|FINALIZED|SETTLED&page=0&size=50` returns deterministic pages;
+  page defaults to 0 and size defaults to 50 with a maximum of 100.
+- `POST /expense-ledgers`
+- `GET /expense-ledgers/{ledgerId}`
+- `PATCH /expense-ledgers/{ledgerId}`
+- `DELETE /expense-ledgers/{ledgerId}?version=...`
+- `POST /expense-ledgers/{ledgerId}/items`
+- `PATCH /expense-ledgers/items/{itemId}`
+- `DELETE /expense-ledgers/items/{itemId}?version=...`
+- `POST /expense-ledgers/{ledgerId}/finalize`
+- `POST /expense-ledgers/{ledgerId}/reopen`
+- `POST /expense-ledgers/{ledgerId}/settle/bill`
+- `POST /expense-ledgers/{ledgerId}/settle/payback`
+
+Clients never submit a settlement amount. Settlement requests carry the current ledger version and
+reviewed target metadata only. The backend locks the ledger, recalculates the derived total, creates
+the Bill or Payback through normal target behavior, records one immutable settlement row, and marks
+the ledger Settled in one transaction.
+
+Item writes validate the exact prospective total under the owner-scoped ledger lock. Totals above
+signed 64-bit return `422 MONEY_AMOUNT_OVERFLOW` with `details.currencyCode` and the normal trace ID,
+and the transaction rolls back the item, ledger touch/version, and audit append. Settlement responses
+use `targetId` for the created entry or Payback and nullable `targetPaycheckId` only for the Bill's
+containing paycheck.
+
 ### Templates
 
 - `GET /templates`

@@ -22,6 +22,7 @@ The user must be able to:
 12. Filter and sort entries.
 13. View historical paychecks and progress.
 14. View an append-only audit history.
+15. Capture expense-first ledgers and settle finalized totals into a Bill or Payback.
 
 ## Paychecks and income events
 
@@ -237,6 +238,44 @@ Default order is the user’s custom order. Temporary sorting must never destroy
 Global entry search supports case-insensitive partial text matching against entry and paycheck
 names plus exact amount matching. Search results are owner-scoped, exclude soft-deleted entries,
 and may be scoped to Active, History, or both.
+
+## Expense Ledgers
+
+Expense Ledgers support expense-first workflows where the user records purchases before deciding
+how the total should affect budgeting. An Expense Ledger is owner-scoped and moves through:
+
+```text
+OPEN -> FINALIZED -> SETTLED
+```
+
+- `OPEN` ledgers and items are editable.
+- `FINALIZED` ledgers are read-only, eligible for settlement, and may be reopened until settled.
+- `SETTLED` ledgers are permanently read-only historical records.
+
+An Open ledger must have at least one live positive item before finalization. Ledger totals are
+always derived from live items; Yuuka does not store or edit an authoritative cached total.
+
+Expense items support a positive amount, a name or merchant, an expense date that cannot be in the
+future, and optional notes. Categories, receipts, OCR, tax fields, payment accounts, tags, and
+spreadsheet UI are outside the current feature.
+
+Item creates and updates validate the final prospective ledger total while holding the ledger write
+lock. Exactly the signed 64-bit maximum is valid; a larger total is rejected atomically with
+`MONEY_AMOUNT_OVERFLOW` before an item, ledger version change, or audit event is persisted.
+
+A Finalized ledger may settle exactly once as either:
+
+- one ordinary Bill entry in an active paycheck that accepts the derived total, or
+- one ordinary Payback with original and opening remaining amounts equal to the derived total.
+
+Settlement recalculates the total server-side in the settlement transaction. The resulting Bill or
+Payback stores nullable Expense Ledger provenance for navigation only. Later target edits do not
+modify the ledger, later ledger reads do not synchronize the target, and target deletion does not
+reopen or delete the ledger.
+
+Settlement provenance stores the created Bill entry ID separately from its containing paycheck ID.
+Payback settlement stores the Payback ID and no paycheck ID, so one target UUID never has two
+navigation meanings.
 
 ## Dates and auditing
 

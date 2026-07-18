@@ -5,11 +5,12 @@
 Persistent bottom tabs:
 
 1. Active
-2. History
+2. Ledgers
+3. History
 
-The app-menu drawer provides Active, History, Paybacks, Templates, Recurring Bills, and Settings.
-Keeping only the two highest-frequency destinations in the tab bar leaves the remaining feature
-routes available without compressing their labels or changing their route identities.
+The app-menu drawer provides Active, Ledgers, History, Paybacks, Templates, Recurring Bills, and
+Settings. Ledgers are top-level because they are an entry point into expense-first capture rather
+than a child of a single paycheck.
 
 A prominent create action is available from Active.
 
@@ -204,6 +205,24 @@ Sinking Fund:
 When a persistent Sinking Fund is selected, the editor sends the assignment, clears entry-level
 target fields, and clears any Payback selection. Selecting a Payback clears the persistent Sinking
 Fund selection. Posted contributions and derived balances are read back from the API.
+
+## Expense Ledgers
+
+The Ledgers tab supports Open, Finalized, and Settled states. List rows show the ledger name,
+derived total, item count, latest expense date when available, loading, stale, empty, retry, and
+pull-to-refresh states. Each state has an isolated paged cache. Load older ledgers appends later
+pages with ID deduplication, exposes the loaded and total counts, and keeps every ledger reachable.
+
+The detail screen shows the derived total and items. Open ledgers provide compact repeated item
+entry with Save and add another plus Save and close, preserve input after failed saves, and allow
+editing or deleting items. Finalized ledgers are read-only and provide Reopen, Settle as Bill, and
+Settle as Payback actions. Settled ledgers are read-only and show the created target summary link.
+
+Bill settlement review requires choosing an active paycheck and shows each paycheck's available
+unallocated amount. Payback settlement creates the Payback with the derived total and latest expense
+date default. Both settlement actions guard repeated taps and refresh the affected target caches.
+Settled Bill links open the containing paycheck ID stored by the settlement; Payback links continue
+to open the Payback target ID.
 
 ## History
 

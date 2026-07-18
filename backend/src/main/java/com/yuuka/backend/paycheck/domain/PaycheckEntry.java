@@ -79,6 +79,9 @@ public class PaycheckEntry {
   @Column(name = "source_recurring_occurrence_date")
   private LocalDate sourceRecurringOccurrenceDate;
 
+  @Column(name = "source_expense_ledger_id")
+  private UUID sourceExpenseLedgerId;
+
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
 
@@ -181,6 +184,13 @@ public class PaycheckEntry {
     sourceRecurringOccurrenceDate = occurrenceDate;
   }
 
+  public void setExpenseLedgerSource(UUID ledgerId) {
+    if (ledgerId != null && entryType != EntryType.BILL) {
+      throw new IllegalStateException("Only Bills can have Expense Ledger provenance.");
+    }
+    sourceExpenseLedgerId = ledgerId;
+  }
+
   public void assignPayback(UUID paybackId) {
     this.paybackId = paybackId;
   }
@@ -281,6 +291,10 @@ public class PaycheckEntry {
 
   public LocalDate getSourceRecurringOccurrenceDate() {
     return sourceRecurringOccurrenceDate;
+  }
+
+  public UUID getSourceExpenseLedgerId() {
+    return sourceExpenseLedgerId;
   }
 
   public Instant getCreatedAt() {

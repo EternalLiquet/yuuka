@@ -8,6 +8,9 @@ import {
   auditEventSchema,
   bucketTransactionSchema,
   entrySchema,
+  expenseLedgerItemSchema,
+  expenseLedgerSchema,
+  expenseLedgerSettlementResultSchema,
   entrySearchResultSchema,
   meSchema,
   pageSchema,
@@ -28,6 +31,7 @@ import {
 } from './contracts';
 import type {
   EntryPaymentMethod,
+  ExpenseLedgerState,
   EntrySearchResult,
   Page,
   RecurringBillStatusFilter,
@@ -82,6 +86,15 @@ export type TemplateEntryPayload = {
   payee?: string | null;
   targetDate?: string | null;
   targetMinor?: number | null;
+  version?: number;
+};
+
+export type ExpenseLedgerItemPayload = {
+  amountMinor: number;
+  expenseDate?: string | null;
+  merchant?: string | null;
+  name?: string | null;
+  notes?: string | null;
   version?: number;
 };
 
@@ -253,6 +266,67 @@ export function useYuukaApi() {
           'POST',
           body,
           sinkingFundTransactionSchema,
+        ),
+      expenseLedgers: (state: ExpenseLedgerState, page: number, size: number) => {
+        const params = new URLSearchParams({ page: String(page), size: String(size) });
+        if (state) params.set('state', state);
+        return get(`/expense-ledgers?${params.toString()}`, pageSchema(expenseLedgerSchema));
+      },
+      expenseLedger: (id: string) => get(`/expense-ledgers/${id}`, expenseLedgerSchema),
+      createExpenseLedger: (body: { name: string; notes?: string | null }) =>
+        send('/expense-ledgers', 'POST', body, expenseLedgerSchema),
+      updateExpenseLedger: (
+        id: string,
+        body: { name: string; notes?: string | null; version: number },
+      ) => send(`/expense-ledgers/${id}`, 'PATCH', body, expenseLedgerSchema),
+      deleteExpenseLedger: (id: string, version: number) =>
+        remove(`/expense-ledgers/${id}?version=${version}`),
+      addExpenseLedgerItem: (ledgerId: string, body: ExpenseLedgerItemPayload) =>
+        send(`/expense-ledgers/${ledgerId}/items`, 'POST', body, expenseLedgerItemSchema),
+      updateExpenseLedgerItem: (
+        itemId: string,
+        body: ExpenseLedgerItemPayload & { version: number },
+      ) => send(`/expense-ledgers/items/${itemId}`, 'PATCH', body, expenseLedgerItemSchema),
+      deleteExpenseLedgerItem: (itemId: string, version: number) =>
+        remove(`/expense-ledgers/items/${itemId}?version=${version}`),
+      finalizeExpenseLedger: (id: string, version: number) =>
+        send(`/expense-ledgers/${id}/finalize`, 'POST', { version }, expenseLedgerSchema),
+      reopenExpenseLedger: (id: string, version: number) =>
+        send(`/expense-ledgers/${id}/reopen`, 'POST', { version }, expenseLedgerSchema),
+      settleExpenseLedgerAsBill: (
+        id: string,
+        body: {
+          accountName?: string | null;
+          dueDate?: string | null;
+          ledgerVersion: number;
+          name?: string | null;
+          payee?: string | null;
+          paycheckId: string;
+          paymentMethod?: EntryPaymentMethod | null;
+          notes?: string | null;
+        },
+      ) =>
+        send(
+          `/expense-ledgers/${id}/settle/bill`,
+          'POST',
+          body,
+          expenseLedgerSettlementResultSchema,
+        ),
+      settleExpenseLedgerAsPayback: (
+        id: string,
+        body: {
+          borrowedDate?: string | null;
+          ledgerVersion: number;
+          name?: string | null;
+          notes?: string | null;
+          source?: string | null;
+        },
+      ) =>
+        send(
+          `/expense-ledgers/${id}/settle/payback`,
+          'POST',
+          body,
+          expenseLedgerSettlementResultSchema,
         ),
       createPaycheck: (body: {
         amountMinor: number;

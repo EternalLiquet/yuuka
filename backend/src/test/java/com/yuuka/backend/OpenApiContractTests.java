@@ -28,6 +28,14 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/recurring-bills",
           "/api/v1/recurring-bills/timeline",
           "/api/v1/recurring-bills/{definitionId}",
+          "/api/v1/expense-ledgers",
+          "/api/v1/expense-ledgers/{ledgerId}",
+          "/api/v1/expense-ledgers/{ledgerId}/items",
+          "/api/v1/expense-ledgers/items/{itemId}",
+          "/api/v1/expense-ledgers/{ledgerId}/finalize",
+          "/api/v1/expense-ledgers/{ledgerId}/reopen",
+          "/api/v1/expense-ledgers/{ledgerId}/settle/bill",
+          "/api/v1/expense-ledgers/{ledgerId}/settle/payback",
           "/api/v1/paychecks/{paycheckId}/recurring-bill-imports",
           "/api/v1/paychecks/active",
           "/api/v1/paychecks/history",
@@ -169,6 +177,36 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     assertThat(sinkingFundSizeSchema.path("maximum").asInt()).isEqualTo(100);
     assertThat(sinkingFundSizeSchema.path("default").asInt()).isEqualTo(50);
 
+    JsonNode expenseLedgerParameters =
+        generated.path("paths").path("/api/v1/expense-ledgers").path("get").path("parameters");
+    assertThat(expenseLedgerParameters.findValuesAsText("name")).contains("state", "page", "size");
+    JsonNode expenseLedgerPageSchema =
+        parameterNamed(expenseLedgerParameters, "page").path("schema");
+    assertThat(expenseLedgerPageSchema.path("type").asText()).isEqualTo("integer");
+    assertThat(expenseLedgerPageSchema.path("format").asText()).isEqualTo("int32");
+    assertThat(expenseLedgerPageSchema.path("minimum").asInt()).isEqualTo(0);
+    assertThat(expenseLedgerPageSchema.path("default").asInt()).isEqualTo(0);
+    JsonNode expenseLedgerSizeSchema =
+        parameterNamed(expenseLedgerParameters, "size").path("schema");
+    assertThat(expenseLedgerSizeSchema.path("type").asText()).isEqualTo("integer");
+    assertThat(expenseLedgerSizeSchema.path("format").asText()).isEqualTo("int32");
+    assertThat(expenseLedgerSizeSchema.path("minimum").asInt()).isEqualTo(1);
+    assertThat(expenseLedgerSizeSchema.path("maximum").asInt()).isEqualTo(100);
+    assertThat(expenseLedgerSizeSchema.path("default").asInt()).isEqualTo(50);
+
+    assertUuidProperty(generated, "ExpenseLedgerSettlementResponse", "targetId");
+    assertUuidProperty(generated, "ExpenseLedgerSettlementResponse", "targetPaycheckId");
+    assertUuidProperty(generated, "EntryResponse", "sourceExpenseLedgerId");
+    assertUuidProperty(generated, "PaybackResponse", "sourceExpenseLedgerId");
+    assertUuidProperty(generated, "SettleExpenseLedgerAsBillRequest", "paycheckId");
+    assertRequired(generated, "CreateExpenseLedgerRequest", "name");
+    assertRequired(generated, "UpdateExpenseLedgerRequest", "name", "version");
+    assertRequired(generated, "CreateExpenseLedgerItemRequest", "amountMinor");
+    assertRequired(
+        generated, "UpdateExpenseLedgerItemRequest", "amountMinor", "expenseDate", "version");
+    assertRequired(generated, "SettleExpenseLedgerAsBillRequest", "paycheckId", "ledgerVersion");
+    assertRequired(generated, "SettleExpenseLedgerAsPaybackRequest", "ledgerVersion");
+
     assertBalanceAssignmentSchema(generated, "DraftPaycheckEntryRequest");
     assertBalanceAssignmentSchema(generated, "TemplateApplicationEntryRequest");
 
@@ -197,5 +235,23 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     assertThat(properties.path("paybackId").path("format").asText()).isEqualTo("uuid");
     assertThat(properties.path("sinkingFundId").path("type").asText()).isEqualTo("string");
     assertThat(properties.path("sinkingFundId").path("format").asText()).isEqualTo("uuid");
+  }
+
+  private void assertUuidProperty(JsonNode generated, String schemaName, String propertyName) {
+    JsonNode property =
+        generated
+            .path("components")
+            .path("schemas")
+            .path(schemaName)
+            .path("properties")
+            .path(propertyName);
+    assertThat(property.path("type").asText()).isEqualTo("string");
+    assertThat(property.path("format").asText()).isEqualTo("uuid");
+  }
+
+  private void assertRequired(JsonNode generated, String schemaName, String... propertyNames) {
+    JsonNode required =
+        generated.path("components").path("schemas").path(schemaName).path("required");
+    assertThat(required).extracting(JsonNode::asText).contains(propertyNames);
   }
 }
