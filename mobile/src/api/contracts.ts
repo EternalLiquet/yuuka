@@ -48,6 +48,7 @@ export const entrySchema = z.object({
   targetDate: date.nullable(),
   sourceRecurringBillDefinitionId: uuid.nullable(),
   sourceRecurringOccurrenceDate: date.nullable(),
+  sourceExpenseLedgerId: uuid.nullable().optional(),
   spentMinor: minor.nullable(),
   remainingMinor: minor.nullable(),
   overBudget: z.boolean().nullable(),
@@ -113,6 +114,7 @@ export const paybackSchema = z.object({
   borrowedDate: date,
   source: z.string().nullable(),
   notes: z.string().nullable(),
+  sourceExpenseLedgerId: uuid.nullable().optional(),
   state: paybackStateSchema,
   position: z.number().int().nonnegative(),
   repaymentCount: z.number().int().nonnegative(),
@@ -213,6 +215,63 @@ export const sinkingFundTransactionSchema = z.object({
   version: z.number().int().nonnegative(),
 });
 export type SinkingFundTransaction = z.infer<typeof sinkingFundTransactionSchema>;
+
+export const expenseLedgerStateSchema = z.enum(['OPEN', 'FINALIZED', 'SETTLED']);
+export type ExpenseLedgerState = z.infer<typeof expenseLedgerStateSchema>;
+
+export const expenseLedgerSettlementTypeSchema = z.enum(['BILL', 'PAYBACK']);
+export type ExpenseLedgerSettlementType = z.infer<typeof expenseLedgerSettlementTypeSchema>;
+
+export const expenseLedgerItemSchema = z.object({
+  id: uuid,
+  ledgerId: uuid,
+  name: z.string().nullable(),
+  merchant: z.string().nullable(),
+  amountMinor: minor.positive(),
+  expenseDate: date,
+  notes: z.string().nullable(),
+  createdAt: instant,
+  updatedAt: instant,
+  version: z.number().int().nonnegative(),
+});
+export type ExpenseLedgerItem = z.infer<typeof expenseLedgerItemSchema>;
+
+export const expenseLedgerSettlementSchema = z.object({
+  id: uuid,
+  ledgerId: uuid,
+  settlementType: expenseLedgerSettlementTypeSchema,
+  settlementAmountMinor: minor.positive(),
+  targetId: uuid,
+  settledAt: instant,
+  createdAt: instant,
+});
+export type ExpenseLedgerSettlement = z.infer<typeof expenseLedgerSettlementSchema>;
+
+export const expenseLedgerSchema = z.object({
+  id: uuid,
+  name: z.string(),
+  notes: z.string().nullable(),
+  state: expenseLedgerStateSchema,
+  totalMinor: minor.nonnegative(),
+  itemCount: z.number().int().nonnegative(),
+  latestExpenseDate: date.nullable(),
+  settlement: expenseLedgerSettlementSchema.nullable(),
+  items: z.array(expenseLedgerItemSchema),
+  finalizedAt: instant.nullable(),
+  reopenedAt: instant.nullable(),
+  settledAt: instant.nullable(),
+  createdAt: instant,
+  updatedAt: instant,
+  version: z.number().int().nonnegative(),
+});
+export type ExpenseLedger = z.infer<typeof expenseLedgerSchema>;
+
+export const expenseLedgerSettlementResultSchema = z.object({
+  ledger: expenseLedgerSchema,
+  billEntry: entrySchema.nullable(),
+  payback: paybackSchema.nullable(),
+});
+export type ExpenseLedgerSettlementResult = z.infer<typeof expenseLedgerSettlementResultSchema>;
 
 export const templateEntrySchema = z.object({
   id: uuid,

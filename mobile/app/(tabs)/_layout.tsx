@@ -1,5 +1,12 @@
 import { Redirect, Tabs } from 'expo-router';
-import { History, LayoutTemplate, RotateCcw, Settings, WalletCards } from 'lucide-react-native';
+import {
+  ClipboardList,
+  History,
+  LayoutTemplate,
+  RotateCcw,
+  Settings,
+  WalletCards,
+} from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { ColorValue } from 'react-native';
 
@@ -46,6 +53,14 @@ export default function TabLayout() {
           title: 'Active',
           tabBarAccessibilityLabel: 'Active tab',
           tabBarIcon: ({ color }) => <TabIcon icon={WalletCards} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="expense-ledgers"
+        options={{
+          title: 'Ledgers',
+          tabBarAccessibilityLabel: 'Expense Ledgers tab',
+          tabBarIcon: ({ color }) => <TabIcon icon={ClipboardList} color={color} />,
         }}
       />
       <Tabs.Screen

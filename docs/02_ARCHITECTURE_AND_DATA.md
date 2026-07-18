@@ -128,6 +128,7 @@ Store mobile tokens in Expo SecureStore, never plain AsyncStorage.
 - paycheck_id
 - payback_id nullable
 - sinking_fund_id nullable
+- source_expense_ledger_id nullable
 - entry_type: BILL, SPENDING_BUCKET, SINKING_FUND
 - name
 - amount_minor BIGINT
@@ -176,6 +177,55 @@ Append-only:
 
 Amounts are positive purchase records. Corrections are made by editing or deleting the original
 transaction; refund-style negative transactions are not part of the current contract.
+
+### expense_ledgers
+
+- id UUID
+- owner_id
+- name
+- notes nullable
+- state: OPEN, FINALIZED, SETTLED
+- finalized_at nullable
+- reopened_at nullable
+- settled_at nullable
+- deleted_at nullable
+- created_at
+- updated_at
+- optimistic-lock version
+
+### expense_ledger_items
+
+- id UUID
+- owner_id
+- ledger_id
+- name nullable
+- merchant nullable
+- amount_minor BIGINT
+- expense_date
+- notes nullable
+- deleted_at nullable
+- created_at
+- updated_at
+- optimistic-lock version
+
+Items require a positive amount and at least one of name or merchant. Live item totals are derived
+through database aggregation and checked integer conversion; no cached ledger total is persisted.
+
+### expense_ledger_settlements
+
+Append-only settlement provenance:
+
+- id UUID
+- owner_id
+- ledger_id
+- settlement_type: BILL or PAYBACK
+- settlement_amount_minor BIGINT
+- target_id UUID
+- settled_at
+- created_at
+
+The database enforces one settlement row per Expense Ledger. The target ID is intentionally
+polymorphic and interpreted by settlement_type.
 
 ### templates
 

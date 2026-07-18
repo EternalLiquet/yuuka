@@ -1008,6 +1008,413 @@
         }
       }
     },
+    "/api/v1/expense-ledgers" : {
+      "get" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "listExpenseLedgers",
+        "parameters" : [ {
+          "name" : "state",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "OPEN", "FINALIZED", "SETTLED" ]
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseExpenseLedgerResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "createExpenseLedger",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateExpenseLedgerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExpenseLedgerResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/expense-ledgers/{ledgerId}" : {
+      "get" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "getExpenseLedger",
+        "parameters" : [ {
+          "name" : "ledgerId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExpenseLedgerResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "updateExpenseLedger",
+        "parameters" : [ {
+          "name" : "ledgerId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateExpenseLedgerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExpenseLedgerResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "deleteExpenseLedger",
+        "parameters" : [ {
+          "name" : "ledgerId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "version",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          }
+        }
+      }
+    },
+    "/api/v1/expense-ledgers/{ledgerId}/items" : {
+      "post" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "createExpenseLedgerItem",
+        "parameters" : [ {
+          "name" : "ledgerId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateExpenseLedgerItemRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExpenseLedgerItemResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/expense-ledgers/items/{itemId}" : {
+      "patch" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "updateExpenseLedgerItem",
+        "parameters" : [ {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateExpenseLedgerItemRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExpenseLedgerItemResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "deleteExpenseLedgerItem",
+        "parameters" : [ {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "version",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          }
+        }
+      }
+    },
+    "/api/v1/expense-ledgers/{ledgerId}/finalize" : {
+      "post" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "finalizeExpenseLedger",
+        "parameters" : [ {
+          "name" : "ledgerId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExpenseLedgerResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/expense-ledgers/{ledgerId}/reopen" : {
+      "post" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "reopenExpenseLedger",
+        "parameters" : [ {
+          "name" : "ledgerId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExpenseLedgerResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/expense-ledgers/{ledgerId}/settle/bill" : {
+      "post" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "settleExpenseLedgerAsBill",
+        "parameters" : [ {
+          "name" : "ledgerId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SettleExpenseLedgerAsBillRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExpenseLedgerSettlementResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/expense-ledgers/{ledgerId}/settle/payback" : {
+      "post" : {
+        "tags" : [ "expense-ledger-controller" ],
+        "operationId" : "settleExpenseLedgerAsPayback",
+        "parameters" : [ {
+          "name" : "ledgerId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SettleExpenseLedgerAsPaybackRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExpenseLedgerSettlementResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/paybacks" : {
       "get" : {
         "tags" : [ "payback-controller" ],
@@ -3174,6 +3581,10 @@
             "type" : "string",
             "format" : "date"
           },
+          "sourceExpenseLedgerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
           "spentMinor" : {
             "type" : "integer",
             "format" : "int64"
@@ -3658,6 +4069,328 @@
         },
         "required" : [ "amountMinor", "entryType", "name" ]
       },
+      "CreateExpenseLedgerRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "name" ]
+      },
+      "UpdateExpenseLedgerRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "name", "version" ]
+      },
+      "CreateExpenseLedgerItemRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "merchant" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "expenseDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "amountMinor" ]
+      },
+      "UpdateExpenseLedgerItemRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "merchant" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "expenseDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "amountMinor", "expenseDate", "version" ]
+      },
+      "SettleExpenseLedgerAsBillRequest" : {
+        "type" : "object",
+        "properties" : {
+          "paycheckId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "ledgerVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "accountName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "payee" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "ledgerVersion", "paycheckId" ]
+      },
+      "SettleExpenseLedgerAsPaybackRequest" : {
+        "type" : "object",
+        "properties" : {
+          "ledgerVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "borrowedDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "source" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "ledgerVersion" ]
+      },
+      "ExpenseLedgerItemResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "ledgerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "merchant" : {
+            "type" : "string"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "expenseDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "ExpenseLedgerSettlementResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "ledgerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "settlementType" : {
+            "type" : "string",
+            "enum" : [ "BILL", "PAYBACK" ]
+          },
+          "settlementAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "targetId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "settledAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "ExpenseLedgerResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string",
+            "enum" : [ "OPEN", "FINALIZED", "SETTLED" ]
+          },
+          "totalMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "itemCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "latestExpenseDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "settlement" : {
+            "$ref" : "#/components/schemas/ExpenseLedgerSettlementResponse"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExpenseLedgerItemResponse"
+            }
+          },
+          "finalizedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "reopenedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "settledAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "ExpenseLedgerSettlementResultResponse" : {
+        "type" : "object",
+        "properties" : {
+          "ledger" : {
+            "$ref" : "#/components/schemas/ExpenseLedgerResponse"
+          },
+          "billEntry" : {
+            "$ref" : "#/components/schemas/EntryResponse"
+          },
+          "payback" : {
+            "$ref" : "#/components/schemas/PaybackResponse"
+          }
+        }
+      },
       "CreatePaybackRequest" : {
         "type" : "object",
         "properties" : {
@@ -3730,6 +4463,10 @@
           },
           "notes" : {
             "type" : "string"
+          },
+          "sourceExpenseLedgerId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
           "state" : {
             "type" : "string",
@@ -4256,6 +4993,36 @@
         "properties" : {
           "status" : {
             "type" : "string"
+          }
+        }
+      },
+      "PageResponseExpenseLedgerResponse" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExpenseLedgerResponse"
+            }
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "hasNext" : {
+            "type" : "boolean"
           }
         }
       },

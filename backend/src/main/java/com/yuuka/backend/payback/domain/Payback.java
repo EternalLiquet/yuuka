@@ -43,6 +43,9 @@ public class Payback {
   @Column(length = 2000)
   private String notes;
 
+  @Column(name = "source_expense_ledger_id")
+  private UUID sourceExpenseLedgerId;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
   private PaybackState state;
@@ -74,6 +77,28 @@ public class Payback {
       String source,
       String notes,
       int position) {
+    this(
+        ownerId,
+        name,
+        originalAmountMinor,
+        openingRemainingAmountMinor,
+        borrowedDate,
+        source,
+        notes,
+        position,
+        null);
+  }
+
+  public Payback(
+      UUID ownerId,
+      String name,
+      long originalAmountMinor,
+      long openingRemainingAmountMinor,
+      LocalDate borrowedDate,
+      String source,
+      String notes,
+      int position,
+      UUID sourceExpenseLedgerId) {
     this.ownerId = ownerId;
     this.name = name;
     this.originalAmountMinor = originalAmountMinor;
@@ -82,6 +107,7 @@ public class Payback {
     this.source = source;
     this.notes = notes;
     this.position = position;
+    this.sourceExpenseLedgerId = sourceExpenseLedgerId;
     syncState(openingRemainingAmountMinor);
   }
 
@@ -164,6 +190,10 @@ public class Payback {
 
   public String getNotes() {
     return notes;
+  }
+
+  public UUID getSourceExpenseLedgerId() {
+    return sourceExpenseLedgerId;
   }
 
   public PaybackState getState() {

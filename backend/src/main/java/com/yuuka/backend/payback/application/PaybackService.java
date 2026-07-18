@@ -116,6 +116,41 @@ public class PaybackService {
   }
 
   @Transactional
+  public PaybackResponse createExpenseLedgerSettlementPayback(
+      UUID ownerId,
+      UUID sourceExpenseLedgerId,
+      String name,
+      long amountMinor,
+      java.time.LocalDate borrowedDate,
+      String source,
+      String notes) {
+    validateBaseline(amountMinor, amountMinor);
+    Payback payback =
+        paybacks.saveAndFlush(
+            new Payback(
+                ownerId,
+                name,
+                amountMinor,
+                amountMinor,
+                borrowedDate,
+                normalizeOptional(source),
+                normalizeOptional(notes),
+                paybacks.findMaxLivePosition(ownerId) + 1,
+                sourceExpenseLedgerId));
+    PaybackResponse response = toResponse(payback);
+    auditService.append(
+        ownerId,
+        "PAYBACK",
+        payback.getId(),
+        "CREATED_FROM_EXPENSE_LEDGER",
+        null,
+        null,
+        response,
+        Map.of("sourceExpenseLedgerId", sourceExpenseLedgerId));
+    return response;
+  }
+
+  @Transactional
   public PaybackResponse update(UUID ownerId, UUID paybackId, UpdatePaybackRequest request) {
     Payback payback = requirePaybackForUpdate(ownerId, paybackId);
     assertVersion(payback.getVersion(), request.version());

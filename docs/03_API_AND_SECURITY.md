@@ -144,6 +144,26 @@ Posted same-fund contribution replacements are validated against the final prosp
 holding the fund lock; cross-fund moves, unlinking, and entry-type changes must pass the full old
 contribution reversal rule.
 
+### Expense Ledgers
+
+- `GET /expense-ledgers?state=OPEN|FINALIZED|SETTLED`
+- `POST /expense-ledgers`
+- `GET /expense-ledgers/{ledgerId}`
+- `PATCH /expense-ledgers/{ledgerId}`
+- `DELETE /expense-ledgers/{ledgerId}?version=...`
+- `POST /expense-ledgers/{ledgerId}/items`
+- `PATCH /expense-ledgers/items/{itemId}`
+- `DELETE /expense-ledgers/items/{itemId}?version=...`
+- `POST /expense-ledgers/{ledgerId}/finalize`
+- `POST /expense-ledgers/{ledgerId}/reopen`
+- `POST /expense-ledgers/{ledgerId}/settle/bill`
+- `POST /expense-ledgers/{ledgerId}/settle/payback`
+
+Clients never submit a settlement amount. Settlement requests carry the current ledger version and
+reviewed target metadata only. The backend locks the ledger, recalculates the derived total, creates
+the Bill or Payback through normal target behavior, records one immutable settlement row, and marks
+the ledger Settled in one transaction.
+
 ### Templates
 
 - `GET /templates`

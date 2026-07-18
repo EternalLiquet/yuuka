@@ -360,6 +360,21 @@ Do not introduce:
 
 unless explicitly requested.
 
+### Expense Ledgers
+
+Expense Ledgers are owner-scoped expense-first aggregates with `OPEN → FINALIZED → SETTLED`
+lifecycle. Open ledgers and live items are editable. Finalized ledgers are read-only but may be
+reopened until settlement. Settled ledgers are permanently read-only historical records.
+
+Ledger totals are always derived from live positive Expense Items using checked money arithmetic;
+do not persist or accept an authoritative cached total. Settlement must recalculate the total
+server-side under the settlement transaction.
+
+A Finalized ledger may settle exactly once as either one ordinary Bill in an eligible paycheck or
+one ordinary Payback. Persist immutable settlement provenance and nullable source-ledger provenance
+on the created target. Provenance is informational only: later ledger edits, target edits, and
+target deletion must not synchronize, reopen, or cascade across the boundary.
+
 ## Money rules
 
 All persisted and API money uses signed 64-bit integer minor units.

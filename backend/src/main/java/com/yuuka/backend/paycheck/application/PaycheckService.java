@@ -18,6 +18,7 @@ import com.yuuka.backend.paycheck.api.dto.StatusEventResponse;
 import com.yuuka.backend.paycheck.api.dto.UpdateEntryRequest;
 import com.yuuka.backend.paycheck.api.dto.UpdatePaycheckRequest;
 import com.yuuka.backend.paycheck.domain.AllocationLine;
+import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryStatus;
 import com.yuuka.backend.paycheck.domain.EntryStatusEvent;
 import com.yuuka.backend.paycheck.domain.EntryType;
@@ -312,6 +313,68 @@ public class PaycheckService {
     EntryResponse response = toEntryResponse(entry);
     auditService.append(
         ownerId, "PAYCHECK_ENTRY", entry.getId(), "CREATED", null, null, response, null);
+    return response;
+  }
+
+  @Transactional
+  public EntryResponse createExpenseLedgerSettlementBill(
+      UUID ownerId,
+      UUID sourceExpenseLedgerId,
+      UUID paycheckId,
+      String name,
+      long amountMinor,
+      EntryPaymentMethod paymentMethod,
+      LocalDate dueDate,
+      String accountName,
+      String payee,
+      String notes) {
+    Paycheck paycheck = requirePaycheckForUpdate(ownerId, paycheckId);
+    validations.requireActive(paycheck);
+    List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
+    List<AllocationLine> proposed = new ArrayList<>(responseAssembler.allocationLines(liveEntries));
+    proposed.add(new AllocationLine(amountMinor, EntryStatus.NOT_PAID, false));
+    validations.assertNotOverAllocated(
+        responseAssembler.calculate(paycheck.getAmountMinor(), proposed));
+
+    CreateEntryRequest request =
+        new CreateEntryRequest(
+            EntryType.BILL,
+            name,
+            amountMinor,
+            paymentMethod,
+            dueDate,
+            accountName,
+            payee,
+            notes,
+            null,
+            null,
+            null);
+    PaycheckEntry entry =
+        entryMutations.newEntry(
+            ownerId, paycheckId, request, entries.findMaxLivePosition(paycheckId) + 1);
+    entry.setExpenseLedgerSource(sourceExpenseLedgerId);
+    entry = entries.saveAndFlush(entry);
+    Instant recordedAt = clock.instant();
+    statusEvents.save(
+        new EntryStatusEvent(
+            ownerId,
+            entry.getId(),
+            null,
+            EntryStatus.NOT_PAID,
+            recordedAt,
+            recordedAt,
+            "Created from Expense Ledger settlement"));
+    paycheck.touch(recordedAt);
+    EntryResponse response = toEntryResponse(entry);
+    auditService.append(
+        ownerId,
+        "PAYCHECK_ENTRY",
+        entry.getId(),
+        "CREATED_FROM_EXPENSE_LEDGER",
+        null,
+        null,
+        response,
+        Map.of("paycheckId", paycheckId, "sourceExpenseLedgerId", sourceExpenseLedgerId));
     return response;
   }
 
