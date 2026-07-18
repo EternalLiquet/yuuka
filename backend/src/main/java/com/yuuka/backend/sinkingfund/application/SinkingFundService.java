@@ -343,6 +343,7 @@ public class SinkingFundService {
     UUID nextFundId = entry.getSinkingFundId();
     boolean contributionChanged =
         previousStatus == EntryStatus.POSTED
+            && (previousFundId != null || nextFundId != null)
             && (previousAmountMinor != entry.getAmountMinor()
                 || !sameId(previousFundId, nextFundId));
     if (contributionChanged && previousFundId != null && sameId(previousFundId, nextFundId)) {
