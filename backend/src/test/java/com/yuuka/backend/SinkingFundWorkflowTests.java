@@ -588,6 +588,48 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void concurrentSameFundReplacementAndStatusReversalUseStableLockOrder() throws Exception {
+    String token = register("sinking-funds-edit-status-lock-order@yuuka.local");
+    JsonNode fund = createFund(token, "Lock order", null, null);
+    JsonNode entry = postedContribution(token, fund, "Contribution", 100, 300);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    CountDownLatch start = new CountDownLatch(1);
+    try {
+      Future<MvcResult> amountEdit =
+          executor.submit(
+              () -> {
+                await(start);
+                return updateEntryResult(
+                    token,
+                    entry.path("id").asText(),
+                    entry.path("version").asLong(),
+                    "SINKING_FUND",
+                    "Contribution edited",
+                    150,
+                    fund.path("id").asText());
+              });
+      Future<MvcResult> statusReversal =
+          executor.submit(
+              () -> {
+                await(start);
+                return changeStatusResult(
+                    token, entry.path("id").asText(), "PROCESSING", entry.path("version").asLong());
+              });
+      start.countDown();
+
+      int amountEditStatus = amountEdit.get(10, TimeUnit.SECONDS).getResponse().getStatus();
+      int statusReversalStatus = statusReversal.get(10, TimeUnit.SECONDS).getResponse().getStatus();
+
+      assertThat(List.of(amountEditStatus, statusReversalStatus))
+          .contains(200)
+          .containsOnly(200, 409);
+      assertThat(activeContributionCount(fund.path("id").asText())).isLessThanOrEqualTo(1);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
   void paybackAndPersistentSinkingFundAssignmentsAreExclusive() throws Exception {
     String token = register("sinking-funds-exclusive@yuuka.local");
     JsonNode fund = createFund(token, "Fund", null, null);
@@ -905,16 +947,25 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
   private JsonNode changeStatus(
       String token, String entryId, String requestedStatus, long version, int expectedStatus)
       throws Exception {
-    return json(
-        post("/api/v1/entries/{id}/status", entryId)
-            .header("Authorization", bearer(token))
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(
-                """
-                {"toStatus":"%s","effectiveAt":"2026-07-17T12:00:00Z","version":%d}
-                """
-                    .formatted(requestedStatus, version)),
-        expectedStatus);
+    MvcResult result = changeStatusResult(token, entryId, requestedStatus, version);
+    assertThat(result.getResponse().getStatus()).isEqualTo(expectedStatus);
+    String body = result.getResponse().getContentAsString();
+    return body.isBlank() ? objectMapper.createObjectNode() : objectMapper.readTree(body);
+  }
+
+  private MvcResult changeStatusResult(
+      String token, String entryId, String requestedStatus, long version) throws Exception {
+    return mockMvc
+        .perform(
+            post("/api/v1/entries/{id}/status", entryId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"toStatus":"%s","effectiveAt":"2026-07-17T12:00:00Z","version":%d}
+                    """
+                        .formatted(requestedStatus, version)))
+        .andReturn();
   }
 
   private JsonNode updateEntry(
@@ -927,31 +978,48 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
       String sinkingFundId,
       int expectedStatus)
       throws Exception {
+    MvcResult result =
+        updateEntryResult(token, entryId, version, entryType, name, amountMinor, sinkingFundId);
+    assertThat(result.getResponse().getStatus()).isEqualTo(expectedStatus);
+    String body = result.getResponse().getContentAsString();
+    return body.isBlank() ? objectMapper.createObjectNode() : objectMapper.readTree(body);
+  }
+
+  private MvcResult updateEntryResult(
+      String token,
+      String entryId,
+      long version,
+      String entryType,
+      String name,
+      long amountMinor,
+      String sinkingFundId)
+      throws Exception {
     String sinkingFundJson = sinkingFundId == null ? "null" : "\"%s\"".formatted(sinkingFundId);
-    return json(
-        patch("/api/v1/entries/{id}", entryId)
-            .header("Authorization", bearer(token))
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(
-                """
-                {
-                  "entryType":"%s",
-                  "name":%s,
-                  "amountMinor":%d,
-                  "paybackId":null,
-	                  "sinkingFundId":%s,
-	                  "targetMinor":9999,
-	                  "targetDate":"2026-12-31",
-	                  "version":%d
-	                }
-	                """
-                    .formatted(
-                        entryType,
-                        objectMapper.writeValueAsString(name),
-                        amountMinor,
-                        sinkingFundJson,
-                        version)),
-        expectedStatus);
+    return mockMvc
+        .perform(
+            patch("/api/v1/entries/{id}", entryId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "entryType":"%s",
+                      "name":%s,
+                      "amountMinor":%d,
+                      "paybackId":null,
+                      "sinkingFundId":%s,
+                      "targetMinor":9999,
+                      "targetDate":"2026-12-31",
+                      "version":%d
+                    }
+                    """
+                        .formatted(
+                            entryType,
+                            objectMapper.writeValueAsString(name),
+                            amountMinor,
+                            sinkingFundJson,
+                            version)))
+        .andReturn();
   }
 
   private JsonNode updateEntryWithAssignments(

@@ -366,7 +366,7 @@ public class PaycheckService {
     Instant now = clock.instant();
     if (entry.getStatus() == EntryStatus.POSTED) {
       paybackService.reversePostedEntryRepayment(ownerId, entry.getId(), now);
-      sinkingFundService.reversePostedEntryContribution(ownerId, entry.getId(), now);
+      sinkingFundService.reversePostedEntryContribution(ownerId, entry, now);
     }
     entry.delete(now);
     paycheck.touch(now);
@@ -397,7 +397,7 @@ public class PaycheckService {
       sinkingFundService.applyPostedEntryContribution(ownerId, entry, recordedAt);
     } else if (previous == EntryStatus.POSTED && request.toStatus() != EntryStatus.POSTED) {
       paybackService.reversePostedEntryRepayment(ownerId, entry.getId(), recordedAt);
-      sinkingFundService.reversePostedEntryContribution(ownerId, entry.getId(), recordedAt);
+      sinkingFundService.reversePostedEntryContribution(ownerId, entry, recordedAt);
     }
     statusEvents.save(
         new EntryStatusEvent(

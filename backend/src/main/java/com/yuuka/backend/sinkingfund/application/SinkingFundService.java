@@ -352,7 +352,7 @@ public class SinkingFundService {
     }
     Map<UUID, SinkingFund> lockedFunds =
         contributionChanged ? lockFundsForUpdate(ownerId, previousFundId, nextFundId) : Map.of();
-    if (contributionChanged) {
+    if (contributionChanged && previousFundId != null) {
       reversePostedEntryContribution(
           ownerId, entry.getId(), recordedAt, lockedFunds.get(previousFundId));
     }
@@ -398,20 +398,22 @@ public class SinkingFundService {
   }
 
   @Transactional
-  public void reversePostedEntryContribution(UUID ownerId, UUID entryId, Instant reversedAt) {
-    reversePostedEntryContribution(ownerId, entryId, reversedAt, null);
+  public void reversePostedEntryContribution(
+      UUID ownerId, PaycheckEntry entry, Instant reversedAt) {
+    UUID fundId = entry.getSinkingFundId();
+    if (fundId == null) {
+      return;
+    }
+    SinkingFund fund = requireFundForUpdate(ownerId, fundId);
+    reversePostedEntryContribution(ownerId, entry.getId(), reversedAt, fund);
   }
 
   private void reversePostedEntryContribution(
-      UUID ownerId, UUID entryId, Instant reversedAt, SinkingFund lockedFund) {
+      UUID ownerId, UUID entryId, Instant reversedAt, SinkingFund fund) {
     transactions
         .findActiveContributionByEntryIdForUpdate(entryId, ownerId)
         .ifPresent(
             transaction -> {
-              SinkingFund fund =
-                  lockedFund == null
-                      ? requireFundForUpdate(ownerId, transaction.getSinkingFundId())
-                      : lockedFund;
               assertContributionCanBeReversed(ownerId, fund.getId(), transaction.getAmountMinor());
               transaction.reverse(reversedAt, null);
               transactions.flush();
