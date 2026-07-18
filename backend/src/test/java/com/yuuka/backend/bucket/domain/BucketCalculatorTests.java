@@ -29,6 +29,16 @@ class BucketCalculatorTests {
   }
 
   @Test
+  void acceptsZeroBucketBudget() {
+    BucketMetrics metrics = calculator.calculate(0, List.of());
+
+    assertThat(metrics.budgetMinor()).isZero();
+    assertThat(metrics.spentMinor()).isZero();
+    assertThat(metrics.remainingMinor()).isZero();
+    assertThat(metrics.overBudget()).isFalse();
+  }
+
+  @Test
   void rejectsNegativeBucketBudgets() {
     assertThatThrownBy(() -> calculator.calculate(-1, List.of()))
         .isInstanceOf(IllegalArgumentException.class)

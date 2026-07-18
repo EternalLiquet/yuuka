@@ -28,6 +28,9 @@ class PaycheckCalculatorTests {
     assertThat(metrics.postedMinor()).isEqualTo(180868);
     assertThat(metrics.processingMinor()).isEqualTo(13052);
     assertThat(metrics.notPaidMinor()).isZero();
+    assertThat(metrics.postedCount()).isEqualTo(1);
+    assertThat(metrics.processingCount()).isEqualTo(1);
+    assertThat(metrics.notPaidCount()).isZero();
     assertThat(metrics.fullyAllocated()).isFalse();
     assertThat(metrics.fullyPosted()).isFalse();
   }
@@ -47,8 +50,9 @@ class PaycheckCalculatorTests {
   void keepsFullyAllocatedPaycheckActiveWhileAnyEntryIsNotPosted() {
     PaycheckMetrics metrics =
         calculator.calculate(
-            15000, List.of(new AllocationLine(15000, EntryStatus.PROCESSING, false)));
+            15000, List.of(new AllocationLine(15000, EntryStatus.NOT_PAID, false)));
 
+    assertThat(metrics.notPaidCount()).isEqualTo(1);
     assertThat(metrics.fullyAllocated()).isTrue();
     assertThat(metrics.requiresAttention()).isTrue();
   }
@@ -112,6 +116,22 @@ class PaycheckCalculatorTests {
     assertThat(metrics.notPaidCount()).isEqualTo(3);
     assertThat(metrics.allocationPercent()).isEqualByComparingTo("60.00");
     assertThat(metrics.completionPercent()).isEqualByComparingTo("33.33");
+  }
+
+  @Test
+  void acceptsZeroRepositoryTotals() {
+    PaycheckMetrics metrics = calculator.calculateFromTotals(0, 0, 0, 0, 0, 0, 0, 0);
+
+    assertThat(metrics.allocatedMinor()).isZero();
+    assertThat(metrics.unallocatedMinor()).isZero();
+    assertThat(metrics.postedMinor()).isZero();
+    assertThat(metrics.processingMinor()).isZero();
+    assertThat(metrics.notPaidMinor()).isZero();
+    assertThat(metrics.postedCount()).isZero();
+    assertThat(metrics.processingCount()).isZero();
+    assertThat(metrics.notPaidCount()).isZero();
+    assertThat(metrics.allocationPercent()).isEqualByComparingTo("0.00");
+    assertThat(metrics.completionPercent()).isEqualByComparingTo("0.00");
   }
 
   @Test
