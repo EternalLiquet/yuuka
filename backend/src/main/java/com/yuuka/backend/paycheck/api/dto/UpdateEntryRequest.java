@@ -24,4 +24,5 @@ public record UpdateEntryRequest(
         Long targetMinor,
     LocalDate targetDate,
     UUID paybackId,
+    UUID sinkingFundId,
     @NotNull @PositiveOrZero Long version) {}

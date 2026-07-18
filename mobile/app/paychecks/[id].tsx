@@ -121,6 +121,11 @@ export default function PaycheckDetailScreen() {
     queryFn: api.paybacks,
     enabled: entryEditorVisible,
   });
+  const sinkingFundsQuery = useQuery({
+    queryKey: ['sinking-funds', 'entry-editor'],
+    queryFn: () => api.sinkingFunds(true),
+    enabled: entryEditorVisible,
+  });
   const showColdLoader = useMinimumVisibleDuration(query.isPending && !query.data, 1000);
   const invalidate = async () => {
     await Promise.all([
@@ -128,6 +133,8 @@ export default function PaycheckDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
       queryClient.invalidateQueries({ queryKey: ['paybacks'] }),
       queryClient.invalidateQueries({ queryKey: ['payback'] }),
+      queryClient.invalidateQueries({ queryKey: ['sinking-funds'] }),
+      queryClient.invalidateQueries({ queryKey: ['sinking-fund'] }),
       queryClient.invalidateQueries({ queryKey: ['spending-buckets'] }),
     ]);
   };
@@ -487,6 +494,7 @@ export default function PaycheckDetailScreen() {
             : undefined
         }
         onRetryPaybacks={() => paybacksQuery.refetch()}
+        onRetrySinkingFunds={() => sinkingFundsQuery.refetch()}
         onSubmit={(payload) =>
           entryMutation
             .mutateAsync({ type: editingEntry ? 'update' : 'add', entry: editingEntry, payload })
@@ -503,6 +511,17 @@ export default function PaycheckDetailScreen() {
             : null
         }
         paybacksLoading={paybacksQuery.isPending}
+        sinkingFunds={sinkingFundsQuery.data?.items ?? []}
+        sinkingFundsError={
+          sinkingFundsQuery.isError
+            ? displayError(
+                sinkingFundsQuery.error,
+                settings.currencyCode,
+                'Sinking Funds could not be loaded.',
+              )
+            : null
+        }
+        sinkingFundsLoading={sinkingFundsQuery.isPending}
         visible={entryEditorVisible}
       />
       <PaycheckEditor

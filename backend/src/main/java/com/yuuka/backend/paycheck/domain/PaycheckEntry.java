@@ -31,6 +31,9 @@ public class PaycheckEntry {
   @Column(name = "payback_id")
   private UUID paybackId;
 
+  @Column(name = "sinking_fund_id")
+  private UUID sinkingFundId;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "entry_type", nullable = false, length = 32)
   private EntryType entryType;
@@ -105,10 +108,12 @@ public class PaycheckEntry {
       String notes,
       Long targetMinor,
       LocalDate targetDate,
-      UUID paybackId) {
+      UUID paybackId,
+      UUID sinkingFundId) {
     this.ownerId = ownerId;
     this.paycheckId = paycheckId;
     this.paybackId = paybackId;
+    this.sinkingFundId = sinkingFundId;
     this.entryType = entryType;
     this.paymentMethod = paymentMethod;
     this.name = name;
@@ -145,7 +150,8 @@ public class PaycheckEntry {
       String notes,
       Long targetMinor,
       LocalDate targetDate,
-      UUID paybackId) {
+      UUID paybackId,
+      UUID sinkingFundId) {
     this.entryType = entryType;
     this.name = name;
     this.amountMinor = amountMinor;
@@ -157,6 +163,7 @@ public class PaycheckEntry {
     this.targetMinor = targetMinor;
     this.targetDate = targetDate;
     this.paybackId = paybackId;
+    this.sinkingFundId = sinkingFundId;
     if (entryType != EntryType.BILL) {
       sourceRecurringBillDefinitionId = null;
       sourceRecurringOccurrenceDate = null;
@@ -176,6 +183,14 @@ public class PaycheckEntry {
 
   public void assignPayback(UUID paybackId) {
     this.paybackId = paybackId;
+  }
+
+  public void assignSinkingFund(UUID sinkingFundId) {
+    this.sinkingFundId = sinkingFundId;
+    if (sinkingFundId != null) {
+      targetMinor = null;
+      targetDate = null;
+    }
   }
 
   public EntryStatus transitionTo(EntryStatus nextStatus) {
@@ -206,6 +221,10 @@ public class PaycheckEntry {
 
   public UUID getPaybackId() {
     return paybackId;
+  }
+
+  public UUID getSinkingFundId() {
+    return sinkingFundId;
   }
 
   public EntryType getEntryType() {

@@ -19,6 +19,9 @@ import {
   recurringBillListSchema,
   recurringBillSchema,
   recurringBillTimelineSchema,
+  sinkingFundListSchema,
+  sinkingFundSchema,
+  sinkingFundTransactionSchema,
   statusEventSchema,
   templateEntrySchema,
   templateSchema,
@@ -41,6 +44,7 @@ export type EntryPayload = {
   paymentMethod?: EntryPaymentMethod | null;
   payee?: string | null;
   paybackId?: string | null;
+  sinkingFundId?: string | null;
   targetDate?: string | null;
   targetMinor?: number | null;
   sourceRecurringBillDefinitionId?: string | null;
@@ -194,6 +198,62 @@ export function useYuukaApi() {
         send('/paybacks/reorder', 'POST', { paybackIds }, paybackListSchema),
       paybackRepayments: (id: string) =>
         get(`/paybacks/${id}/repayments?size=100`, pageSchema(paybackRepaymentSchema)),
+      sinkingFunds: (includeArchived = false) =>
+        get(`/sinking-funds?includeArchived=${includeArchived}`, sinkingFundListSchema),
+      sinkingFund: (id: string) => get(`/sinking-funds/${id}`, sinkingFundSchema),
+      createSinkingFund: (body: {
+        name: string;
+        notes?: string | null;
+        openingBalanceMinor?: number | null;
+        targetDate?: string | null;
+        targetMinor?: number | null;
+      }) => send('/sinking-funds', 'POST', body, sinkingFundSchema),
+      updateSinkingFund: (
+        id: string,
+        body: {
+          name: string;
+          notes?: string | null;
+          targetDate?: string | null;
+          targetMinor?: number | null;
+          version: number;
+        },
+      ) => send(`/sinking-funds/${id}`, 'PATCH', body, sinkingFundSchema),
+      archiveSinkingFund: (id: string, version: number, confirmPositiveBalance = false) =>
+        send(
+          `/sinking-funds/${id}/archive`,
+          'POST',
+          { version, confirmPositiveBalance },
+          sinkingFundSchema,
+        ),
+      restoreSinkingFund: (id: string, version: number) =>
+        send(`/sinking-funds/${id}/restore`, 'POST', { version }, sinkingFundSchema),
+      reorderSinkingFunds: (sinkingFundIds: string[]) =>
+        send('/sinking-funds/reorder', 'POST', { sinkingFundIds }, sinkingFundListSchema),
+      sinkingFundTransactions: (id: string, page: number, size: number) =>
+        get(
+          `/sinking-funds/${id}/transactions?page=${page}&size=${size}`,
+          pageSchema(sinkingFundTransactionSchema),
+        ),
+      withdrawSinkingFund: (
+        id: string,
+        body: {
+          amountMinor: number;
+          effectiveDate?: string | null;
+          notes?: string | null;
+          reason: string;
+          version: number;
+        },
+      ) => send(`/sinking-funds/${id}/withdrawals`, 'POST', body, sinkingFundTransactionSchema),
+      reverseSinkingFundWithdrawal: (
+        transactionId: string,
+        body: { reason: string; version: number },
+      ) =>
+        send(
+          `/sinking-fund-transactions/${transactionId}/reverse`,
+          'POST',
+          body,
+          sinkingFundTransactionSchema,
+        ),
       createPaycheck: (body: {
         amountMinor: number;
         incomeDate: string;

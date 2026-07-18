@@ -29,6 +29,7 @@ import com.yuuka.backend.paycheck.domain.StatusTransitionPolicy;
 import com.yuuka.backend.paycheck.infrastructure.JpaEntryStatusEventRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckRepository;
+import com.yuuka.backend.sinkingfund.application.SinkingFundService;
 import java.sql.Date;
 import java.time.Clock;
 import java.time.Instant;
@@ -59,6 +60,7 @@ public class PaycheckService {
   private final StatusTransitionPolicy statusTransitionPolicy;
   private final OwnerLocalDateService ownerLocalDateService;
   private final PaybackService paybackService;
+  private final SinkingFundService sinkingFundService;
   private final AuditService auditService;
   private final Clock clock;
 
@@ -73,6 +75,7 @@ public class PaycheckService {
       StatusTransitionPolicy statusTransitionPolicy,
       OwnerLocalDateService ownerLocalDateService,
       PaybackService paybackService,
+      SinkingFundService sinkingFundService,
       AuditService auditService,
       Clock clock) {
     this.paychecks = paychecks;
@@ -85,6 +88,7 @@ public class PaycheckService {
     this.statusTransitionPolicy = statusTransitionPolicy;
     this.ownerLocalDateService = ownerLocalDateService;
     this.paybackService = paybackService;
+    this.sinkingFundService = sinkingFundService;
     this.auditService = auditService;
     this.clock = clock;
   }
@@ -134,6 +138,8 @@ public class PaycheckService {
     for (int index = 0; index < requestedEntries.size(); index++) {
       DraftPaycheckEntryRequest source = requestedEntries.get(index);
       PaycheckEntry entry = entryMutations.draftEntry(ownerId, paycheck.getId(), source, index);
+      paybackService.validateAssignment(ownerId, entry, source.paybackId());
+      sinkingFundService.validateAssignment(ownerId, entry, source.sinkingFundId());
       entry = entries.saveAndFlush(entry);
       createdEntries.add(entry);
       statusEvents.save(
@@ -290,6 +296,7 @@ public class PaycheckService {
         entryMutations.newEntry(
             ownerId, paycheckId, request, entries.findMaxLivePosition(paycheckId) + 1);
     paybackService.validateAssignment(ownerId, entry, request.paybackId());
+    sinkingFundService.validateAssignment(ownerId, entry, request.sinkingFundId());
     entry = entries.saveAndFlush(entry);
     Instant recordedAt = clock.instant();
     statusEvents.save(
@@ -330,12 +337,15 @@ public class PaycheckService {
         responseAssembler.calculate(paycheck.getAmountMinor(), proposed));
     EntryResponse before = toEntryResponse(entry);
     UUID previousPaybackId = entry.getPaybackId();
+    UUID previousSinkingFundId = entry.getSinkingFundId();
     long previousAmountMinor = entry.getAmountMinor();
     EntryStatus previousStatus = entry.getStatus();
     entryMutations.update(entry, request);
     Instant recordedAt = clock.instant();
     paybackService.syncAfterEntryUpdate(
         ownerId, entry, previousPaybackId, previousAmountMinor, previousStatus, recordedAt);
+    sinkingFundService.syncAfterEntryUpdate(
+        ownerId, entry, previousSinkingFundId, previousAmountMinor, previousStatus, recordedAt);
     paycheck.touch(recordedAt);
     entries.flush();
     EntryResponse after = toEntryResponse(entry);
@@ -356,6 +366,7 @@ public class PaycheckService {
     Instant now = clock.instant();
     if (entry.getStatus() == EntryStatus.POSTED) {
       paybackService.reversePostedEntryRepayment(ownerId, entry.getId(), now);
+      sinkingFundService.reversePostedEntryContribution(ownerId, entry, now);
     }
     entry.delete(now);
     paycheck.touch(now);
@@ -381,9 +392,12 @@ public class PaycheckService {
     EntryStatus previous = entry.transitionTo(request.toStatus());
     Instant recordedAt = clock.instant();
     if (previous != EntryStatus.POSTED && request.toStatus() == EntryStatus.POSTED) {
+      EntryBalanceAssignmentPolicy.requireExclusive(entry.getPaybackId(), entry.getSinkingFundId());
       paybackService.applyPostedEntryRepayment(ownerId, entry, recordedAt);
+      sinkingFundService.applyPostedEntryContribution(ownerId, entry, recordedAt);
     } else if (previous == EntryStatus.POSTED && request.toStatus() != EntryStatus.POSTED) {
       paybackService.reversePostedEntryRepayment(ownerId, entry.getId(), recordedAt);
+      sinkingFundService.reversePostedEntryContribution(ownerId, entry, recordedAt);
     }
     statusEvents.save(
         new EntryStatusEvent(

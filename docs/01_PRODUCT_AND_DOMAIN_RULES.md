@@ -96,14 +96,16 @@ created. Duplicate names are allowed and Yuuka does not prepend `Copy of`.
 
 The entry draft copies live source entries in saved custom order, excluding generated `LEFTOVER`
 entries. It copies entry type, name, amount, notes, Bill payment method/account/payee/due-date
-relationship, and Sinking Fund target fields. It does not copy entry IDs, versions, statuses,
-status history, timestamps, audit history, Spending Bucket purchases or spent totals, Payback
-assignments, Payback repayment history, or soft-deleted entries. Every saved duplicate entry starts
-as Not Paid, and the new paycheck starts Active.
+relationship, and unlinked Sinking Fund target fields. It does not copy entry IDs, versions,
+statuses, status history, timestamps, audit history, Spending Bucket purchases or spent totals,
+Payback assignments, Sinking Fund assignments, Payback repayment history, Sinking Fund
+transactions, or soft-deleted entries. Every saved duplicate entry starts as Not Paid, and the new
+paycheck starts Active.
 
 Bill due dates are shifted by preserving the source due-date offset from the source paycheck income
-date and applying it to the new income date. Sinking Fund target dates stay exact. Payback
-assignments are cleared by omission and the mobile draft reports how many were not copied.
+date and applying it to the new income date. Unlinked Sinking Fund target dates stay exact.
+Payback and persistent Sinking Fund assignments are cleared by omission and the mobile draft
+reports how many were not copied.
 
 ## Recurring Bill definitions
 
@@ -157,9 +159,33 @@ soft-deleted purchases, non-bucket entries, and purchases effective after `asOfD
 
 ### Sinking Fund
 
-A contribution toward a future purpose, such as tires, travel, car maintenance, or an emergency reserve.
+A contribution toward a future purpose, such as tires, travel, car maintenance, or an emergency
+reserve.
 
-A sinking fund may have a target amount and target date, but only the current paycheck contribution counts as current allocation.
+A Sinking Fund may be a persistent owner-scoped fund with an optional target amount, target date,
+notes, owner-defined order, current balance derived from transactions, and Active or Archived
+state. A persistent fund can start with an optional opening balance. Opening balances,
+contributions, withdrawals, and reversals are transaction history, not persisted derived totals.
+
+A paycheck entry of type `SINKING_FUND` may link to one Active persistent Sinking Fund. The entry
+still reserves only that paycheck's contribution in allocation. Linking does not change the fund
+balance until the entry reaches Posted. Moving a linked entry out of Posted reverses the active
+contribution; returning it to Posted creates a new active contribution while preserving reversed
+history. Editing a Posted linked entry's amount or assignment reverses the old contribution and
+applies the new one transactionally. When a Posted entry stays linked to the same persistent fund,
+Yuuka validates the final replacement balance, `current - old contribution + new contribution`, so
+valid net replacements are allowed even if a full standalone reversal would temporarily overdraw the
+fund. Deleting a Posted linked entry reverses its active contribution.
+
+Unlinked Sinking Fund entries retain entry-level target amount and target date for lightweight
+per-paycheck planning. Linked entries use the persistent fund's target fields and return null
+entry-level target fields in the API.
+
+Withdrawals reduce a persistent fund's derived balance, require the latest fund version, and cannot
+exceed the current balance. Reversing a withdrawal restores that balance contribution while
+preserving the withdrawal row as reversed history. Archiving a fund blocks pending linked entries,
+requires explicit confirmation when the fund still has a positive balance, and does not erase
+history. Archived funds can be restored, and reversed history remains auditable.
 
 ## Entry statuses
 
@@ -246,6 +272,9 @@ names such as `amountMinor`.
 A Payback tracks money the owner borrowed from themself and intends to repay through paycheck
 entries. It is separate from allocation: assigning a paycheck entry to a Payback does not change
 the Payback balance until that entry reaches Posted status.
+
+A single entry cannot be assigned to both a Payback and a persistent Sinking Fund. The user must
+choose which balance the Posted entry will affect.
 
 Payback terminology:
 

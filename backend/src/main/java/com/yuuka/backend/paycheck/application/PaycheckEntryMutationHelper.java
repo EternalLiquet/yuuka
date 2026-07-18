@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 class PaycheckEntryMutationHelper {
   PaycheckEntry draftEntry(
       UUID ownerId, UUID paycheckId, DraftPaycheckEntryRequest source, int position) {
+    EntryBalanceAssignmentPolicy.requireExclusive(source.paybackId(), source.sinkingFundId());
     PaycheckEntry entry =
         new PaycheckEntry(
             ownerId,
@@ -28,9 +29,14 @@ class PaycheckEntryMutationHelper {
             billValue(source.entryType(), normalizeOptional(source.accountName())),
             billValue(source.entryType(), normalizeOptional(source.payee())),
             normalizeOptional(source.notes()),
-            sinkingValue(source.entryType(), source.targetMinor()),
-            sinkingValue(source.entryType(), source.targetDate()),
-            null);
+            source.sinkingFundId() == null
+                ? sinkingValue(source.entryType(), source.targetMinor())
+                : null,
+            source.sinkingFundId() == null
+                ? sinkingValue(source.entryType(), source.targetDate())
+                : null,
+            source.paybackId(),
+            sinkingValue(source.entryType(), source.sinkingFundId()));
     validateRecurringSource(
         source.entryType(),
         source.sourceRecurringBillDefinitionId(),
@@ -55,10 +61,12 @@ class PaycheckEntryMutationHelper {
         null,
         null,
         null,
+        null,
         null);
   }
 
   PaycheckEntry newEntry(UUID ownerId, UUID paycheckId, CreateEntryRequest request, int position) {
+    EntryBalanceAssignmentPolicy.requireExclusive(request.paybackId(), request.sinkingFundId());
     return new PaycheckEntry(
         ownerId,
         paycheckId,
@@ -71,12 +79,18 @@ class PaycheckEntryMutationHelper {
         billValue(request.entryType(), normalizeOptional(request.accountName())),
         billValue(request.entryType(), normalizeOptional(request.payee())),
         normalizeOptional(request.notes()),
-        sinkingValue(request.entryType(), request.targetMinor()),
-        sinkingValue(request.entryType(), request.targetDate()),
-        request.paybackId());
+        request.sinkingFundId() == null
+            ? sinkingValue(request.entryType(), request.targetMinor())
+            : null,
+        request.sinkingFundId() == null
+            ? sinkingValue(request.entryType(), request.targetDate())
+            : null,
+        request.paybackId(),
+        sinkingValue(request.entryType(), request.sinkingFundId()));
   }
 
   void update(PaycheckEntry entry, UpdateEntryRequest request) {
+    EntryBalanceAssignmentPolicy.requireExclusive(request.paybackId(), request.sinkingFundId());
     entry.update(
         request.entryType(),
         request.name().trim(),
@@ -86,9 +100,14 @@ class PaycheckEntryMutationHelper {
         billValue(request.entryType(), normalizeOptional(request.accountName())),
         billValue(request.entryType(), normalizeOptional(request.payee())),
         normalizeOptional(request.notes()),
-        sinkingValue(request.entryType(), request.targetMinor()),
-        sinkingValue(request.entryType(), request.targetDate()),
-        request.paybackId());
+        request.sinkingFundId() == null
+            ? sinkingValue(request.entryType(), request.targetMinor())
+            : null,
+        request.sinkingFundId() == null
+            ? sinkingValue(request.entryType(), request.targetDate())
+            : null,
+        request.paybackId(),
+        sinkingValue(request.entryType(), request.sinkingFundId()));
   }
 
   private String normalizeOptional(String value) {

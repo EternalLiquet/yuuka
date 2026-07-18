@@ -24,6 +24,7 @@ import com.yuuka.backend.paycheck.domain.StatusTransitionPolicy;
 import com.yuuka.backend.paycheck.infrastructure.JpaEntryStatusEventRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckRepository;
+import com.yuuka.backend.sinkingfund.application.SinkingFundService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -47,6 +48,7 @@ class PaycheckServiceTests {
       mock(SpendingBucketPerformanceService.class);
   private final OwnerLocalDateService ownerLocalDateService = mock(OwnerLocalDateService.class);
   private final PaybackService paybackService = mock(PaybackService.class);
+  private final SinkingFundService sinkingFundService = mock(SinkingFundService.class);
   private final AuditService auditService = mock(AuditService.class);
 
   @Test
@@ -96,6 +98,7 @@ class PaycheckServiceTests {
         statusTransitionPolicy,
         ownerLocalDateService,
         paybackService,
+        sinkingFundService,
         auditService,
         Clock.fixed(Instant.parse("2026-07-15T02:00:00Z"), ZoneOffset.UTC));
   }

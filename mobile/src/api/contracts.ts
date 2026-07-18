@@ -33,6 +33,7 @@ export const entrySchema = z.object({
   id: uuid,
   paycheckId: uuid,
   paybackId: uuid.nullable(),
+  sinkingFundId: uuid.nullable().optional(),
   entryType: entryTypeSchema,
   paymentMethod: entryPaymentMethodSchema.nullable(),
   name: z.string(),
@@ -149,6 +150,69 @@ export const paybackRepaymentSchema = z.object({
   version: z.number().int().nonnegative(),
 });
 export type PaybackRepayment = z.infer<typeof paybackRepaymentSchema>;
+
+export const sinkingFundStateSchema = z.enum(['ACTIVE', 'ARCHIVED']);
+export type SinkingFundState = z.infer<typeof sinkingFundStateSchema>;
+
+export const sinkingFundSchema = z.object({
+  id: uuid,
+  name: z.string(),
+  targetMinor: minor.nonnegative().nullable(),
+  targetDate: date.nullable(),
+  notes: z.string().nullable(),
+  state: sinkingFundStateSchema,
+  position: z.number().int().nonnegative(),
+  currentBalanceMinor: minor.nonnegative(),
+  remainingTargetMinor: minor.nullable(),
+  progressPercent: z.number().nullable(),
+  transactionCount: z.number().int().nonnegative(),
+  createdAt: instant,
+  updatedAt: instant,
+  archivedAt: instant.nullable(),
+  version: z.number().int().nonnegative(),
+});
+export type SinkingFund = z.infer<typeof sinkingFundSchema>;
+
+export const sinkingFundSummarySchema = z.object({
+  totalActiveBalanceMinor: minor.nonnegative(),
+  activeCount: z.number().int().nonnegative(),
+  archivedCount: z.number().int().nonnegative(),
+});
+export type SinkingFundSummary = z.infer<typeof sinkingFundSummarySchema>;
+
+export const sinkingFundListSchema = z.object({
+  summary: sinkingFundSummarySchema,
+  items: z.array(sinkingFundSchema),
+});
+export type SinkingFundList = z.infer<typeof sinkingFundListSchema>;
+
+export const sinkingFundTransactionTypeSchema = z.enum([
+  'OPENING_BALANCE',
+  'CONTRIBUTION',
+  'WITHDRAWAL',
+]);
+export type SinkingFundTransactionType = z.infer<typeof sinkingFundTransactionTypeSchema>;
+
+export const sinkingFundTransactionSchema = z.object({
+  id: uuid,
+  sinkingFundId: uuid,
+  entryId: uuid.nullable(),
+  transactionType: sinkingFundTransactionTypeSchema,
+  amountMinor: minor.positive(),
+  effectiveDate: date,
+  reason: z.string().nullable(),
+  notes: z.string().nullable(),
+  paycheckName: z.string().nullable(),
+  paycheckIncomeDate: date.nullable(),
+  entryName: z.string().nullable(),
+  entryStatus: entryStatusSchema.nullable(),
+  reversedAt: instant.nullable(),
+  reversalReason: z.string().nullable(),
+  createdAt: instant,
+  updatedAt: instant,
+  version: z.number().int().nonnegative(),
+});
+export type SinkingFundTransaction = z.infer<typeof sinkingFundTransactionSchema>;
 
 export const templateEntrySchema = z.object({
   id: uuid,
