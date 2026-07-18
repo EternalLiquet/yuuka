@@ -6,6 +6,8 @@ import com.yuuka.backend.bucket.api.dto.UpdateBucketTransactionRequest;
 import com.yuuka.backend.bucket.application.BucketTransactionService;
 import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.security.AuthenticatedOwner;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -33,8 +35,30 @@ public class BucketTransactionController {
 
   @GetMapping("/entries/{entryId}/bucket-transactions")
   public PageResponse<BucketTransactionResponse> list(
-      @AuthenticationPrincipal Jwt jwt, @PathVariable UUID entryId) {
-    return PageResponse.singlePage(service.list(AuthenticatedOwner.id(jwt), entryId));
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID entryId,
+      @Parameter(
+              schema =
+                  @Schema(
+                      implementation = Integer.class,
+                      type = "integer",
+                      format = "int32",
+                      minimum = "0",
+                      defaultValue = "0"))
+          @RequestParam(defaultValue = "0")
+          int page,
+      @Parameter(
+              schema =
+                  @Schema(
+                      implementation = Integer.class,
+                      type = "integer",
+                      format = "int32",
+                      minimum = "1",
+                      maximum = "100",
+                      defaultValue = "50"))
+          @RequestParam(defaultValue = "50")
+          int size) {
+    return service.list(AuthenticatedOwner.id(jwt), entryId, page, size);
   }
 
   @PostMapping("/entries/{entryId}/bucket-transactions")

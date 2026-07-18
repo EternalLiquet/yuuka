@@ -278,8 +278,11 @@ export function useYuukaApi() {
           { entryIds, templateVersion },
           templateSchema,
         ),
-      bucketTransactions: (entryId: string) =>
-        get(`/entries/${entryId}/bucket-transactions`, pageSchema(bucketTransactionSchema)),
+      bucketTransactions: (entryId: string, page: number, size: number) =>
+        get(
+          `/entries/${entryId}/bucket-transactions?page=${page}&size=${size}`,
+          pageSchema(bucketTransactionSchema),
+        ),
       addBucketTransaction: (
         entryId: string,
         body: { amountMinor: number; description?: string; notes?: string; effectiveDate: string },

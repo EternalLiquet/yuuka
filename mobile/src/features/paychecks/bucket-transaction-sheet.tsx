@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Save, Trash2, X } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { BucketTransaction, Entry } from '@/api/contracts';
@@ -15,6 +15,8 @@ import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 import { today } from './form-schemas';
+
+const BUCKET_TRANSACTION_PAGE_SIZE = 100;
 
 export function BucketTransactionSheet({
   entry,
@@ -35,10 +37,13 @@ export function BucketTransactionSheet({
   const [notes, setNotes] = useState('');
   const [effectiveDate, setEffectiveDate] = useState(today());
   const [error, setError] = useState('');
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: ['entry', entry?.id, 'bucket-transactions'],
-    queryFn: () => api.bucketTransactions(entry!.id),
+    queryFn: ({ pageParam }) =>
+      api.bucketTransactions(entry!.id, pageParam, BUCKET_TRANSACTION_PAGE_SIZE),
     enabled: Boolean(entry),
+    getNextPageParam: (lastPage) => (lastPage.hasNext ? lastPage.page + 1 : undefined),
+    initialPageParam: 0,
   });
   const mutation = useMutation({
     mutationFn: async (action: 'delete' | 'save') => {
@@ -95,6 +100,20 @@ export function BucketTransactionSheet({
   const spentMinor = entry?.spentMinor ?? 0;
   const remainingMinor = entry?.remainingMinor ?? entry?.amountMinor ?? 0;
   const overBudget = Boolean(entry?.overBudget);
+  const transactions = useMemo(() => {
+    const seen = new Set<string>();
+    const rows: BucketTransaction[] = [];
+    for (const page of query.data?.pages ?? []) {
+      for (const transaction of page.items) {
+        if (!seen.has(transaction.id)) {
+          seen.add(transaction.id);
+          rows.push(transaction);
+        }
+      }
+    }
+    return rows;
+  }, [query.data]);
+  const totalPurchases = query.data?.pages[0]?.totalItems ?? 0;
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} visible={Boolean(entry)}>
@@ -180,7 +199,12 @@ export function BucketTransactionSheet({
           <View style={styles.list}>
             <AppText variant="label">Purchases</AppText>
             {query.isPending ? <ActivityIndicator color={colors.accent} /> : null}
-            {query.data?.items.map((transaction) => (
+            {totalPurchases > 0 ? (
+              <AppText style={{ color: colors.muted }} variant="caption">
+                Showing {transactions.length} of {totalPurchases} purchases
+              </AppText>
+            ) : null}
+            {transactions.map((transaction) => (
               <View
                 key={transaction.id}
                 style={[styles.transaction, { borderBottomColor: colors.border }]}
@@ -206,10 +230,18 @@ export function BucketTransactionSheet({
                 />
               </View>
             ))}
-            {query.data?.items.length === 0 ? (
+            {transactions.length === 0 && !query.isPending ? (
               <AppText style={{ color: colors.muted }} variant="caption">
                 No purchases recorded.
               </AppText>
+            ) : null}
+            {query.hasNextPage ? (
+              <Button
+                label="Load older purchases"
+                loading={query.isFetchingNextPage}
+                onPress={() => query.fetchNextPage()}
+                variant="secondary"
+              />
             ) : null}
             {query.isError ? (
               <AppText style={{ color: colors.danger }} variant="error">

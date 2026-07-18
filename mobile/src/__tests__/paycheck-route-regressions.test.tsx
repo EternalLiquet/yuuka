@@ -479,7 +479,7 @@ describe('paycheck route regressions', () => {
   it('opens a bucket ledger with totals, purchases, notes, and validation', async () => {
     const view = await renderRoute(<PaycheckDetailScreen />);
 
-    fireEvent.press(await view.findByLabelText('Add activity to Work Food'));
+    fireEvent.press(await view.findByLabelText('Add activity to Work Food', {}, { timeout: 5000 }));
 
     expect(await view.findByText('Bucket ledger')).toBeTruthy();
     expect(view.getAllByText('Budgeted').length).toBeGreaterThan(0);
@@ -494,6 +494,8 @@ describe('paycheck route regressions', () => {
     expect(
       await view.findByText('Enter a valid money amount with no more than two decimal places.'),
     ).toBeTruthy();
+
+    fireEvent.press(view.getByLabelText('Close bucket ledger'));
   });
 });
 

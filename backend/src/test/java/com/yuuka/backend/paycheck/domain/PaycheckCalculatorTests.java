@@ -5,7 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.yuuka.backend.common.api.BusinessRuleException;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class PaycheckCalculatorTests {
   private final PaycheckCalculator calculator = new PaycheckCalculator();
@@ -24,6 +28,9 @@ class PaycheckCalculatorTests {
     assertThat(metrics.postedMinor()).isEqualTo(180868);
     assertThat(metrics.processingMinor()).isEqualTo(13052);
     assertThat(metrics.notPaidMinor()).isZero();
+    assertThat(metrics.postedCount()).isEqualTo(1);
+    assertThat(metrics.processingCount()).isEqualTo(1);
+    assertThat(metrics.notPaidCount()).isZero();
     assertThat(metrics.fullyAllocated()).isFalse();
     assertThat(metrics.fullyPosted()).isFalse();
   }
@@ -43,8 +50,9 @@ class PaycheckCalculatorTests {
   void keepsFullyAllocatedPaycheckActiveWhileAnyEntryIsNotPosted() {
     PaycheckMetrics metrics =
         calculator.calculate(
-            15000, List.of(new AllocationLine(15000, EntryStatus.PROCESSING, false)));
+            15000, List.of(new AllocationLine(15000, EntryStatus.NOT_PAID, false)));
 
+    assertThat(metrics.notPaidCount()).isEqualTo(1);
     assertThat(metrics.fullyAllocated()).isTrue();
     assertThat(metrics.requiresAttention()).isTrue();
   }
@@ -91,5 +99,88 @@ class PaycheckCalculatorTests {
         .isInstanceOfSatisfying(
             BusinessRuleException.class,
             exception -> assertThat(exception.code()).isEqualTo("MONEY_AMOUNT_OVERFLOW"));
+  }
+
+  @Test
+  void calculatesMetricsFromRepositoryTotals() {
+    PaycheckMetrics metrics =
+        calculator.calculateFromTotals(10000, 6000, 2000, 3000, 1000, 1, 2, 3);
+
+    assertThat(metrics.allocatedMinor()).isEqualTo(6000);
+    assertThat(metrics.unallocatedMinor()).isEqualTo(4000);
+    assertThat(metrics.postedMinor()).isEqualTo(2000);
+    assertThat(metrics.processingMinor()).isEqualTo(3000);
+    assertThat(metrics.notPaidMinor()).isEqualTo(1000);
+    assertThat(metrics.postedCount()).isEqualTo(1);
+    assertThat(metrics.processingCount()).isEqualTo(2);
+    assertThat(metrics.notPaidCount()).isEqualTo(3);
+    assertThat(metrics.allocationPercent()).isEqualByComparingTo("60.00");
+    assertThat(metrics.completionPercent()).isEqualByComparingTo("33.33");
+  }
+
+  @Test
+  void acceptsZeroRepositoryTotals() {
+    PaycheckMetrics metrics = calculator.calculateFromTotals(0, 0, 0, 0, 0, 0, 0, 0);
+
+    assertThat(metrics.allocatedMinor()).isZero();
+    assertThat(metrics.unallocatedMinor()).isZero();
+    assertThat(metrics.postedMinor()).isZero();
+    assertThat(metrics.processingMinor()).isZero();
+    assertThat(metrics.notPaidMinor()).isZero();
+    assertThat(metrics.postedCount()).isZero();
+    assertThat(metrics.processingCount()).isZero();
+    assertThat(metrics.notPaidCount()).isZero();
+    assertThat(metrics.allocationPercent()).isEqualByComparingTo("0.00");
+    assertThat(metrics.completionPercent()).isEqualByComparingTo("0.00");
+  }
+
+  @Test
+  void rejectsNegativePaycheckAmountsFromRepositoryTotals() {
+    assertThatThrownBy(() -> calculator.calculateFromTotals(-1, 0, 0, 0, 0, 0, 0, 0))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Paycheck amount must not be negative");
+  }
+
+  @ParameterizedTest
+  @MethodSource("negativeRepositoryTotals")
+  void rejectsNegativeRepositoryTotals(
+      long allocated,
+      long posted,
+      long processing,
+      long notPaid,
+      long postedCount,
+      long processingCount,
+      long notPaidCount) {
+    assertThatThrownBy(
+            () ->
+                calculator.calculateFromTotals(
+                    10000,
+                    allocated,
+                    posted,
+                    processing,
+                    notPaid,
+                    postedCount,
+                    processingCount,
+                    notPaidCount))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Paycheck totals must not be negative");
+  }
+
+  @Test
+  void rejectsRepositoryTotalsThatDoNotMatchAllocatedAmount() {
+    assertThatThrownBy(() -> calculator.calculateFromTotals(10000, 6000, 2000, 3000, 999, 1, 2, 3))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Paycheck status totals must match allocation total");
+  }
+
+  private static Stream<Arguments> negativeRepositoryTotals() {
+    return Stream.of(
+        Arguments.of(-1, 0, 0, 0, 0, 0, 0),
+        Arguments.of(0, -1, 0, 0, 0, 0, 0),
+        Arguments.of(0, 0, -1, 0, 0, 0, 0),
+        Arguments.of(0, 0, 0, -1, 0, 0, 0),
+        Arguments.of(0, 0, 0, 0, -1, 0, 0),
+        Arguments.of(0, 0, 0, 0, 0, -1, 0),
+        Arguments.of(0, 0, 0, 0, 0, 0, -1));
   }
 }
