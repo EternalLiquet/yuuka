@@ -77,6 +77,8 @@ statuses, bucket purchases, Payback assignments, or copied history.
 - `paybackId` may be supplied on entry create/update to assign that entry to an Active Payback.
 - `sinkingFundId` may be supplied on `SINKING_FUND` entry create/update to assign that entry to an
   Active persistent Sinking Fund.
+- `paybackId` and `sinkingFundId` are mutually exclusive. Requests that supply both return
+  `422 ENTRY_MULTIPLE_BALANCE_ASSIGNMENTS`.
 - Bill entry create/update requests and responses include optional `paymentMethod` values of `AUTOPAY` or `MANUAL`; non-Bill entries must not carry a payment method.
 - `POST /paychecks/{paycheckId}/leftover-entry` creates a normal `BILL` named `LEFTOVER` for the exact current unallocated amount when the supplied paycheck version is current.
 - `PATCH /entries/{id}`
@@ -138,6 +140,9 @@ instead of embedding raw storage values in the message.
 
 Persistent Sinking Fund balances and progress are derived from transaction history. Controllers and
 mobile clients must not persist or duplicate the authoritative balance calculation.
+Posted same-fund contribution replacements are validated against the final prospective balance while
+holding the fund lock; cross-fund moves, unlinking, and entry-type changes must pass the full old
+contribution reversal rule.
 
 ### Templates
 

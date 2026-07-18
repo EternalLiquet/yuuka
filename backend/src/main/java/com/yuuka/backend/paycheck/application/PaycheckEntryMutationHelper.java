@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 class PaycheckEntryMutationHelper {
   PaycheckEntry draftEntry(
       UUID ownerId, UUID paycheckId, DraftPaycheckEntryRequest source, int position) {
+    EntryBalanceAssignmentPolicy.requireExclusive(source.paybackId(), source.sinkingFundId());
     PaycheckEntry entry =
         new PaycheckEntry(
             ownerId,
@@ -34,7 +35,7 @@ class PaycheckEntryMutationHelper {
             source.sinkingFundId() == null
                 ? sinkingValue(source.entryType(), source.targetDate())
                 : null,
-            null,
+            source.paybackId(),
             sinkingValue(source.entryType(), source.sinkingFundId()));
     validateRecurringSource(
         source.entryType(),
@@ -65,6 +66,7 @@ class PaycheckEntryMutationHelper {
   }
 
   PaycheckEntry newEntry(UUID ownerId, UUID paycheckId, CreateEntryRequest request, int position) {
+    EntryBalanceAssignmentPolicy.requireExclusive(request.paybackId(), request.sinkingFundId());
     return new PaycheckEntry(
         ownerId,
         paycheckId,
@@ -88,6 +90,7 @@ class PaycheckEntryMutationHelper {
   }
 
   void update(PaycheckEntry entry, UpdateEntryRequest request) {
+    EntryBalanceAssignmentPolicy.requireExclusive(request.paybackId(), request.sinkingFundId());
     entry.update(
         request.entryType(),
         request.name().trim(),

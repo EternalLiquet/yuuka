@@ -94,6 +94,8 @@ export function EntryEditor({
   }, [entryType, setValue]);
 
   async function submit(values: EntryFormValues) {
+    const persistentSinkingFundId =
+      values.entryType === 'SINKING_FUND' ? values.sinkingFundId || null : null;
     try {
       await onSubmit({
         entryType: values.entryType,
@@ -108,8 +110,8 @@ export function EntryEditor({
             : null,
         payee: values.entryType === 'BILL' && values.payee.trim() ? values.payee.trim() : null,
         notes: values.notes.trim() || null,
-        paybackId: values.paybackId || null,
-        sinkingFundId: values.entryType === 'SINKING_FUND' ? values.sinkingFundId || null : null,
+        paybackId: persistentSinkingFundId ? null : values.paybackId || null,
+        sinkingFundId: persistentSinkingFundId,
         targetMinor:
           values.entryType === 'SINKING_FUND' && !values.sinkingFundId && values.target
             ? parseMoneyToMinor(values.target)
@@ -240,7 +242,10 @@ export function EntryEditor({
                       currentSinkingFundId={entry?.sinkingFundId ?? null}
                       error={sinkingFundsError}
                       loading={sinkingFundsLoading}
-                      onChange={field.onChange}
+                      onChange={(value) => {
+                        field.onChange(value);
+                        if (value) setValue('paybackId', '');
+                      }}
                       onRetry={onRetrySinkingFunds}
                       sinkingFunds={sinkingFunds}
                       value={field.value}
@@ -278,7 +283,10 @@ export function EntryEditor({
                   currentPaybackId={entry?.paybackId ?? null}
                   error={paybacksError}
                   loading={paybacksLoading}
-                  onChange={field.onChange}
+                  onChange={(value) => {
+                    field.onChange(value);
+                    if (value) setValue('sinkingFundId', '');
+                  }}
                   onRetry={onRetryPaybacks}
                   paybacks={paybacks}
                   value={field.value}

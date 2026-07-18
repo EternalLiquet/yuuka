@@ -126,6 +126,8 @@ Store mobile tokens in Expo SecureStore, never plain AsyncStorage.
 - id UUID
 - owner_id
 - paycheck_id
+- payback_id nullable
+- sinking_fund_id nullable
 - entry_type: BILL, SPENDING_BUCKET, SINKING_FUND
 - name
 - amount_minor BIGINT
@@ -141,6 +143,9 @@ Store mobile tokens in Expo SecureStore, never plain AsyncStorage.
 - updated_at
 - deleted_at nullable
 - optimistic-lock version
+
+`payback_id` and `sinking_fund_id` are mutually exclusive. A `sinking_fund_id` may only appear on
+`SINKING_FUND` entries.
 
 ### entry_status_events
 

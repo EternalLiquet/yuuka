@@ -31,6 +31,10 @@ ALTER TABLE paycheck_entries
     ADD CONSTRAINT chk_paycheck_entries_sinking_fund_type
         CHECK (sinking_fund_id IS NULL OR entry_type = 'SINKING_FUND');
 
+ALTER TABLE paycheck_entries
+    ADD CONSTRAINT chk_paycheck_entries_single_balance_assignment
+        CHECK (payback_id IS NULL OR sinking_fund_id IS NULL);
+
 CREATE INDEX idx_paycheck_entries_sinking_fund_owner
     ON paycheck_entries(sinking_fund_id, owner_id)
     WHERE sinking_fund_id IS NOT NULL AND deleted_at IS NULL;

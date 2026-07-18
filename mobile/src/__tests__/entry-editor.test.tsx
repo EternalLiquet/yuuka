@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 
-import type { Entry, Payback } from '@/api/contracts';
+import type { Entry, Payback, SinkingFund } from '@/api/contracts';
 import { EntryEditor } from '@/features/paychecks/entry-editor';
 
 jest.mock('@/settings/settings-provider', () => ({
@@ -112,6 +112,46 @@ describe('EntryEditor', () => {
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ paybackId: null });
   });
 
+  it('keeps Payback and persistent Sinking Fund selections mutually exclusive', async () => {
+    const onSubmit = jest.fn().mockResolvedValue(undefined);
+    const view = await render(
+      <EntryEditor
+        entry={entry({
+          entryType: 'SINKING_FUND',
+          paybackId: '11111111-1111-4111-8111-111111111101',
+        })}
+        onClose={jest.fn()}
+        onSubmit={onSubmit}
+        paybacks={[payback({ id: '11111111-1111-4111-8111-111111111101', name: 'Car repair' })]}
+        sinkingFunds={[
+          sinkingFund({ id: '11111111-1111-4111-8111-111111111301', name: 'Car fund' }),
+        ]}
+        visible
+      />,
+    );
+
+    await fireEvent.press(view.getByLabelText('Sinking Fund, selected No persistent fund'));
+    await fireEvent.press(view.getByText('Car fund'));
+    await fireEvent.press(view.getByLabelText('Save entry'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      paybackId: null,
+      sinkingFundId: '11111111-1111-4111-8111-111111111301',
+    });
+
+    onSubmit.mockClear();
+    await fireEvent.press(view.getByLabelText('Apply to Payback, selected No Payback'));
+    await fireEvent.press(view.getByText('Car repair'));
+    await fireEvent.press(view.getByLabelText('Save entry'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      paybackId: '11111111-1111-4111-8111-111111111101',
+      sinkingFundId: null,
+    });
+  });
+
   it('shows Payback selector loading, error retry, and empty states', async () => {
     const retry = jest.fn();
     const loading = await render(
@@ -179,6 +219,27 @@ function payback(overrides: Partial<Payback> = {}): Payback {
     repaymentCount: 0,
     source: null,
     state: 'ACTIVE',
+    updatedAt: '2026-07-12T12:30:00Z',
+    version: 0,
+    ...overrides,
+  };
+}
+
+function sinkingFund(overrides: Partial<SinkingFund> = {}): SinkingFund {
+  return {
+    archivedAt: null,
+    createdAt: '2026-07-12T12:00:00Z',
+    currentBalanceMinor: 0,
+    id: '11111111-1111-4111-8111-111111111301',
+    name: 'Sinking fund',
+    notes: null,
+    position: 0,
+    progressPercent: null,
+    remainingTargetMinor: null,
+    state: 'ACTIVE',
+    targetDate: null,
+    targetMinor: null,
+    transactionCount: 0,
     updatedAt: '2026-07-12T12:30:00Z',
     version: 0,
     ...overrides,

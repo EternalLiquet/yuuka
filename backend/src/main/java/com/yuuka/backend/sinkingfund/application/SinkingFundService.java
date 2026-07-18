@@ -36,6 +36,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -328,20 +329,7 @@ public class SinkingFundService {
 
   @Transactional
   public void validateAssignment(UUID ownerId, PaycheckEntry entry, UUID fundId) {
-    if (fundId == null) {
-      return;
-    }
-    if (entry.getEntryType() != EntryType.SINKING_FUND) {
-      throw new BusinessRuleException("Only Sinking Fund entries can link to a Sinking Fund.");
-    }
-    if (entry.getAmountMinor() <= 0) {
-      throw new BusinessRuleException(
-          "SINKING_FUND_CONTRIBUTION_AMOUNT_REQUIRED",
-          "Linked Sinking Fund contributions must be greater than $0.00.",
-          Map.of());
-    }
-    SinkingFund fund = requireFundForUpdate(ownerId, fundId);
-    requireActive(fund);
+    validateAssignment(ownerId, entry, fundId, null);
   }
 
   @Transactional
@@ -357,16 +345,23 @@ public class SinkingFundService {
         previousStatus == EntryStatus.POSTED
             && (previousAmountMinor != entry.getAmountMinor()
                 || !sameId(previousFundId, nextFundId));
+    if (contributionChanged && previousFundId != null && sameId(previousFundId, nextFundId)) {
+      replacePostedEntryContribution(ownerId, entry, recordedAt);
+      return;
+    }
+    Map<UUID, SinkingFund> lockedFunds =
+        contributionChanged ? lockFundsForUpdate(ownerId, previousFundId, nextFundId) : Map.of();
     if (contributionChanged) {
-      reversePostedEntryContribution(ownerId, entry.getId(), recordedAt);
+      reversePostedEntryContribution(
+          ownerId, entry.getId(), recordedAt, lockedFunds.get(previousFundId));
     }
     if (nextFundId != null && (previousStatus != EntryStatus.POSTED || contributionChanged)) {
-      validateAssignment(ownerId, entry, nextFundId);
+      validateAssignment(ownerId, entry, nextFundId, lockedFunds.get(nextFundId));
     }
     if (entry.getStatus() == EntryStatus.POSTED
         && nextFundId != null
         && (previousStatus != EntryStatus.POSTED || contributionChanged)) {
-      applyPostedEntryContribution(ownerId, entry, recordedAt);
+      applyPostedEntryContribution(ownerId, entry, recordedAt, lockedFunds.get(nextFundId));
     }
   }
 
@@ -377,10 +372,15 @@ public class SinkingFundService {
       return;
     }
     SinkingFund fund = requireFundForUpdate(ownerId, fundId);
+    applyPostedEntryContribution(ownerId, entry, recordedAt, fund);
+  }
+
+  private void applyPostedEntryContribution(
+      UUID ownerId, PaycheckEntry entry, Instant recordedAt, SinkingFund fund) {
     if (transactions.findActiveContributionByEntryIdForUpdate(entry.getId(), ownerId).isPresent()) {
       return;
     }
-    validateAssignment(ownerId, entry, fundId);
+    validateAssignment(ownerId, entry, fund.getId(), fund);
     MoneyArithmetic.add(currentBalance(ownerId, fund.getId()), entry.getAmountMinor());
     transactions.saveAndFlush(
         new SinkingFundTransaction(
@@ -398,15 +398,56 @@ public class SinkingFundService {
 
   @Transactional
   public void reversePostedEntryContribution(UUID ownerId, UUID entryId, Instant reversedAt) {
+    reversePostedEntryContribution(ownerId, entryId, reversedAt, null);
+  }
+
+  private void reversePostedEntryContribution(
+      UUID ownerId, UUID entryId, Instant reversedAt, SinkingFund lockedFund) {
     transactions
         .findActiveContributionByEntryIdForUpdate(entryId, ownerId)
         .ifPresent(
             transaction -> {
-              SinkingFund fund = requireFundForUpdate(ownerId, transaction.getSinkingFundId());
+              SinkingFund fund =
+                  lockedFund == null
+                      ? requireFundForUpdate(ownerId, transaction.getSinkingFundId())
+                      : lockedFund;
               assertContributionCanBeReversed(ownerId, fund.getId(), transaction.getAmountMinor());
               transaction.reverse(reversedAt, null);
               transactions.flush();
               fund.touch(reversedAt);
+              funds.flush();
+            });
+  }
+
+  private void replacePostedEntryContribution(
+      UUID ownerId, PaycheckEntry entry, Instant recordedAt) {
+    SinkingFund fund = requireFundForUpdate(ownerId, entry.getSinkingFundId());
+    transactions
+        .findActiveContributionByEntryIdForUpdate(entry.getId(), ownerId)
+        .ifPresent(
+            transaction -> {
+              validateAssignment(ownerId, entry, fund.getId(), fund);
+              long balanceAfterOldContribution =
+                  MoneyArithmetic.subtract(
+                      currentBalance(ownerId, fund.getId()), transaction.getAmountMinor());
+              long finalBalance =
+                  MoneyArithmetic.add(balanceAfterOldContribution, entry.getAmountMinor());
+              if (finalBalance < 0) {
+                throwContributionReversalExceedsBalance(-finalBalance);
+              }
+              transaction.reverse(recordedAt, null);
+              transactions.flush();
+              transactions.saveAndFlush(
+                  new SinkingFundTransaction(
+                      ownerId,
+                      fund.getId(),
+                      entry.getId(),
+                      SinkingFundTransactionType.CONTRIBUTION,
+                      entry.getAmountMinor(),
+                      ownerLocalDateService.currentDate(ownerId),
+                      null,
+                      null));
+              fund.touch(recordedAt);
               funds.flush();
             });
   }
@@ -419,6 +460,41 @@ public class SinkingFundService {
     return funds
         .findByIdAndOwnerIdForUpdate(fundId, ownerId)
         .orElseThrow(ResourceNotFoundException::new);
+  }
+
+  private void validateAssignment(
+      UUID ownerId, PaycheckEntry entry, UUID fundId, SinkingFund lockedFund) {
+    if (fundId == null) {
+      return;
+    }
+    if (entry.getEntryType() != EntryType.SINKING_FUND) {
+      throw new BusinessRuleException("Only Sinking Fund entries can link to a Sinking Fund.");
+    }
+    if (entry.getAmountMinor() <= 0) {
+      throw new BusinessRuleException(
+          "SINKING_FUND_CONTRIBUTION_AMOUNT_REQUIRED",
+          "Linked Sinking Fund contributions must be greater than $0.00.",
+          Map.of());
+    }
+    SinkingFund fund = lockedFund == null ? requireFundForUpdate(ownerId, fundId) : lockedFund;
+    requireActive(fund);
+  }
+
+  private Map<UUID, SinkingFund> lockFundsForUpdate(UUID ownerId, UUID firstId, UUID secondId) {
+    List<UUID> fundIds =
+        java.util.stream.Stream.of(firstId, secondId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .sorted()
+            .toList();
+    if (fundIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<UUID, SinkingFund> locked = new LinkedHashMap<>();
+    for (UUID fundId : fundIds) {
+      locked.put(fundId, requireFundForUpdate(ownerId, fundId));
+    }
+    return locked;
   }
 
   private void requireActive(SinkingFund fund) {
@@ -540,11 +616,15 @@ public class SinkingFundService {
   private void assertContributionCanBeReversed(UUID ownerId, UUID fundId, long amountMinor) {
     long balance = currentBalance(ownerId, fundId);
     if (amountMinor > balance) {
-      throw new BusinessRuleException(
-          "SINKING_FUND_CONTRIBUTION_REVERSAL_EXCEEDS_BALANCE",
-          "This contribution cannot be reversed because withdrawals have already used it.",
-          Map.of("amountMinor", amountMinor - balance, "currencyCode", "USD"));
+      throwContributionReversalExceedsBalance(amountMinor - balance);
     }
+  }
+
+  private void throwContributionReversalExceedsBalance(long shortfallMinor) {
+    throw new BusinessRuleException(
+        "SINKING_FUND_CONTRIBUTION_REVERSAL_EXCEEDS_BALANCE",
+        "This contribution cannot be reversed because withdrawals have already used it.",
+        Map.of("amountMinor", shortfallMinor, "currencyCode", "USD"));
   }
 
   private record Balance(long currentBalanceMinor, long transactionCount) {

@@ -63,6 +63,9 @@ paycheck contribution. Posted status creates one active contribution transaction
 amount; moving backward, deleting the entry, or changing a Posted linked entry reverses the active
 contribution instead of deleting history. Returning to Posted creates a new active contribution,
 while a partial unique index prevents duplicate active contribution rows for the same entry.
+Same-fund Posted contribution replacements lock the fund and validate the final prospective balance
+instead of requiring the old contribution to be fully reversible in isolation. Cross-fund
+reassignments lock touched funds in stable UUID order before reversing and applying contributions.
 
 Current Sinking Fund balances are derived from unreversed opening-balance, contribution, and
 withdrawal transactions. The Sinking Fund table stores metadata, state, order, and target fields,

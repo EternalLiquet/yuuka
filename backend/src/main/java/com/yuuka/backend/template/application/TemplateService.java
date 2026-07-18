@@ -6,10 +6,12 @@ import com.yuuka.backend.bucket.application.SpendingBucketPerformanceService;
 import com.yuuka.backend.common.api.BusinessRuleException;
 import com.yuuka.backend.common.api.ConflictException;
 import com.yuuka.backend.common.api.ResourceNotFoundException;
+import com.yuuka.backend.payback.application.PaybackService;
 import com.yuuka.backend.paycheck.api.dto.CreatePaycheckFromTemplateRequest;
 import com.yuuka.backend.paycheck.api.dto.EntryResponse;
 import com.yuuka.backend.paycheck.api.dto.PaycheckResponse;
 import com.yuuka.backend.paycheck.api.dto.TemplateApplicationEntryRequest;
+import com.yuuka.backend.paycheck.application.EntryBalanceAssignmentPolicy;
 import com.yuuka.backend.paycheck.domain.AllocationLine;
 import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryStatus;
@@ -56,6 +58,7 @@ public class TemplateService {
   private final JpaEntryStatusEventRepository statusEvents;
   private final PaycheckCalculator calculator;
   private final SpendingBucketPerformanceService spendingBucketPerformanceService;
+  private final PaybackService paybackService;
   private final SinkingFundService sinkingFundService;
   private final OwnerLocalDateService ownerLocalDateService;
   private final AuditService auditService;
@@ -69,6 +72,7 @@ public class TemplateService {
       JpaEntryStatusEventRepository statusEvents,
       PaycheckCalculator calculator,
       SpendingBucketPerformanceService spendingBucketPerformanceService,
+      PaybackService paybackService,
       SinkingFundService sinkingFundService,
       OwnerLocalDateService ownerLocalDateService,
       AuditService auditService,
@@ -80,6 +84,7 @@ public class TemplateService {
     this.statusEvents = statusEvents;
     this.calculator = calculator;
     this.spendingBucketPerformanceService = spendingBucketPerformanceService;
+    this.paybackService = paybackService;
     this.sinkingFundService = sinkingFundService;
     this.ownerLocalDateService = ownerLocalDateService;
     this.auditService = auditService;
@@ -348,8 +353,9 @@ public class TemplateService {
               source.notes(),
               source.targetMinor(),
               source.targetDate(),
-              null,
+              source.paybackId(),
               source.sinkingFundId());
+      paybackService.validateAssignment(ownerId, entry, source.paybackId());
       sinkingFundService.validateAssignment(ownerId, entry, source.sinkingFundId());
       validateRecurringSource(
           source.entryType(),
@@ -421,11 +427,13 @@ public class TemplateService {
                     entry.getTargetDate(),
                     null,
                     null,
+                    null,
                     null))
         .toList();
   }
 
   private ApplicationEntry fromApplicationRequest(TemplateApplicationEntryRequest request) {
+    EntryBalanceAssignmentPolicy.requireExclusive(request.paybackId(), request.sinkingFundId());
     return new ApplicationEntry(
         request.entryType(),
         request.name().trim(),
@@ -441,6 +449,7 @@ public class TemplateService {
         request.sinkingFundId() == null
             ? sinkingValue(request.entryType(), request.targetDate())
             : null,
+        request.paybackId(),
         request.sinkingFundId(),
         request.sourceRecurringBillDefinitionId(),
         request.sourceRecurringOccurrenceDate());
@@ -556,6 +565,7 @@ public class TemplateService {
       String notes,
       Long targetMinor,
       LocalDate targetDate,
+      UUID paybackId,
       UUID sinkingFundId,
       UUID sourceRecurringBillDefinitionId,
       LocalDate sourceRecurringOccurrenceDate) {}

@@ -172,8 +172,10 @@ still reserves only that paycheck's contribution in allocation. Linking does not
 balance until the entry reaches Posted. Moving a linked entry out of Posted reverses the active
 contribution; returning it to Posted creates a new active contribution while preserving reversed
 history. Editing a Posted linked entry's amount or assignment reverses the old contribution and
-applies the new one transactionally. Deleting a Posted linked entry reverses its active
-contribution.
+applies the new one transactionally. When a Posted entry stays linked to the same persistent fund,
+Yuuka validates the final replacement balance, `current - old contribution + new contribution`, so
+valid net replacements are allowed even if a full standalone reversal would temporarily overdraw the
+fund. Deleting a Posted linked entry reverses its active contribution.
 
 Unlinked Sinking Fund entries retain entry-level target amount and target date for lightweight
 per-paycheck planning. Linked entries use the persistent fund's target fields and return null
@@ -270,6 +272,9 @@ names such as `amountMinor`.
 A Payback tracks money the owner borrowed from themself and intends to repay through paycheck
 entries. It is separate from allocation: assigning a paycheck entry to a Payback does not change
 the Payback balance until that entry reaches Posted status.
+
+A single entry cannot be assigned to both a Payback and a persistent Sinking Fund. The user must
+choose which balance the Posted entry will affect.
 
 Payback terminology:
 

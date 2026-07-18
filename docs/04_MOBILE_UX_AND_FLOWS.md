@@ -201,8 +201,9 @@ Sinking Fund:
 - optional target,
 - optional target date.
 
-When a persistent Sinking Fund is selected, the editor sends the assignment and clears entry-level
-target fields. Posted contributions and derived balances are read back from the API.
+When a persistent Sinking Fund is selected, the editor sends the assignment, clears entry-level
+target fields, and clears any Payback selection. Selecting a Payback clears the persistent Sinking
+Fund selection. Posted contributions and derived balances are read back from the API.
 
 ## History
 
@@ -344,7 +345,8 @@ Create/edit fields:
 
 Helper text must explain the difference between original amount owed and amount currently left.
 Paycheck entry editing exposes an "Apply to Payback" selector. Repayment applies only when the
-linked entry reaches Posted status.
+linked entry reaches Posted status. Selecting a Payback clears any persistent Sinking Fund
+assignment so one entry cannot affect both balances.
 
 ## Sinking Funds menu destination
 

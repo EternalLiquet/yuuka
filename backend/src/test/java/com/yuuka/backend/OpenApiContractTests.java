@@ -169,6 +169,9 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     assertThat(sinkingFundSizeSchema.path("maximum").asInt()).isEqualTo(100);
     assertThat(sinkingFundSizeSchema.path("default").asInt()).isEqualTo(50);
 
+    assertBalanceAssignmentSchema(generated, "DraftPaycheckEntryRequest");
+    assertBalanceAssignmentSchema(generated, "TemplateApplicationEntryRequest");
+
     Path generatedPath = Path.of("build", "generated", "openapi.json");
     Files.createDirectories(generatedPath.getParent());
     objectMapper.writerWithDefaultPrettyPrinter().writeValue(generatedPath.toFile(), generated);
@@ -185,5 +188,14 @@ class OpenApiContractTests extends AbstractIntegrationTest {
       }
     }
     throw new AssertionError("Missing OpenAPI parameter: " + name);
+  }
+
+  private void assertBalanceAssignmentSchema(JsonNode generated, String schemaName) {
+    JsonNode properties =
+        generated.path("components").path("schemas").path(schemaName).path("properties");
+    assertThat(properties.path("paybackId").path("type").asText()).isEqualTo("string");
+    assertThat(properties.path("paybackId").path("format").asText()).isEqualTo("uuid");
+    assertThat(properties.path("sinkingFundId").path("type").asText()).isEqualTo("string");
+    assertThat(properties.path("sinkingFundId").path("format").asText()).isEqualTo("uuid");
   }
 }

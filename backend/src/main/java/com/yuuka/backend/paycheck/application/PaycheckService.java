@@ -138,6 +138,7 @@ public class PaycheckService {
     for (int index = 0; index < requestedEntries.size(); index++) {
       DraftPaycheckEntryRequest source = requestedEntries.get(index);
       PaycheckEntry entry = entryMutations.draftEntry(ownerId, paycheck.getId(), source, index);
+      paybackService.validateAssignment(ownerId, entry, source.paybackId());
       sinkingFundService.validateAssignment(ownerId, entry, source.sinkingFundId());
       entry = entries.saveAndFlush(entry);
       createdEntries.add(entry);
@@ -391,6 +392,7 @@ public class PaycheckService {
     EntryStatus previous = entry.transitionTo(request.toStatus());
     Instant recordedAt = clock.instant();
     if (previous != EntryStatus.POSTED && request.toStatus() == EntryStatus.POSTED) {
+      EntryBalanceAssignmentPolicy.requireExclusive(entry.getPaybackId(), entry.getSinkingFundId());
       paybackService.applyPostedEntryRepayment(ownerId, entry, recordedAt);
       sinkingFundService.applyPostedEntryContribution(ownerId, entry, recordedAt);
     } else if (previous == EntryStatus.POSTED && request.toStatus() != EntryStatus.POSTED) {

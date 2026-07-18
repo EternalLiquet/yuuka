@@ -458,6 +458,51 @@ class TemplateWorkflowTests extends AbstractIntegrationTest {
         paycheckCountBefore, entryCountBefore, statusCountBefore, auditCountBefore);
   }
 
+  @Test
+  void rejectsTemplateApplicationWithMultipleBalanceAssignmentsTransactionally() throws Exception {
+    String token = registerAndGetAccessToken("templates-exclusive-assignments@yuuka.local");
+    JsonNode template = createTemplate(token, "Exclusive Source", 120000);
+    JsonNode fund = createSinkingFund(token, "Exclusive Fund");
+    JsonNode payback = createPayback(token, "Exclusive Loan", 5000);
+    long paycheckCountBefore = tableCount("paychecks");
+    long entryCountBefore = tableCount("paycheck_entries");
+    long statusCountBefore = tableCount("entry_status_events");
+    long auditCountBefore = tableCount("audit_events");
+
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/from-template")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "templateId":"%s",
+                      "name":"Bad Assignment",
+                      "amountMinor":1000,
+                      "incomeDate":"2026-07-17",
+                      "entries":[
+                        {
+                          "entryType":"SINKING_FUND",
+                          "name":"Both",
+                          "amountMinor":1000,
+                          "paybackId":"%s",
+                          "sinkingFundId":"%s"
+                        }
+                      ]
+                    }
+                    """
+                        .formatted(
+                            template.path("id").asText(),
+                            payback.path("id").asText(),
+                            fund.path("id").asText())))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("ENTRY_MULTIPLE_BALANCE_ASSIGNMENTS"));
+
+    assertPaycheckApplicationCounts(
+        paycheckCountBefore, entryCountBefore, statusCountBefore, auditCountBefore);
+  }
+
   private JsonNode createTemplate(String token, String name, long totalMinor) throws Exception {
     MvcResult result =
         mockMvc
@@ -543,6 +588,32 @@ class TemplateWorkflowTests extends AbstractIntegrationTest {
                 get("/api/v1/sinking-funds/{id}", fundId)
                     .header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
+            .andReturn();
+    return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private JsonNode createPayback(String token, String name, long openingRemainingAmountMinor)
+      throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/api/v1/paybacks")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "name":%s,
+                          "originalAmountMinor":%d,
+                          "openingRemainingAmountMinor":%d,
+                          "borrowedDate":"2026-07-01"
+                        }
+                        """
+                            .formatted(
+                                objectMapper.writeValueAsString(name),
+                                openingRemainingAmountMinor,
+                                openingRemainingAmountMinor)))
+            .andExpect(status().isCreated())
             .andReturn();
     return objectMapper.readTree(result.getResponse().getContentAsString());
   }

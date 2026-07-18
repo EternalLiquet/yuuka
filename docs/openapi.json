@@ -3538,6 +3538,10 @@
             "type" : "string",
             "format" : "date"
           },
+          "paybackId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
           "sinkingFundId" : {
             "type" : "string",
             "format" : "uuid"
@@ -3634,6 +3638,10 @@
           "targetDate" : {
             "type" : "string",
             "format" : "date"
+          },
+          "paybackId" : {
+            "type" : "string",
+            "format" : "uuid"
           },
           "sinkingFundId" : {
             "type" : "string",
