@@ -109,7 +109,7 @@ jobs:
           mkdir -p ../artifacts/android-e2e-apk
           cp "$apk" ../artifacts/android-e2e-apk/app-e2e.apk
       - name: Upload E2E APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-e2e-apk
           if-no-files-found: error
@@ -199,7 +199,7 @@ jobs:
           script: bash .github/scripts/android-e2e.sh "${{ matrix.flow }}" "artifacts/android-e2e-apk/app-e2e.apk"
       - name: Upload Android E2E diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           if-no-files-found: ignore
