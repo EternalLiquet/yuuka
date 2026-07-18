@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Plus } from 'lucide-react-native';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { ExpenseLedger, ExpenseLedgerState } from '@/api/contracts';
@@ -29,16 +29,28 @@ const STATE_OPTIONS = [
   { label: 'Settled', value: 'SETTLED' },
 ] as const;
 
+const PAGE_SIZE = 50;
+
 export default function ExpenseLedgersScreen() {
   const api = useYuukaApi();
   const router = useRouter();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const [state, setState] = useState<ExpenseLedgerState>('OPEN');
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: ['expense-ledgers', state],
-    queryFn: () => api.expenseLedgers(state),
+    queryFn: ({ pageParam }) => api.expenseLedgers(state, pageParam, PAGE_SIZE),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => (lastPage.hasNext ? lastPage.page + 1 : undefined),
   });
+  const ledgers = useMemo(() => {
+    const byId = new Map<string, ExpenseLedger>();
+    query.data?.pages.forEach((page) =>
+      page.items.forEach((ledger) => byId.set(ledger.id, ledger)),
+    );
+    return [...byId.values()];
+  }, [query.data?.pages]);
+  const totalItems = query.data?.pages[0]?.totalItems ?? 0;
   const showColdLoader = useMinimumVisibleDuration(query.isPending && !query.data, 750);
 
   if (showColdLoader) {
@@ -53,7 +65,7 @@ export default function ExpenseLedgersScreen() {
     <Screen>
       <FlatList
         contentContainerStyle={styles.content}
-        data={query.data?.items ?? []}
+        data={ledgers}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
           query.isError && !query.data ? (
@@ -77,13 +89,30 @@ export default function ExpenseLedgersScreen() {
             />
           )
         }
+        ListFooterComponent={
+          query.hasNextPage || query.isFetchNextPageError ? (
+            <View style={styles.footer}>
+              {query.isFetchNextPageError ? (
+                <AppText style={{ color: colors.danger }} variant="error">
+                  Older Expense Ledgers could not be loaded.
+                </AppText>
+              ) : null}
+              <Button
+                label={query.isFetchNextPageError ? 'Retry older ledgers' : 'Load older ledgers'}
+                loading={query.isFetchingNextPage}
+                onPress={() => void query.fetchNextPage()}
+                variant="secondary"
+              />
+            </View>
+          ) : null
+        }
         ListHeaderComponent={
           <View style={styles.header}>
             <View style={styles.titleRow}>
               <View style={styles.titleBlock}>
                 <AppText variant="title">Expense Ledgers</AppText>
                 <AppText style={{ color: colors.muted }} variant="caption">
-                  {query.data?.totalItems ?? 0} {state.toLowerCase()}
+                  Showing {ledgers.length} of {totalItems} {state.toLowerCase()} ledgers
                 </AppText>
               </View>
               <Button
@@ -160,6 +189,7 @@ function LedgerRow({
 const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   content: { flexGrow: 1, gap: 12, padding: 16, paddingBottom: 28 },
+  footer: { gap: 8, paddingTop: 4 },
   header: { gap: 13, marginBottom: 2 },
   ledgerRow: {
     alignItems: 'center',

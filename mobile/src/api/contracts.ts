@@ -242,6 +242,7 @@ export const expenseLedgerSettlementSchema = z.object({
   settlementType: expenseLedgerSettlementTypeSchema,
   settlementAmountMinor: minor.positive(),
   targetId: uuid,
+  targetPaycheckId: uuid.nullable(),
   settledAt: instant,
   createdAt: instant,
 });

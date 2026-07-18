@@ -11,6 +11,7 @@ public record ExpenseLedgerSettlementResponse(
     ExpenseLedgerSettlementType settlementType,
     long settlementAmountMinor,
     UUID targetId,
+    UUID targetPaycheckId,
     Instant settledAt,
     Instant createdAt) {
   public static ExpenseLedgerSettlementResponse from(ExpenseLedgerSettlement settlement) {
@@ -20,6 +21,7 @@ public record ExpenseLedgerSettlementResponse(
         settlement.getSettlementType(),
         settlement.getSettlementAmountMinor(),
         settlement.getTargetId(),
+        settlement.getTargetPaycheckId(),
         settlement.getSettledAt(),
         settlement.getCreatedAt());
   }

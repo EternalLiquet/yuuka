@@ -51,6 +51,7 @@ CREATE TABLE expense_ledger_settlements (
     settlement_type VARCHAR(20) NOT NULL,
     settlement_amount_minor BIGINT NOT NULL,
     target_id UUID NOT NULL,
+    target_paycheck_id UUID,
     settled_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     CONSTRAINT fk_expense_ledger_settlements_owner FOREIGN KEY (ledger_id, owner_id)
@@ -58,7 +59,11 @@ CREATE TABLE expense_ledger_settlements (
     CONSTRAINT uq_expense_ledger_settlements_id_owner UNIQUE (id, owner_id),
     CONSTRAINT uq_expense_ledger_settlements_ledger UNIQUE (ledger_id),
     CONSTRAINT chk_expense_ledger_settlements_type CHECK (settlement_type IN ('BILL', 'PAYBACK')),
-    CONSTRAINT chk_expense_ledger_settlements_amount CHECK (settlement_amount_minor > 0)
+    CONSTRAINT chk_expense_ledger_settlements_amount CHECK (settlement_amount_minor > 0),
+    CONSTRAINT chk_expense_ledger_settlements_paycheck_target CHECK (
+        (settlement_type = 'BILL' AND target_paycheck_id IS NOT NULL)
+        OR (settlement_type = 'PAYBACK' AND target_paycheck_id IS NULL)
+    )
 );
 
 CREATE INDEX idx_expense_ledger_settlements_owner_target

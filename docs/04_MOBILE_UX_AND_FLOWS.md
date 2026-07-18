@@ -210,7 +210,8 @@ Fund selection. Posted contributions and derived balances are read back from the
 
 The Ledgers tab supports Open, Finalized, and Settled states. List rows show the ledger name,
 derived total, item count, latest expense date when available, loading, stale, empty, retry, and
-pull-to-refresh states.
+pull-to-refresh states. Each state has an isolated paged cache. Load older ledgers appends later
+pages with ID deduplication, exposes the loaded and total counts, and keeps every ledger reachable.
 
 The detail screen shows the derived total and items. Open ledgers provide compact repeated item
 entry with Save and add another plus Save and close, preserve input after failed saves, and allow
@@ -220,6 +221,8 @@ Settle as Payback actions. Settled ledgers are read-only and show the created ta
 Bill settlement review requires choosing an active paycheck and shows each paycheck's available
 unallocated amount. Payback settlement creates the Payback with the derived total and latest expense
 date default. Both settlement actions guard repeated taps and refresh the affected target caches.
+Settled Bill links open the containing paycheck ID stored by the settlement; Payback links continue
+to open the Payback target ID.
 
 ## History
 

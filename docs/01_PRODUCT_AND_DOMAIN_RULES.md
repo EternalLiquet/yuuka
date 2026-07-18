@@ -259,6 +259,10 @@ Expense items support a positive amount, a name or merchant, an expense date tha
 future, and optional notes. Categories, receipts, OCR, tax fields, payment accounts, tags, and
 spreadsheet UI are outside the current feature.
 
+Item creates and updates validate the final prospective ledger total while holding the ledger write
+lock. Exactly the signed 64-bit maximum is valid; a larger total is rejected atomically with
+`MONEY_AMOUNT_OVERFLOW` before an item, ledger version change, or audit event is persisted.
+
 A Finalized ledger may settle exactly once as either:
 
 - one ordinary Bill entry in an active paycheck that accepts the derived total, or
@@ -268,6 +272,10 @@ Settlement recalculates the total server-side in the settlement transaction. The
 Payback stores nullable Expense Ledger provenance for navigation only. Later target edits do not
 modify the ledger, later ledger reads do not synchronize the target, and target deletion does not
 reopen or delete the ledger.
+
+Settlement provenance stores the created Bill entry ID separately from its containing paycheck ID.
+Payback settlement stores the Payback ID and no paycheck ID, so one target UUID never has two
+navigation meanings.
 
 ## Dates and auditing
 

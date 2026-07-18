@@ -146,7 +146,8 @@ contribution reversal rule.
 
 ### Expense Ledgers
 
-- `GET /expense-ledgers?state=OPEN|FINALIZED|SETTLED`
+- `GET /expense-ledgers?state=OPEN|FINALIZED|SETTLED&page=0&size=50` returns deterministic pages;
+  page defaults to 0 and size defaults to 50 with a maximum of 100.
 - `POST /expense-ledgers`
 - `GET /expense-ledgers/{ledgerId}`
 - `PATCH /expense-ledgers/{ledgerId}`
@@ -163,6 +164,12 @@ Clients never submit a settlement amount. Settlement requests carry the current 
 reviewed target metadata only. The backend locks the ledger, recalculates the derived total, creates
 the Bill or Payback through normal target behavior, records one immutable settlement row, and marks
 the ledger Settled in one transaction.
+
+Item writes validate the exact prospective total under the owner-scoped ledger lock. Totals above
+signed 64-bit return `422 MONEY_AMOUNT_OVERFLOW` with `details.currencyCode` and the normal trace ID,
+and the transaction rolls back the item, ledger touch/version, and audit append. Settlement responses
+use `targetId` for the created entry or Payback and nullable `targetPaycheckId` only for the Bill's
+containing paycheck.
 
 ### Templates
 

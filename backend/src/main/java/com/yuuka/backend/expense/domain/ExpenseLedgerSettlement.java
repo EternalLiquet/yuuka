@@ -35,6 +35,9 @@ public class ExpenseLedgerSettlement {
   @Column(name = "target_id", nullable = false)
   private UUID targetId;
 
+  @Column(name = "target_paycheck_id")
+  private UUID targetPaycheckId;
+
   @Column(name = "settled_at", nullable = false)
   private Instant settledAt;
 
@@ -49,12 +52,14 @@ public class ExpenseLedgerSettlement {
       ExpenseLedgerSettlementType settlementType,
       long settlementAmountMinor,
       UUID targetId,
+      UUID targetPaycheckId,
       Instant settledAt) {
     this.ownerId = ownerId;
     this.ledgerId = ledgerId;
     this.settlementType = settlementType;
     this.settlementAmountMinor = settlementAmountMinor;
     this.targetId = targetId;
+    this.targetPaycheckId = targetPaycheckId;
     this.settledAt = settledAt;
   }
 
@@ -85,6 +90,10 @@ public class ExpenseLedgerSettlement {
 
   public UUID getTargetId() {
     return targetId;
+  }
+
+  public UUID getTargetPaycheckId() {
+    return targetPaycheckId;
   }
 
   public Instant getSettledAt() {

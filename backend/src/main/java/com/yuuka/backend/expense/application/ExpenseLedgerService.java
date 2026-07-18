@@ -4,6 +4,7 @@ import com.yuuka.backend.audit.application.AuditService;
 import com.yuuka.backend.auth.application.OwnerLocalDateService;
 import com.yuuka.backend.common.api.BusinessRuleException;
 import com.yuuka.backend.common.api.ConflictException;
+import com.yuuka.backend.common.api.MoneyArithmetic;
 import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.api.ResourceNotFoundException;
 import com.yuuka.backend.expense.api.dto.CreateExpenseLedgerItemRequest;
@@ -142,6 +143,7 @@ public class ExpenseLedgerService {
             ? ownerLocalDateService.currentDate(ownerId)
             : request.expenseDate();
     validateItem(request.name(), request.merchant(), request.amountMinor(), expenseDate, ownerId);
+    MoneyArithmetic.add(responses.totalsFor(ownerId, ledgerId).totalMinor(), request.amountMinor());
     ExpenseLedgerItem item =
         items.saveAndFlush(
             new ExpenseLedgerItem(
@@ -176,6 +178,9 @@ public class ExpenseLedgerService {
     assertVersion(item.getVersion(), request.version());
     validateItem(
         request.name(), request.merchant(), request.amountMinor(), request.expenseDate(), ownerId);
+    long currentTotal = responses.totalsFor(ownerId, ledger.getId()).totalMinor();
+    long totalWithoutItem = MoneyArithmetic.subtract(currentTotal, item.getAmountMinor());
+    MoneyArithmetic.add(totalWithoutItem, request.amountMinor());
     ExpenseLedgerItemResponse before = ExpenseLedgerItemResponse.from(item);
     item.update(
         normalizeOptional(request.name()),
@@ -267,7 +272,12 @@ public class ExpenseLedgerService {
             normalizeOptional(request.notes()));
     ExpenseLedgerResponse ledgerResponse =
         recordSettlement(
-            ownerId, ledger, ExpenseLedgerSettlementType.BILL, totals.totalMinor(), bill.id());
+            ownerId,
+            ledger,
+            ExpenseLedgerSettlementType.BILL,
+            totals.totalMinor(),
+            bill.id(),
+            bill.paycheckId());
     return new ExpenseLedgerSettlementResultResponse(ledgerResponse, bill, null);
   }
 
@@ -300,7 +310,8 @@ public class ExpenseLedgerService {
             ledger,
             ExpenseLedgerSettlementType.PAYBACK,
             totals.totalMinor(),
-            payback.id());
+            payback.id(),
+            null);
     return new ExpenseLedgerSettlementResultResponse(ledgerResponse, null, payback);
   }
 
@@ -348,12 +359,19 @@ public class ExpenseLedgerService {
       ExpenseLedger ledger,
       ExpenseLedgerSettlementType settlementType,
       long amountMinor,
-      UUID targetId) {
+      UUID targetId,
+      UUID targetPaycheckId) {
     Instant settledAt = clock.instant();
     ExpenseLedgerResponse before = responses.toResponse(ledger);
     settlements.saveAndFlush(
         new ExpenseLedgerSettlement(
-            ownerId, ledger.getId(), settlementType, amountMinor, targetId, settledAt));
+            ownerId,
+            ledger.getId(),
+            settlementType,
+            amountMinor,
+            targetId,
+            targetPaycheckId,
+            settledAt));
     ledger.settle(settledAt);
     ledgers.flush();
     ExpenseLedgerResponse after = responses.toResponse(ledger);
@@ -365,8 +383,19 @@ public class ExpenseLedgerService {
         settledAt,
         before,
         after,
-        Map.of("settlementType", settlementType, "targetId", targetId));
+        settlementMetadata(settlementType, targetId, targetPaycheckId));
     return after;
+  }
+
+  private Map<String, Object> settlementMetadata(
+      ExpenseLedgerSettlementType settlementType, UUID targetId, UUID targetPaycheckId) {
+    if (targetPaycheckId == null) {
+      return Map.of("settlementType", settlementType, "targetId", targetId);
+    }
+    return Map.of(
+        "settlementType", settlementType,
+        "targetId", targetId,
+        "targetPaycheckId", targetPaycheckId);
   }
 
   private void requireOpen(ExpenseLedger ledger) {

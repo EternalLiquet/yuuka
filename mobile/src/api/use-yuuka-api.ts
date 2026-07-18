@@ -267,8 +267,8 @@ export function useYuukaApi() {
           body,
           sinkingFundTransactionSchema,
         ),
-      expenseLedgers: (state?: ExpenseLedgerState) => {
-        const params = new URLSearchParams({ size: '100' });
+      expenseLedgers: (state: ExpenseLedgerState, page: number, size: number) => {
+        const params = new URLSearchParams({ page: String(page), size: String(size) });
         if (state) params.set('state', state);
         return get(`/expense-ledgers?${params.toString()}`, pageSchema(expenseLedgerSchema));
       },

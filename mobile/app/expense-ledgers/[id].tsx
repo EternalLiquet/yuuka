@@ -14,6 +14,7 @@ import { ScrollScreen } from '@/components/scroll-screen';
 import { TextField } from '@/components/text-field';
 import { ErrorState } from '@/components/states';
 import { formatMoney, minorToInput, parseMoneyToMinor } from '@/domain/money';
+import { expenseLedgerSettlementTargetPath } from '@/features/expense-ledgers/navigation';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
@@ -58,6 +59,9 @@ export default function ExpenseLedgerDetailScreen() {
     () => ledger?.items.find((item) => item.id === editingItemId) ?? null,
     [editingItemId, ledger?.items],
   );
+  const settlementTargetPath = ledger?.settlement
+    ? expenseLedgerSettlementTargetPath(ledger.settlement)
+    : null;
 
   const refreshLedgers = async () => {
     await Promise.all([
@@ -218,16 +222,10 @@ export default function ExpenseLedgerDetailScreen() {
                 {formatMoney(ledger.totalMinor, settings.currencyCode)}
               </AppText>
             </View>
-            {ledger.settlement ? (
+            {ledger.settlement && settlementTargetPath ? (
               <Pressable
                 accessibilityRole="button"
-                onPress={() =>
-                  router.push(
-                    ledger.settlement?.settlementType === 'BILL'
-                      ? `/paychecks/${ledger.settlement.targetId}`
-                      : `/paybacks/${ledger.settlement?.targetId}`,
-                  )
-                }
+                onPress={() => router.push(settlementTargetPath)}
               >
                 <AppText style={{ color: colors.accent }} variant="label">
                   {ledger.settlement.settlementType === 'BILL' ? 'Bill' : 'Payback'} target

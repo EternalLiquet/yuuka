@@ -14,6 +14,8 @@ import com.yuuka.backend.expense.api.dto.UpdateExpenseLedgerRequest;
 import com.yuuka.backend.expense.application.ExpenseLedgerService;
 import com.yuuka.backend.expense.domain.ExpenseLedgerState;
 import com.yuuka.backend.paycheck.api.dto.VersionRequest;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -43,8 +45,27 @@ public class ExpenseLedgerController {
   public PageResponse<ExpenseLedgerResponse> list(
       @AuthenticationPrincipal Jwt jwt,
       @RequestParam(required = false) ExpenseLedgerState state,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "50") int size) {
+      @Parameter(
+              schema =
+                  @Schema(
+                      implementation = Integer.class,
+                      type = "integer",
+                      format = "int32",
+                      minimum = "0",
+                      defaultValue = "0"))
+          @RequestParam(defaultValue = "0")
+          int page,
+      @Parameter(
+              schema =
+                  @Schema(
+                      implementation = Integer.class,
+                      type = "integer",
+                      format = "int32",
+                      minimum = "1",
+                      maximum = "100",
+                      defaultValue = "50"))
+          @RequestParam(defaultValue = "50")
+          int size) {
     return expenseLedgerService.list(AuthenticatedOwner.id(jwt), state, page, size);
   }
 

@@ -348,6 +348,7 @@ public class PaycheckService {
             notes,
             null,
             null,
+            null,
             null);
     PaycheckEntry entry =
         entryMutations.newEntry(

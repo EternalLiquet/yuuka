@@ -12,7 +12,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuuka.backend.support.AbstractIntegrationTest;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -45,7 +51,7 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.totalMinor").value(5000))
         .andExpect(jsonPath("$.itemCount").value(1))
-        .andExpect(jsonPath("$.latestExpenseDate").value("2026-07-16"))
+        .andExpect(jsonPath("$.latestExpenseDate").value("2026-07-17"))
         .andExpect(jsonPath("$.items.length()").value(1));
 
     mockMvc
@@ -88,6 +94,95 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void preventsOverflowAndRollsBackRejectedItemWrites() throws Exception {
+    String token = registerAndGetAccessToken("expense-ledger-overflow@yuuka.local");
+    JsonNode createLedger = createLedger(token, "Exact max create");
+    JsonNode maxItem =
+        createItem(
+            token, createLedger.path("id").asText(), "Maximum", null, Long.MAX_VALUE, "2026-07-17");
+    JsonNode exactMax = getLedger(token, createLedger.path("id").asText());
+    long exactMaxVersion = exactMax.path("version").asLong();
+    int createdAuditsBefore = createdItemAuditCount(createLedger.path("id").asText());
+
+    JsonNode createOverflow =
+        createItemExpecting(
+            token, createLedger.path("id").asText(), "Overflow", null, 1, "2026-07-17", 422);
+
+    assertOverflow(createOverflow);
+    JsonNode afterCreateRejection = getLedger(token, createLedger.path("id").asText());
+    assertThat(afterCreateRejection.path("totalMinor").asLong()).isEqualTo(Long.MAX_VALUE);
+    assertThat(afterCreateRejection.path("itemCount").asLong()).isEqualTo(1);
+    assertThat(afterCreateRejection.path("version").asLong()).isEqualTo(exactMaxVersion);
+    assertThat(createdItemAuditCount(createLedger.path("id").asText()))
+        .isEqualTo(createdAuditsBefore);
+
+    JsonNode updateLedger = createLedger(token, "Exact max update");
+    createItem(
+        token, updateLedger.path("id").asText(), "Large", null, Long.MAX_VALUE - 1, "2026-07-17");
+    JsonNode one =
+        createItem(token, updateLedger.path("id").asText(), "One", null, 1, "2026-07-17");
+    JsonNode beforeUpdateRejection = getLedger(token, updateLedger.path("id").asText());
+    JsonNode updateOverflow =
+        updateItemExpecting(
+            token, one.path("id").asText(), one.path("version").asLong(), "Two", null, 2, 422);
+
+    assertOverflow(updateOverflow);
+    JsonNode afterUpdateRejection = getLedger(token, updateLedger.path("id").asText());
+    assertThat(afterUpdateRejection.path("totalMinor").asLong()).isEqualTo(Long.MAX_VALUE);
+    assertThat(afterUpdateRejection.path("version").asLong())
+        .isEqualTo(beforeUpdateRejection.path("version").asLong());
+    assertThat(refreshedItem(token, updateLedger, one).path("amountMinor").asLong()).isEqualTo(1);
+    assertThat(
+            auditCount("EXPENSE_LEDGER_ITEM", UUID.fromString(one.path("id").asText()), "UPDATED"))
+        .isZero();
+
+    deleteItem(token, maxItem.path("id").asText(), maxItem.path("version").asLong());
+    JsonNode afterExactMaxDelete = getLedger(token, createLedger.path("id").asText());
+    assertThat(afterExactMaxDelete.path("totalMinor").asLong()).isZero();
+    assertThat(afterExactMaxDelete.path("itemCount").asLong()).isZero();
+  }
+
+  @Test
+  void serializesConcurrentItemAddsBeforeValidatingTheProspectiveTotal() throws Exception {
+    String token = registerAndGetAccessToken("expense-ledger-concurrent-overflow@yuuka.local");
+    JsonNode ledger = createLedger(token, "Concurrent max");
+    String ledgerId = ledger.path("id").asText();
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      Future<ItemWriteResult> maximum =
+          executor.submit(
+              () -> concurrentCreate(token, ledgerId, "Maximum", Long.MAX_VALUE, ready, start));
+      Future<ItemWriteResult> one =
+          executor.submit(() -> concurrentCreate(token, ledgerId, "One", 1, ready, start));
+      assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+
+      List<ItemWriteResult> results =
+          List.of(maximum.get(30, TimeUnit.SECONDS), one.get(30, TimeUnit.SECONDS));
+      assertThat(results).extracting(ItemWriteResult::status).containsExactlyInAnyOrder(201, 422);
+      JsonNode overflow =
+          results.stream()
+              .filter(result -> result.status() == 422)
+              .map(ItemWriteResult::body)
+              .findFirst()
+              .orElseThrow();
+      assertOverflow(overflow);
+
+      JsonNode persisted = getLedger(token, ledgerId);
+      assertThat(persisted.path("itemCount").asLong()).isEqualTo(1);
+      assertThat(persisted.path("totalMinor").canConvertToLong()).isTrue();
+      assertThat(createdItemAuditCount(ledgerId)).isEqualTo(1);
+      assertThat(liveItemCount(ledgerId)).isEqualTo(1);
+    } finally {
+      start.countDown();
+      executor.shutdownNow();
+      assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+    }
+  }
+
+  @Test
   void settlesFinalizedLedgerAsBillWithServerDerivedAmountAndProvenance() throws Exception {
     String token = registerAndGetAccessToken("expense-ledger-bill@yuuka.local");
     JsonNode paycheck = createPaycheck(token, 10000);
@@ -112,6 +207,27 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
     assertThat(result.path("billEntry").path("paymentMethod").asText()).isEqualTo("AUTOPAY");
     assertThat(result.path("billEntry").path("sourceExpenseLedgerId").asText())
         .isEqualTo(ledger.path("id").asText());
+    JsonNode settlement = result.path("ledger").path("settlement");
+    assertThat(settlement.path("targetId").asText())
+        .isEqualTo(result.path("billEntry").path("id").asText());
+    assertThat(settlement.path("targetPaycheckId").asText())
+        .isEqualTo(paycheck.path("id").asText());
+
+    JsonNode reloaded = getLedger(token, ledger.path("id").asText());
+    assertThat(reloaded.path("settlement").path("targetId").asText())
+        .isEqualTo(result.path("billEntry").path("id").asText());
+    assertThat(reloaded.path("settlement").path("targetPaycheckId").asText())
+        .isEqualTo(paycheck.path("id").asText());
+
+    deleteEntry(
+        token,
+        result.path("billEntry").path("id").asText(),
+        result.path("billEntry").path("version").asLong());
+    JsonNode afterTargetDelete = getLedger(token, ledger.path("id").asText());
+    assertThat(afterTargetDelete.path("settlement").path("targetId").asText())
+        .isEqualTo(result.path("billEntry").path("id").asText());
+    assertThat(afterTargetDelete.path("settlement").path("targetPaycheckId").asText())
+        .isEqualTo(paycheck.path("id").asText());
 
     settleAsBill(
         token,
@@ -152,7 +268,8 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
                 .header("Authorization", "Bearer " + token))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.state").value("SETTLED"))
-        .andExpect(jsonPath("$.settlement.targetId").value(payback.path("id").asText()));
+        .andExpect(jsonPath("$.settlement.targetId").value(payback.path("id").asText()))
+        .andExpect(jsonPath("$.settlement.targetPaycheckId").value(nullValue()));
   }
 
   @Test
@@ -278,6 +395,18 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
   private JsonNode updateItem(
       String token, String itemId, long version, String name, String merchant, long amountMinor)
       throws Exception {
+    return updateItemExpecting(token, itemId, version, name, merchant, amountMinor, 200);
+  }
+
+  private JsonNode updateItemExpecting(
+      String token,
+      String itemId,
+      long version,
+      String name,
+      String merchant,
+      long amountMinor,
+      int statusCode)
+      throws Exception {
     String content =
         """
         {
@@ -296,7 +425,7 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
                     .header("Authorization", "Bearer " + token)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(content))
-            .andExpect(status().isOk())
+            .andExpect(status().is(statusCode))
             .andReturn()
             .getResponse()
             .getContentAsString());
@@ -306,6 +435,15 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
     mockMvc
         .perform(
             delete("/api/v1/expense-ledgers/items/{id}", itemId)
+                .queryParam("version", Long.toString(version))
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isNoContent());
+  }
+
+  private void deleteEntry(String token, String entryId, long version) throws Exception {
+    mockMvc
+        .perform(
+            delete("/api/v1/entries/{id}", entryId)
                 .queryParam("version", Long.toString(version))
                 .header("Authorization", "Bearer " + token))
         .andExpect(status().isNoContent());
@@ -408,9 +546,13 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
   }
 
   private long refreshedItemVersion(String token, JsonNode ledger, JsonNode item) throws Exception {
+    return refreshedItem(token, ledger, item).path("version").asLong();
+  }
+
+  private JsonNode refreshedItem(String token, JsonNode ledger, JsonNode item) throws Exception {
     for (JsonNode candidate : getLedger(token, ledger.path("id").asText()).path("items")) {
       if (candidate.path("id").asText().equals(item.path("id").asText())) {
-        return candidate.path("version").asLong();
+        return candidate;
       }
     }
     throw new AssertionError("Missing item");
@@ -426,6 +568,66 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
             .andReturn()
             .getResponse()
             .getContentAsString());
+  }
+
+  private ItemWriteResult concurrentCreate(
+      String token,
+      String ledgerId,
+      String name,
+      long amountMinor,
+      CountDownLatch ready,
+      CountDownLatch start)
+      throws Exception {
+    ready.countDown();
+    if (!start.await(10, TimeUnit.SECONDS)) {
+      throw new AssertionError("Concurrent item additions did not start together");
+    }
+    var result =
+        mockMvc
+            .perform(
+                post("/api/v1/expense-ledgers/{id}/items", ledgerId)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "name": "%s",
+                          "amountMinor": %d,
+                          "expenseDate": "2026-07-17"
+                        }
+                        """
+                            .formatted(name, amountMinor)))
+            .andReturn()
+            .getResponse();
+    String content = result.getContentAsString();
+    return new ItemWriteResult(
+        result.getStatus(),
+        content.isBlank() ? objectMapper.createObjectNode() : objectMapper.readTree(content));
+  }
+
+  private void assertOverflow(JsonNode response) {
+    assertThat(response.path("code").asText()).isEqualTo("MONEY_AMOUNT_OVERFLOW");
+    assertThat(response.path("details").path("currencyCode").asText()).isEqualTo("USD");
+    assertThat(response.path("traceId").asText()).isNotBlank();
+  }
+
+  private int createdItemAuditCount(String ledgerId) {
+    Integer count =
+        jdbcTemplate.queryForObject(
+            "select count(*) from audit_events where entity_type = 'EXPENSE_LEDGER_ITEM' "
+                + "and action = 'CREATED' and metadata ->> 'ledgerId' = ?",
+            Integer.class,
+            ledgerId);
+    return count == null ? 0 : count;
+  }
+
+  private int liveItemCount(String ledgerId) {
+    Integer count =
+        jdbcTemplate.queryForObject(
+            "select count(*) from expense_ledger_items where ledger_id = ? and deleted_at is null",
+            Integer.class,
+            UUID.fromString(ledgerId));
+    return count == null ? 0 : count;
   }
 
   private int auditCount(String entityType, UUID entityId, String action) {
@@ -456,7 +658,7 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """
-                        {"email":"%s","password":"correct horse battery staple"}
+                        {"email":"%s","password":"Password12345","displayName":"Test"}
                         """
                             .formatted(email)))
             .andExpect(status().isCreated())
@@ -469,4 +671,6 @@ class ExpenseLedgerWorkflowTests extends AbstractIntegrationTest {
   private String jsonString(String value) {
     return value == null ? "null" : "\"" + value + "\"";
   }
+
+  private record ItemWriteResult(int status, JsonNode body) {}
 }

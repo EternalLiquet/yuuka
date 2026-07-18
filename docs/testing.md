@@ -11,7 +11,8 @@ cd backend
 `check` runs formatting, unit tests, PostgreSQL Testcontainers integration tests, the exact OpenAPI snapshot comparison, and JaCoCo verification. Integration tests use PostgreSQL 16, not H2.
 
 Expense Ledger coverage lives in backend integration tests because lifecycle, derived totals,
-settlement provenance, and rollback behavior depend on PostgreSQL constraints and transactions.
+settlement provenance, exact-max overflow rollback, and concurrent item serialization depend on
+PostgreSQL constraints and transactions.
 
 JaCoCo enforces 80% overall line coverage and 90% line / 85% branch coverage on critical domain policies and application services. Trivial DTO accessors, JPA persistence accessors, Spring configuration, and generated OpenAPI material may be omitted from targeted package rules; they remain exercised through integration tests and contribute to the overall report unless explicitly excluded in Gradle.
 
@@ -37,9 +38,9 @@ npx expo export --platform android --output-dir dist/android
 
 Jest enforces 85% line/function/statement and 80% branch coverage for money, API contracts/parsing, session expiry, settings storage, validation, and list behavior. Expo Router page wiring is validated through React Native Testing Library and Maestro rather than counted as isolated unit logic. The resulting targeted threshold exceeds the required 85/80 core-logic and 75 overall minima for the code under the unit coverage gate.
 
-Mobile Expense Ledger checks cover runtime contracts and OpenAPI endpoint presence. Full rapid-entry
-and settlement journeys are candidates for Maestro once the flow is promoted into the critical E2E
-set.
+Mobile Expense Ledger checks cover runtime contracts, OpenAPI endpoint presence, Bill/Payback target
+routing, and mocked multi-page list behavior through ledger 101. Full rapid-entry and settlement
+journeys are candidates for Maestro once the flow is promoted into the critical E2E set.
 
 The mobile OpenAPI test reads `docs/openapi.json`; the backend test regenerates that document from
 Springdoc and requires byte-for-byte structural equality. The version contract must keep
