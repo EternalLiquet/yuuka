@@ -363,7 +363,7 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
   void statusReversalCannotOverdrawSinkingFundContribution() throws Exception {
     String token = register("sinking-funds-status-overdraw@yuuka.local");
     JsonNode fund = createFund(token, "Car", null, null);
-    JsonNode entry = postedContribution(token, fund, "Car contribution", 100);
+    JsonNode entry = postedContribution(token, fund, "Car contribution", 100, 200);
     withdraw(
         token,
         fund.path("id").asText(),
@@ -388,7 +388,7 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
   void deletingPostedContributionCannotOverdrawSinkingFund() throws Exception {
     String token = register("sinking-funds-delete-overdraw@yuuka.local");
     JsonNode fund = createFund(token, "Home", null, null);
-    JsonNode entry = postedContribution(token, fund, "Home contribution", 100);
+    JsonNode entry = postedContribution(token, fund, "Home contribution", 100, 200);
     withdraw(
         token,
         fund.path("id").asText(),
@@ -415,7 +415,7 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
     String token = register("sinking-funds-update-overdraw@yuuka.local");
     JsonNode fund = createFund(token, "Medical", null, null);
     JsonNode otherFund = createFund(token, "Moving", null, null);
-    JsonNode entry = postedContribution(token, fund, "Medical contribution", 100);
+    JsonNode entry = postedContribution(token, fund, "Medical contribution", 100, 200);
     withdraw(
         token,
         fund.path("id").asText(),
@@ -696,7 +696,13 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
 
   private JsonNode postedContribution(String token, JsonNode fund, String name, long amountMinor)
       throws Exception {
-    JsonNode paycheck = createPaycheck(token, name, amountMinor);
+    return postedContribution(token, fund, name, amountMinor, amountMinor);
+  }
+
+  private JsonNode postedContribution(
+      String token, JsonNode fund, String name, long amountMinor, long paycheckAmountMinor)
+      throws Exception {
+    JsonNode paycheck = createPaycheck(token, name, paycheckAmountMinor);
     JsonNode entry =
         addEntry(
             token,
