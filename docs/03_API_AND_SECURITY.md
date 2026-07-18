@@ -135,8 +135,6 @@ instead of embedding raw storage values in the message.
 - `POST /sinking-funds/{id}/withdrawals` creates a withdrawal transaction after version and balance
   validation.
 - `POST /sinking-fund-transactions/{id}/reverse` reverses a withdrawal without deleting history.
-- `POST /entries/{entryId}/sinking-fund-assignment` assigns or clears a persistent Sinking Fund on
-  an existing live entry after optimistic-lock validation.
 
 Persistent Sinking Fund balances and progress are derived from transaction history. Controllers and
 mobile clients must not persist or duplicate the authoritative balance calculation.

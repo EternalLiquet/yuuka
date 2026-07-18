@@ -48,7 +48,6 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/sinking-funds/{fundId}/transactions",
           "/api/v1/sinking-funds/{fundId}/withdrawals",
           "/api/v1/sinking-fund-transactions/{transactionId}/reverse",
-          "/api/v1/entries/{entryId}/sinking-fund-assignment",
           "/api/v1/templates",
           "/health/live",
           "/health/version");

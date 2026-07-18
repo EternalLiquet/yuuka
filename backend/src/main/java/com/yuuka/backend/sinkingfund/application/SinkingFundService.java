@@ -11,10 +11,8 @@ import com.yuuka.backend.paycheck.domain.EntryStatus;
 import com.yuuka.backend.paycheck.domain.EntryType;
 import com.yuuka.backend.paycheck.domain.Paycheck;
 import com.yuuka.backend.paycheck.domain.PaycheckEntry;
-import com.yuuka.backend.paycheck.domain.PaycheckState;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckRepository;
-import com.yuuka.backend.sinkingfund.api.dto.AssignSinkingFundRequest;
 import com.yuuka.backend.sinkingfund.api.dto.CreateSinkingFundRequest;
 import com.yuuka.backend.sinkingfund.api.dto.CreateSinkingFundWithdrawalRequest;
 import com.yuuka.backend.sinkingfund.api.dto.ReorderSinkingFundsRequest;
@@ -32,6 +30,7 @@ import com.yuuka.backend.sinkingfund.domain.SinkingFundTransactionType;
 import com.yuuka.backend.sinkingfund.infrastructure.JpaSinkingFundRepository;
 import com.yuuka.backend.sinkingfund.infrastructure.JpaSinkingFundTransactionRepository;
 import com.yuuka.backend.sinkingfund.infrastructure.SinkingFundBalanceProjection;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -39,6 +38,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -246,11 +246,14 @@ public class SinkingFundService {
   public PageResponse<SinkingFundTransactionResponse> transactions(
       UUID ownerId, UUID fundId, int page, int size) {
     requireFund(ownerId, fundId);
+    var results =
+        transactions.findAllBySinkingFundIdAndOwnerIdOrderByEffectiveDateDescCreatedAtDescIdDesc(
+            fundId, ownerId, listPage(page, size));
+    Map<UUID, PaycheckEntry> entriesById = entriesById(ownerId, results.getContent());
+    Map<UUID, Paycheck> paychecksById =
+        paychecksById(ownerId, entriesById.values().stream().toList());
     return PageResponse.from(
-        transactions
-            .findAllBySinkingFundIdAndOwnerIdOrderByEffectiveDateDescCreatedAtDescIdDesc(
-                fundId, ownerId, listPage(page, size))
-            .map(transaction -> toTransactionResponse(ownerId, transaction)));
+        results.map(transaction -> toTransactionResponse(transaction, entriesById, paychecksById)));
   }
 
   @Transactional
@@ -304,6 +307,7 @@ public class SinkingFundService {
       throw new BusinessRuleException("This withdrawal has already been reversed.");
     }
     SinkingFund fund = requireFundForUpdate(ownerId, transaction.getSinkingFundId());
+    MoneyArithmetic.add(currentBalance(ownerId, fund.getId()), transaction.getAmountMinor());
     Instant now = clock.instant();
     transaction.reverse(now, request.reason().trim());
     transactions.flush();
@@ -377,6 +381,7 @@ public class SinkingFundService {
       return;
     }
     validateAssignment(ownerId, entry, fundId);
+    MoneyArithmetic.add(currentBalance(ownerId, fund.getId()), entry.getAmountMinor());
     transactions.saveAndFlush(
         new SinkingFundTransaction(
             ownerId,
@@ -398,37 +403,12 @@ public class SinkingFundService {
         .ifPresent(
             transaction -> {
               SinkingFund fund = requireFundForUpdate(ownerId, transaction.getSinkingFundId());
+              assertContributionCanBeReversed(ownerId, fund.getId(), transaction.getAmountMinor());
               transaction.reverse(reversedAt, null);
               transactions.flush();
               fund.touch(reversedAt);
               funds.flush();
             });
-  }
-
-  @Transactional
-  public void assignEntry(UUID ownerId, UUID entryId, AssignSinkingFundRequest request) {
-    PaycheckEntry entry =
-        entries
-            .findLiveByIdAndOwnerIdForUpdate(entryId, ownerId)
-            .orElseThrow(ResourceNotFoundException::new);
-    Paycheck paycheck =
-        paychecks
-            .findByIdAndOwnerIdForUpdate(entry.getPaycheckId(), ownerId)
-            .orElseThrow(ResourceNotFoundException::new);
-    if (paycheck.getState() != PaycheckState.ACTIVE) {
-      throw new BusinessRuleException("Only Active paycheck entries can be assigned.");
-    }
-    assertVersion(entry.getVersion(), request.version());
-    UUID previousFundId = entry.getSinkingFundId();
-    long previousAmountMinor = entry.getAmountMinor();
-    EntryStatus previousStatus = entry.getStatus();
-    Instant now = clock.instant();
-    entry.assignSinkingFund(request.sinkingFundId());
-    validateAssignment(ownerId, entry, request.sinkingFundId());
-    syncAfterEntryUpdate(ownerId, entry, previousFundId, previousAmountMinor, previousStatus, now);
-    entries.flush();
-    paycheck.touch(now);
-    paychecks.flush();
   }
 
   public SinkingFund requireFund(UUID ownerId, UUID fundId) {
@@ -462,19 +442,51 @@ public class SinkingFundService {
   }
 
   private SinkingFundTransactionResponse toTransactionResponse(
-      UUID ownerId, SinkingFundTransaction transaction) {
+      SinkingFundTransaction transaction,
+      Map<UUID, PaycheckEntry> entriesById,
+      Map<UUID, Paycheck> paychecksById) {
     if (transaction.getEntryId() == null) {
       return SinkingFundTransactionResponse.from(transaction, null, null);
     }
-    PaycheckEntry entry =
-        entries
-            .findByIdAndOwnerId(transaction.getEntryId(), ownerId)
-            .orElseThrow(ResourceNotFoundException::new);
-    Paycheck paycheck =
-        paychecks
-            .findByIdAndOwnerId(entry.getPaycheckId(), ownerId)
-            .orElseThrow(ResourceNotFoundException::new);
+    PaycheckEntry entry = entriesById.get(transaction.getEntryId());
+    if (entry == null) {
+      return SinkingFundTransactionResponse.from(transaction, null, null);
+    }
+    Paycheck paycheck = paychecksById.get(entry.getPaycheckId());
     return SinkingFundTransactionResponse.from(transaction, entry, paycheck);
+  }
+
+  private SinkingFundTransactionResponse toTransactionResponse(
+      UUID ownerId, SinkingFundTransaction transaction) {
+    Map<UUID, PaycheckEntry> entriesById = entriesById(ownerId, List.of(transaction));
+    Map<UUID, Paycheck> paychecksById =
+        paychecksById(ownerId, entriesById.values().stream().toList());
+    return toTransactionResponse(transaction, entriesById, paychecksById);
+  }
+
+  private Map<UUID, PaycheckEntry> entriesById(
+      UUID ownerId, List<SinkingFundTransaction> transactionsPage) {
+    List<UUID> entryIds =
+        transactionsPage.stream()
+            .map(SinkingFundTransaction::getEntryId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+    if (entryIds.isEmpty()) {
+      return Map.of();
+    }
+    return entries.findAllByIdInAndOwnerId(entryIds, ownerId).stream()
+        .collect(Collectors.toMap(PaycheckEntry::getId, Function.identity()));
+  }
+
+  private Map<UUID, Paycheck> paychecksById(UUID ownerId, List<PaycheckEntry> entriesPage) {
+    List<UUID> paycheckIds =
+        entriesPage.stream().map(PaycheckEntry::getPaycheckId).distinct().toList();
+    if (paycheckIds.isEmpty()) {
+      return Map.of();
+    }
+    return paychecks.findAllByIdInAndOwnerId(paycheckIds, ownerId).stream()
+        .collect(Collectors.toMap(Paycheck::getId, Function.identity()));
   }
 
   private Map<UUID, Balance> balances(UUID ownerId, List<UUID> fundIds) {
@@ -492,7 +504,7 @@ public class SinkingFundService {
   }
 
   private long currentBalance(UUID ownerId, UUID fundId) {
-    return transactions.currentBalanceMinor(ownerId, fundId);
+    return MoneyArithmetic.toLongExact(transactions.currentBalanceMinor(ownerId, fundId));
   }
 
   private long transactionCount(SinkingFund fund) {
@@ -519,6 +531,20 @@ public class SinkingFundService {
 
   private long value(Long value) {
     return value == null ? 0 : value;
+  }
+
+  private long value(BigDecimal value) {
+    return MoneyArithmetic.toLongExact(value);
+  }
+
+  private void assertContributionCanBeReversed(UUID ownerId, UUID fundId, long amountMinor) {
+    long balance = currentBalance(ownerId, fundId);
+    if (amountMinor > balance) {
+      throw new BusinessRuleException(
+          "SINKING_FUND_CONTRIBUTION_REVERSAL_EXCEEDS_BALANCE",
+          "This contribution cannot be reversed because withdrawals have already used it.",
+          Map.of("amountMinor", amountMinor - balance, "currencyCode", "USD"));
+    }
   }
 
   private record Balance(long currentBalanceMinor, long transactionCount) {

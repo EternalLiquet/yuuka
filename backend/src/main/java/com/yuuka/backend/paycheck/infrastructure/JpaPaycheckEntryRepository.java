@@ -13,6 +13,8 @@ import org.springframework.data.repository.query.Param;
 public interface JpaPaycheckEntryRepository extends JpaRepository<PaycheckEntry, UUID> {
   Optional<PaycheckEntry> findByIdAndOwnerId(UUID id, UUID ownerId);
 
+  List<PaycheckEntry> findAllByIdInAndOwnerId(java.util.Collection<UUID> ids, UUID ownerId);
+
   Optional<PaycheckEntry> findByIdAndOwnerIdAndDeletedAtIsNull(UUID id, UUID ownerId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)

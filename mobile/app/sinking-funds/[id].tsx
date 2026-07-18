@@ -1,13 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Archive, Pencil, RotateCcw, Save, WalletCards, X } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { z } from 'zod';
 
-import { SinkingFund, SinkingFundTransaction } from '@/api/contracts';
+import type { SinkingFund, SinkingFundTransaction } from '@/api/contracts';
 import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
@@ -23,6 +23,8 @@ import { today } from '@/features/paychecks/form-schemas';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
+const SINKING_FUND_TRANSACTION_PAGE_SIZE = 100;
+
 export default function SinkingFundDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const api = useYuukaApi();
@@ -32,20 +34,28 @@ export default function SinkingFundDetailScreen() {
   const { settings } = useSettings();
   const [editing, setEditing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [archiveConfirming, setArchiveConfirming] = useState(false);
+  const [reversingTransaction, setReversingTransaction] = useState<SinkingFundTransaction | null>(
+    null,
+  );
   const fundQuery = useQuery({
     queryKey: ['sinking-fund', id],
     queryFn: () => api.sinkingFund(id),
     enabled: Boolean(id),
   });
-  const transactionsQuery = useQuery({
+  const transactionsQuery = useInfiniteQuery({
     queryKey: ['sinking-fund', id, 'transactions'],
-    queryFn: () => api.sinkingFundTransactions(id, 0, 100),
+    queryFn: ({ pageParam }) =>
+      api.sinkingFundTransactions(id, pageParam, SINKING_FUND_TRANSACTION_PAGE_SIZE),
     enabled: Boolean(id),
+    getNextPageParam: (lastPage) => (lastPage.hasNext ? lastPage.page + 1 : undefined),
+    initialPageParam: 0,
   });
   const invalidate = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['sinking-funds'] }),
       queryClient.invalidateQueries({ queryKey: ['sinking-fund', id] }),
+      queryClient.invalidateQueries({ queryKey: ['sinking-fund', id, 'transactions'] }),
       queryClient.invalidateQueries({ queryKey: ['paycheck'] }),
       queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
     ]);
@@ -66,16 +76,15 @@ export default function SinkingFundDetailScreen() {
     },
   });
   const lifecycleMutation = useMutation({
-    mutationFn: (action: 'archive' | 'restore') => {
+    mutationFn: (values: { action: 'archive' | 'restore'; confirmPositiveBalance?: boolean }) => {
       if (!fundQuery.data) throw new Error('Refresh the Sinking Fund first.');
-      if (action === 'restore') return api.restoreSinkingFund(id, fundQuery.data.version);
-      return api.archiveSinkingFund(
-        id,
-        fundQuery.data.version,
-        fundQuery.data.currentBalanceMinor > 0,
-      );
+      if (values.action === 'restore') return api.restoreSinkingFund(id, fundQuery.data.version);
+      return api.archiveSinkingFund(id, fundQuery.data.version, values.confirmPositiveBalance);
     },
-    onSuccess: invalidate,
+    onSuccess: async () => {
+      await invalidate();
+      setArchiveConfirming(false);
+    },
   });
   const withdrawalMutation = useMutation({
     mutationFn: (values: {
@@ -89,21 +98,34 @@ export default function SinkingFundDetailScreen() {
     },
     onSuccess: async () => {
       await invalidate();
-      await transactionsQuery.refetch();
       setWithdrawing(false);
     },
   });
   const reverseMutation = useMutation({
-    mutationFn: (transaction: SinkingFundTransaction) =>
-      api.reverseSinkingFundWithdrawal(transaction.id, {
-        reason: 'Reversed from mobile',
-        version: transaction.version,
+    mutationFn: (values: { reason: string; transaction: SinkingFundTransaction }) =>
+      api.reverseSinkingFundWithdrawal(values.transaction.id, {
+        reason: values.reason,
+        version: values.transaction.version,
       }),
     onSuccess: async () => {
       await invalidate();
-      await transactionsQuery.refetch();
+      setReversingTransaction(null);
     },
   });
+  const transactions = useMemo(() => {
+    const seen = new Set<string>();
+    const rows: SinkingFundTransaction[] = [];
+    for (const page of transactionsQuery.data?.pages ?? []) {
+      for (const transaction of page.items) {
+        if (!seen.has(transaction.id)) {
+          seen.add(transaction.id);
+          rows.push(transaction);
+        }
+      }
+    }
+    return rows;
+  }, [transactionsQuery.data]);
+  const totalTransactions = transactionsQuery.data?.pages[0]?.totalItems ?? 0;
 
   if (editing && fundQuery.data) {
     return (
@@ -145,7 +167,16 @@ export default function SinkingFundDetailScreen() {
                       fundQuery.data.currentBalanceMinor > 0 ? 'Archive with balance' : 'Archive'
                     }
                     loading={lifecycleMutation.isPending}
-                    onPress={() => lifecycleMutation.mutate('archive')}
+                    onPress={() => {
+                      if (fundQuery.data.currentBalanceMinor > 0) {
+                        setArchiveConfirming(true);
+                      } else {
+                        lifecycleMutation.mutate({
+                          action: 'archive',
+                          confirmPositiveBalance: false,
+                        });
+                      }
+                    }}
                     variant="ghost"
                   />
                 </>
@@ -154,7 +185,7 @@ export default function SinkingFundDetailScreen() {
                   icon={RotateCcw}
                   label="Restore"
                   loading={lifecycleMutation.isPending}
-                  onPress={() => lifecycleMutation.mutate('restore')}
+                  onPress={() => lifecycleMutation.mutate({ action: 'restore' })}
                 />
               )}
             </View>
@@ -197,7 +228,39 @@ export default function SinkingFundDetailScreen() {
             <AppText variant="label">Transactions</AppText>
             {transactionsQuery.isPending ? (
               <ActivityIndicator color={colors.accent} />
-            ) : transactionsQuery.isError ? (
+            ) : transactions.length ? (
+              <>
+                <AppText style={{ color: colors.muted }} variant="caption">
+                  Showing {transactions.length} of {totalTransactions} transactions
+                </AppText>
+                {transactions.map((transaction) => (
+                  <TransactionRow
+                    key={transaction.id}
+                    onReverse={() => setReversingTransaction(transaction)}
+                    reversing={
+                      reverseMutation.isPending && reversingTransaction?.id === transaction.id
+                    }
+                    transaction={transaction}
+                  />
+                ))}
+                {transactionsQuery.hasNextPage ? (
+                  <Button
+                    label="Load older transactions"
+                    loading={transactionsQuery.isFetchingNextPage}
+                    onPress={() => transactionsQuery.fetchNextPage()}
+                    variant="secondary"
+                  />
+                ) : null}
+              </>
+            ) : null}
+            {transactions.length === 0 &&
+            !transactionsQuery.isPending &&
+            !transactionsQuery.isError ? (
+              <AppText style={{ color: colors.muted }} variant="caption">
+                No transactions yet.
+              </AppText>
+            ) : null}
+            {transactionsQuery.isError ? (
               <AppText style={{ color: colors.danger }} variant="error">
                 {displayError(
                   transactionsQuery.error,
@@ -205,20 +268,7 @@ export default function SinkingFundDetailScreen() {
                   'Transaction history could not be loaded.',
                 )}
               </AppText>
-            ) : transactionsQuery.data?.items.length ? (
-              transactionsQuery.data.items.map((transaction) => (
-                <TransactionRow
-                  key={transaction.id}
-                  onReverse={() => reverseMutation.mutate(transaction)}
-                  reversing={reverseMutation.isPending}
-                  transaction={transaction}
-                />
-              ))
-            ) : (
-              <AppText style={{ color: colors.muted }} variant="caption">
-                No transactions yet.
-              </AppText>
-            )}
+            ) : null}
           </View>
         ) : null}
       </ScrollView>
@@ -228,6 +278,27 @@ export default function SinkingFundDetailScreen() {
         onClose={() => setWithdrawing(false)}
         onSubmit={(values) => withdrawalMutation.mutateAsync(values).then(() => undefined)}
         visible={withdrawing}
+      />
+      <ArchiveConfirmation
+        error={lifecycleMutation.error}
+        loading={lifecycleMutation.isPending}
+        onCancel={() => setArchiveConfirming(false)}
+        onConfirm={() =>
+          lifecycleMutation.mutate({ action: 'archive', confirmPositiveBalance: true })
+        }
+        sinkingFund={fundQuery.data ?? null}
+        visible={archiveConfirming}
+      />
+      <ReverseWithdrawalSheet
+        error={reverseMutation.error}
+        loading={reverseMutation.isPending}
+        onClose={() => setReversingTransaction(null)}
+        onSubmit={(reason) =>
+          reverseMutation
+            .mutateAsync({ reason, transaction: reversingTransaction! })
+            .then(() => undefined)
+        }
+        transaction={reversingTransaction}
       />
     </Screen>
   );
@@ -316,9 +387,16 @@ function TransactionRow({
         </AppText>
       ) : null}
       {transaction.reversedAt ? (
-        <AppText style={{ color: colors.muted }} variant="caption">
-          Reversed {formatDateTime(transaction.reversedAt)}
-        </AppText>
+        <>
+          <AppText style={{ color: colors.muted }} variant="caption">
+            Reversed {formatDateTime(transaction.reversedAt)}
+          </AppText>
+          {transaction.reversalReason ? (
+            <AppText style={{ color: colors.muted }} variant="caption">
+              Reversal reason: {transaction.reversalReason}
+            </AppText>
+          ) : null}
+        </>
       ) : transaction.transactionType === 'WITHDRAWAL' ? (
         <Button
           icon={RotateCcw}
@@ -329,6 +407,155 @@ function TransactionRow({
         />
       ) : null}
     </View>
+  );
+}
+
+function ArchiveConfirmation({
+  error,
+  loading,
+  onCancel,
+  onConfirm,
+  sinkingFund,
+  visible,
+}: {
+  error: Error | null;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  sinkingFund: SinkingFund | null;
+  visible: boolean;
+}) {
+  const { colors } = useAppTheme();
+  const { settings } = useSettings();
+  if (!sinkingFund) return null;
+  return (
+    <Modal animationType="fade" onRequestClose={onCancel} transparent visible={visible}>
+      <View style={styles.dialogBackdrop}>
+        <View
+          style={[styles.dialog, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
+          <AppText variant="title">Archive with balance</AppText>
+          <AppText style={{ color: colors.muted }} variant="body">
+            {formatMoney(sinkingFund.currentBalanceMinor, settings.currencyCode)} will remain in the
+            archived Sinking Fund history.
+          </AppText>
+          {error ? (
+            <AppText style={{ color: colors.danger }} variant="error">
+              {displayError(error, settings.currencyCode, 'Sinking Fund state was not changed.')}
+            </AppText>
+          ) : null}
+          <View style={styles.formActions}>
+            <Button label="Cancel" onPress={onCancel} variant="ghost" />
+            <Button icon={Archive} label="Archive" loading={loading} onPress={onConfirm} />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const reversalSchema = z.object({
+  reason: z.string().trim().min(1, 'Enter a reversal reason.').max(1000),
+});
+type ReversalValues = z.infer<typeof reversalSchema>;
+
+function ReverseWithdrawalSheet({
+  error,
+  loading,
+  onClose,
+  onSubmit,
+  transaction,
+}: {
+  error: Error | null;
+  loading: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string) => Promise<void>;
+  transaction: SinkingFundTransaction | null;
+}) {
+  const { colors } = useAppTheme();
+  const { settings } = useSettings();
+  const {
+    control,
+    formState: { errors },
+    handleSubmit,
+    reset,
+    setError,
+  } = useForm<ReversalValues>({
+    resolver: zodResolver(reversalSchema),
+    defaultValues: { reason: '' },
+  });
+
+  useEffect(() => {
+    if (transaction) reset({ reason: '' });
+  }, [reset, transaction]);
+
+  async function submit(values: ReversalValues) {
+    try {
+      await onSubmit(values.reason.trim());
+      reset({ reason: '' });
+    } catch (submitError) {
+      setError('root', {
+        message: displayError(
+          submitError,
+          settings.currencyCode,
+          'The withdrawal was not reversed.',
+        ),
+      });
+    }
+  }
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} visible={Boolean(transaction)}>
+      <View style={[styles.sheetScreen, { backgroundColor: colors.background }]}>
+        <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
+          <View>
+            <AppText variant="title">Reverse withdrawal</AppText>
+            <AppText style={{ color: colors.muted }} variant="caption">
+              {transaction ? formatMoney(transaction.amountMinor, settings.currencyCode) : ''}
+            </AppText>
+          </View>
+          <Pressable
+            accessibilityLabel="Close reversal form"
+            onPress={onClose}
+            style={styles.close}
+          >
+            <X color={colors.text} size={23} />
+          </Pressable>
+        </View>
+        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+          <Controller
+            control={control}
+            name="reason"
+            render={({ field }) => (
+              <TextField
+                error={errors.reason?.message}
+                label="Reason"
+                multiline
+                onBlur={field.onBlur}
+                onChangeText={field.onChange}
+                value={String(field.value ?? '')}
+              />
+            )}
+          />
+          {errors.root?.message || error ? (
+            <AppText style={{ color: colors.danger }} variant="error">
+              {errors.root?.message ??
+                displayError(error, settings.currencyCode, 'The withdrawal was not reversed.')}
+            </AppText>
+          ) : null}
+          <View style={styles.formActions}>
+            <Button label="Cancel" onPress={onClose} variant="ghost" />
+            <Button
+              icon={RotateCcw}
+              label="Reverse withdrawal"
+              loading={loading}
+              onPress={handleSubmit(submit)}
+              variant="danger"
+            />
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 
@@ -521,7 +748,14 @@ const styles = StyleSheet.create({
   card: { borderRadius: 8, borderWidth: 1, gap: 13, padding: 15 },
   close: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   content: { gap: 16, padding: 16, paddingBottom: 32 },
+  dialog: { borderRadius: 8, borderWidth: 1, gap: 13, margin: 18, padding: 18 },
+  dialogBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    flex: 1,
+    justifyContent: 'center',
+  },
   form: { gap: 13, padding: 18, paddingBottom: 40 },
+  formActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   header: {
     alignItems: 'center',
     flexDirection: 'row',

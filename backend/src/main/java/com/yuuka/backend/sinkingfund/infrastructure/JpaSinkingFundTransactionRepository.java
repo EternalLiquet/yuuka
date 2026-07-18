@@ -2,6 +2,7 @@ package com.yuuka.backend.sinkingfund.infrastructure;
 
 import com.yuuka.backend.sinkingfund.domain.SinkingFundTransaction;
 import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -54,7 +55,7 @@ public interface JpaSinkingFundTransactionRepository
             and tx.sinking_fund_id = :fundId
           """,
       nativeQuery = true)
-  long currentBalanceMinor(@Param("ownerId") UUID ownerId, @Param("fundId") UUID fundId);
+  BigDecimal currentBalanceMinor(@Param("ownerId") UUID ownerId, @Param("fundId") UUID fundId);
 
   long countBySinkingFundIdAndOwnerId(UUID sinkingFundId, UUID ownerId);
 

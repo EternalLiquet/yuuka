@@ -1117,36 +1117,6 @@
         }
       }
     },
-    "/api/v1/entries/{entryId}/sinking-fund-assignment" : {
-      "post" : {
-        "tags" : [ "sinking-fund-controller" ],
-        "operationId" : "assignEntry",
-        "parameters" : [ {
-          "name" : "entryId",
-          "in" : "path",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "format" : "uuid"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/AssignSinkingFundRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "204" : {
-            "description" : "No Content"
-          }
-        }
-      }
-    },
     "/api/v1/entries/{entryId}/bucket-transactions" : {
       "get" : {
         "tags" : [ "bucket-transaction-controller" ],
@@ -3850,20 +3820,6 @@
           }
         },
         "required" : [ "effectiveAt", "toStatus" ]
-      },
-      "AssignSinkingFundRequest" : {
-        "type" : "object",
-        "properties" : {
-          "sinkingFundId" : {
-            "type" : "string",
-            "format" : "uuid"
-          },
-          "version" : {
-            "type" : "integer",
-            "format" : "int64"
-          }
-        },
-        "required" : [ "version" ]
       },
       "CreateBucketTransactionRequest" : {
         "type" : "object",

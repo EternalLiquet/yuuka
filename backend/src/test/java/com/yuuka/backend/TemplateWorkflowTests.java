@@ -346,6 +346,118 @@ class TemplateWorkflowTests extends AbstractIntegrationTest {
     assertThat(refreshedTemplate.path("entries")).hasSize(2);
   }
 
+  @Test
+  void appliesTemplateOverridesWithSinkingFundAssignments() throws Exception {
+    String token = registerAndGetAccessToken("templates-sinking-fund@yuuka.local");
+    JsonNode template = createTemplate(token, "Fund Overrides", 120000);
+    JsonNode fund = createSinkingFund(token, "Car tags");
+
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/from-template")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "templateId":"%s",
+                      "name":"Funded Paycheck",
+                      "amountMinor":30000,
+                      "incomeDate":"2026-07-17",
+                      "entries":[
+                        {
+                          "entryType":"SINKING_FUND",
+                          "name":"Car tags",
+                          "amountMinor":10000,
+                          "targetMinor":120000,
+                          "targetDate":"2026-12-01",
+                          "sinkingFundId":"%s"
+                        },
+                        {
+                          "entryType":"SINKING_FUND",
+                          "name":"Car insurance",
+                          "amountMinor":20000,
+                          "sinkingFundId":"%s"
+                        }
+                      ]
+                    }
+                    """
+                        .formatted(
+                            template.path("id").asText(),
+                            fund.path("id").asText(),
+                            fund.path("id").asText())))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.entries", hasSize(2)))
+        .andExpect(jsonPath("$.entries[0].sinkingFundId").value(fund.path("id").asText()))
+        .andExpect(jsonPath("$.entries[0].targetMinor").value(nullValue()))
+        .andExpect(jsonPath("$.entries[0].targetDate").value(nullValue()))
+        .andExpect(jsonPath("$.entries[0].status").value("NOT_PAID"))
+        .andExpect(jsonPath("$.entries[1].sinkingFundId").value(fund.path("id").asText()))
+        .andExpect(jsonPath("$.entries[1].status").value("NOT_PAID"));
+
+    JsonNode refreshedFund = getSinkingFund(token, fund.path("id").asText());
+    assertThat(refreshedFund.path("currentBalanceMinor").asLong()).isZero();
+    assertThat(refreshedFund.path("transactionCount").asLong()).isZero();
+  }
+
+  @Test
+  void rejectsTemplateSinkingFundAssignmentsTransactionally() throws Exception {
+    String ownerToken = registerAndGetAccessToken("templates-sinking-owner@yuuka.local");
+    String otherToken = registerAndGetAccessToken("templates-sinking-other@yuuka.local");
+    JsonNode template = createTemplate(ownerToken, "Assignment Source", 120000);
+    JsonNode ownerFund = createSinkingFund(ownerToken, "Owner Fund");
+    JsonNode archivedFund = createSinkingFund(ownerToken, "Archived Fund");
+    archiveSinkingFund(
+        ownerToken, archivedFund.path("id").asText(), archivedFund.path("version").asLong());
+    JsonNode otherFund = createSinkingFund(otherToken, "Other Fund");
+    long paycheckCountBefore = tableCount("paychecks");
+    long entryCountBefore = tableCount("paycheck_entries");
+    long statusCountBefore = tableCount("entry_status_events");
+    long auditCountBefore = tableCount("audit_events");
+
+    JsonNode crossOwnerError =
+        postTemplateAssignment(
+            ownerToken, template.path("id").asText(), otherFund.path("id").asText(), 1000, 404);
+    assertThat(crossOwnerError.path("code").asText()).isEqualTo("NOT_FOUND");
+    assertPaycheckApplicationCounts(
+        paycheckCountBefore, entryCountBefore, statusCountBefore, auditCountBefore);
+
+    JsonNode archivedError =
+        postTemplateAssignment(
+            ownerToken, template.path("id").asText(), archivedFund.path("id").asText(), 1000, 422);
+    assertThat(archivedError.path("code").asText()).isEqualTo("SINKING_FUND_NOT_ACTIVE");
+    assertPaycheckApplicationCounts(
+        paycheckCountBefore, entryCountBefore, statusCountBefore, auditCountBefore);
+
+    mockMvc
+        .perform(
+            post("/api/v1/paychecks/from-template")
+                .header("Authorization", "Bearer " + ownerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "templateId":"%s",
+                      "name":"Zero Fund",
+                      "amountMinor":1000,
+                      "incomeDate":"2026-07-17",
+                      "entries":[
+                        {
+                          "entryType":"SINKING_FUND",
+                          "name":"Zero",
+                          "amountMinor":0,
+                          "sinkingFundId":"%s"
+                        }
+                      ]
+                    }
+                    """
+                        .formatted(template.path("id").asText(), ownerFund.path("id").asText())))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("SINKING_FUND_CONTRIBUTION_AMOUNT_REQUIRED"));
+    assertPaycheckApplicationCounts(
+        paycheckCountBefore, entryCountBefore, statusCountBefore, auditCountBefore);
+  }
+
   private JsonNode createTemplate(String token, String name, long totalMinor) throws Exception {
     MvcResult result =
         mockMvc
@@ -399,6 +511,90 @@ class TemplateWorkflowTests extends AbstractIntegrationTest {
             .andExpect(status().isOk())
             .andReturn();
     return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private JsonNode createSinkingFund(String token, String name) throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/api/v1/sinking-funds")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "name":"%s",
+                          "targetMinor":null,
+                          "targetDate":null,
+                          "notes":null,
+                          "openingBalanceMinor":null
+                        }
+                        """
+                            .formatted(name)))
+            .andExpect(status().isCreated())
+            .andReturn();
+    return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private JsonNode getSinkingFund(String token, String fundId) throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                get("/api/v1/sinking-funds/{id}", fundId)
+                    .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andReturn();
+    return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private void archiveSinkingFund(String token, String fundId, long version) throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/sinking-funds/{id}/archive", fundId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"version\":" + version + ",\"confirmPositiveBalance\":false}"))
+        .andExpect(status().isOk());
+  }
+
+  private JsonNode postTemplateAssignment(
+      String token, String templateId, String sinkingFundId, long amountMinor, int expectedStatus)
+      throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/api/v1/paychecks/from-template")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                    {
+                      "templateId":"%s",
+                      "name":"Rejected Fund",
+                      "amountMinor":1000,
+                      "incomeDate":"2026-07-17",
+                      "entries":[
+                        {
+                          "entryType":"SINKING_FUND",
+                          "name":"Rejected",
+                          "amountMinor":%d,
+                          "sinkingFundId":"%s"
+                        }
+                      ]
+                    }
+                    """
+                            .formatted(templateId, amountMinor, sinkingFundId)))
+            .andExpect(status().is(expectedStatus))
+            .andReturn();
+    return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private void assertPaycheckApplicationCounts(
+      long paycheckCount, long entryCount, long statusCount, long auditCount) {
+    assertThat(tableCount("paychecks")).isEqualTo(paycheckCount);
+    assertThat(tableCount("paycheck_entries")).isEqualTo(entryCount);
+    assertThat(tableCount("entry_status_events")).isEqualTo(statusCount);
+    assertThat(tableCount("audit_events")).isEqualTo(auditCount);
   }
 
   private JsonNode updateTemplate(

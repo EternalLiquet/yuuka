@@ -254,18 +254,6 @@ export function useYuukaApi() {
           body,
           sinkingFundTransactionSchema,
         ),
-      assignSinkingFundEntry: async (
-        entryId: string,
-        sinkingFundId: string | null,
-        version: number,
-      ) =>
-        expectNoContent(
-          await authenticatedRequest(`/entries/${entryId}/sinking-fund-assignment`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sinkingFundId, version }),
-          }),
-        ),
       createPaycheck: (body: {
         amountMinor: number;
         incomeDate: string;

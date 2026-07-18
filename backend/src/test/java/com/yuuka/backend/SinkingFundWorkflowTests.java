@@ -1,7 +1,9 @@
 package com.yuuka.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -201,7 +203,15 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
             201);
 
     archive(token, fund.path("id").asText(), fund.path("version").asLong(), false, 422);
-    assignEntry(token, entry.path("id").asText(), entry.path("version").asLong(), null, 204);
+    updateEntry(
+        token,
+        entry.path("id").asText(),
+        entry.path("version").asLong(),
+        "SINKING_FUND",
+        entry.path("name").asText(),
+        entry.path("amountMinor").asLong(),
+        null,
+        200);
     JsonNode archived =
         archive(
             token,
@@ -256,6 +266,191 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
         404);
   }
 
+  @Test
+  void exactLongMaxBalanceIsReturnedButAdditionalPostedContributionOverflowsAndRollsBack()
+      throws Exception {
+    String token = register("sinking-funds-long-max@yuuka.local");
+    JsonNode fund = createFund(token, "Vault", null, Long.MAX_VALUE);
+    assertThat(getFund(token, fund.path("id").asText()).path("currentBalanceMinor").asLong())
+        .isEqualTo(Long.MAX_VALUE);
+
+    JsonNode list = json(get("/api/v1/sinking-funds").header("Authorization", bearer(token)), 200);
+    assertThat(list.path("summary").path("totalActiveBalanceMinor").asLong())
+        .isEqualTo(Long.MAX_VALUE);
+
+    JsonNode paycheck = createPaycheck(token, "Overflow check", 1);
+    JsonNode entry =
+        addEntry(
+            token,
+            paycheck.path("id").asText(),
+            "SINKING_FUND",
+            "Too much",
+            1,
+            fund.path("id").asText(),
+            201);
+    long transactionCountBefore = sinkingFundTransactionCount(fund.path("id").asText());
+    long statusEventCountBefore = statusEventCount(entry.path("id").asText());
+    long auditCountBefore =
+        auditCount("PAYCHECK_ENTRY", UUID.fromString(entry.path("id").asText()));
+
+    JsonNode error =
+        changeStatus(
+            token, entry.path("id").asText(), "POSTED", entry.path("version").asLong(), 422);
+
+    assertThat(error.path("code").asText()).isEqualTo("MONEY_AMOUNT_OVERFLOW");
+    assertThat(error.path("traceId").asText()).isNotBlank();
+    assertThat(error.path("details").path("currencyCode").asText()).isEqualTo("USD");
+    assertThat(sinkingFundTransactionCount(fund.path("id").asText()))
+        .isEqualTo(transactionCountBefore);
+    assertThat(activeContributionCount(fund.path("id").asText())).isZero();
+    assertThat(statusEventCount(entry.path("id").asText())).isEqualTo(statusEventCountBefore);
+    assertThat(auditCount("PAYCHECK_ENTRY", UUID.fromString(entry.path("id").asText())))
+        .isEqualTo(auditCountBefore);
+    assertThat(entryStatus(entry.path("id").asText())).isEqualTo("NOT_PAID");
+  }
+
+  @Test
+  void withdrawalReversalThatWouldOverflowReturnsStructuredErrorAndRollsBack() throws Exception {
+    String token = register("sinking-funds-reversal-overflow@yuuka.local");
+    JsonNode fund = createFund(token, "Overflow reversal", null, Long.MAX_VALUE);
+    JsonNode withdrawal =
+        withdraw(
+            token,
+            fund.path("id").asText(),
+            fund.path("version").asLong(),
+            1,
+            "2026-07-17",
+            "Temporary",
+            201);
+    insertOpeningBalance(fund.path("id").asText(), 1);
+
+    JsonNode error =
+        reverseWithdrawal(
+            token,
+            withdrawal.path("id").asText(),
+            withdrawal.path("version").asLong(),
+            "Undo",
+            422);
+
+    assertThat(error.path("code").asText()).isEqualTo("MONEY_AMOUNT_OVERFLOW");
+    assertThat(error.path("traceId").asText()).isNotBlank();
+    assertThat(error.path("details").path("currencyCode").asText()).isEqualTo("USD");
+    assertThat(transactionReversedAt(withdrawal.path("id").asText())).isNull();
+  }
+
+  @Test
+  void batchedListBalanceOverflowIsStructuredAndOwnerScoped() throws Exception {
+    String ownerToken = register("sinking-funds-list-overflow@yuuka.local");
+    String otherToken = register("sinking-funds-list-overflow-other@yuuka.local");
+    JsonNode fund = createFund(ownerToken, "Huge", null, Long.MAX_VALUE);
+    insertOpeningBalance(fund.path("id").asText(), Long.MAX_VALUE);
+
+    mockMvc
+        .perform(get("/api/v1/sinking-funds").header("Authorization", bearer(ownerToken)))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("MONEY_AMOUNT_OVERFLOW"))
+        .andExpect(jsonPath("$.details.currencyCode").value("USD"))
+        .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+    mockMvc
+        .perform(get("/api/v1/sinking-funds").header("Authorization", bearer(otherToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.summary.totalActiveBalanceMinor").value(0))
+        .andExpect(jsonPath("$.items").isEmpty());
+  }
+
+  @Test
+  void statusReversalCannotOverdrawSinkingFundContribution() throws Exception {
+    String token = register("sinking-funds-status-overdraw@yuuka.local");
+    JsonNode fund = createFund(token, "Car", null, null);
+    JsonNode entry = postedContribution(token, fund, "Car contribution", 100);
+    withdraw(
+        token,
+        fund.path("id").asText(),
+        getFund(token, fund.path("id").asText()).path("version").asLong(),
+        100,
+        "2026-07-18",
+        "Repair",
+        201);
+
+    JsonNode error =
+        changeStatus(
+            token, entry.path("id").asText(), "PROCESSING", entry.path("version").asLong(), 422);
+
+    assertThat(error.path("code").asText())
+        .isEqualTo("SINKING_FUND_CONTRIBUTION_REVERSAL_EXCEEDS_BALANCE");
+    assertThat(error.path("details").path("amountMinor").asLong()).isEqualTo(100);
+    assertThat(entryStatus(entry.path("id").asText())).isEqualTo("POSTED");
+    assertThat(activeContributionCount(fund.path("id").asText())).isEqualTo(1);
+  }
+
+  @Test
+  void deletingPostedContributionCannotOverdrawSinkingFund() throws Exception {
+    String token = register("sinking-funds-delete-overdraw@yuuka.local");
+    JsonNode fund = createFund(token, "Home", null, null);
+    JsonNode entry = postedContribution(token, fund, "Home contribution", 100);
+    withdraw(
+        token,
+        fund.path("id").asText(),
+        getFund(token, fund.path("id").asText()).path("version").asLong(),
+        100,
+        "2026-07-18",
+        "Supplies",
+        201);
+
+    mockMvc
+        .perform(
+            delete("/api/v1/entries/{entryId}", entry.path("id").asText())
+                .param("version", String.valueOf(entry.path("version").asLong()))
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("SINKING_FUND_CONTRIBUTION_REVERSAL_EXCEEDS_BALANCE"));
+
+    assertThat(entryDeletedAt(entry.path("id").asText())).isNull();
+    assertThat(activeContributionCount(fund.path("id").asText())).isEqualTo(1);
+  }
+
+  @Test
+  void updatingPostedContributionAmountOrFundCannotOverdrawSinkingFund() throws Exception {
+    String token = register("sinking-funds-update-overdraw@yuuka.local");
+    JsonNode fund = createFund(token, "Medical", null, null);
+    JsonNode otherFund = createFund(token, "Moving", null, null);
+    JsonNode entry = postedContribution(token, fund, "Medical contribution", 100);
+    withdraw(
+        token,
+        fund.path("id").asText(),
+        getFund(token, fund.path("id").asText()).path("version").asLong(),
+        100,
+        "2026-07-18",
+        "Prescription",
+        201);
+
+    updateEntry(
+        token,
+        entry.path("id").asText(),
+        entry.path("version").asLong(),
+        "SINKING_FUND",
+        "Smaller contribution",
+        50,
+        fund.path("id").asText(),
+        422);
+    updateEntry(
+        token,
+        entry.path("id").asText(),
+        entry.path("version").asLong(),
+        "SINKING_FUND",
+        "Move contribution",
+        100,
+        otherFund.path("id").asText(),
+        422);
+
+    JsonNode paycheck = getPaycheck(token, entry.path("paycheckId").asText());
+    JsonNode refreshed = entryById(paycheck, entry.path("id").asText());
+    assertThat(refreshed.path("amountMinor").asLong()).isEqualTo(100);
+    assertThat(refreshed.path("sinkingFundId").asText()).isEqualTo(fund.path("id").asText());
+    assertThat(activeContributionCount(fund.path("id").asText())).isEqualTo(1);
+  }
+
   private String register(String email) throws Exception {
     JsonNode result =
         json(
@@ -271,8 +466,7 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
   }
 
   private JsonNode createFund(
-      String token, String name, Integer targetMinor, Integer openingBalanceMinor)
-      throws Exception {
+      String token, String name, Number targetMinor, Number openingBalanceMinor) throws Exception {
     return json(
         post("/api/v1/sinking-funds")
             .header("Authorization", bearer(token))
@@ -297,6 +491,12 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
   private JsonNode getFund(String token, String fundId) throws Exception {
     return json(
         get("/api/v1/sinking-funds/{fundId}", fundId).header("Authorization", bearer(token)), 200);
+  }
+
+  private JsonNode getPaycheck(String token, String paycheckId) throws Exception {
+    return json(
+        get("/api/v1/paychecks/{paycheckId}", paycheckId).header("Authorization", bearer(token)),
+        200);
   }
 
   private JsonNode createPaycheck(String token, String name, long amountMinor) throws Exception {
@@ -358,6 +558,43 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
                 {"toStatus":"%s","effectiveAt":"2026-07-17T12:00:00Z","version":%d}
                 """
                     .formatted(requestedStatus, version)),
+        expectedStatus);
+  }
+
+  private JsonNode updateEntry(
+      String token,
+      String entryId,
+      long version,
+      String entryType,
+      String name,
+      long amountMinor,
+      String sinkingFundId,
+      int expectedStatus)
+      throws Exception {
+    String sinkingFundJson = sinkingFundId == null ? "null" : "\"%s\"".formatted(sinkingFundId);
+    return json(
+        patch("/api/v1/entries/{id}", entryId)
+            .header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {
+                  "entryType":"%s",
+                  "name":%s,
+                  "amountMinor":%d,
+                  "paybackId":null,
+                  "sinkingFundId":%s,
+                  "targetMinor":9999,
+                  "targetDate":"2026-12-31",
+                  "version":%d
+                }
+                """
+                    .formatted(
+                        entryType,
+                        objectMapper.writeValueAsString(name),
+                        amountMinor,
+                        sinkingFundJson,
+                        version)),
         expectedStatus);
   }
 
@@ -436,22 +673,6 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
         expectedStatus);
   }
 
-  private void assignEntry(
-      String token, String entryId, long version, String sinkingFundId, int expectedStatus)
-      throws Exception {
-    String sinkingFundJson = sinkingFundId == null ? "null" : "\"%s\"".formatted(sinkingFundId);
-    json(
-        post("/api/v1/entries/{entryId}/sinking-fund-assignment", entryId)
-            .header("Authorization", bearer(token))
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(
-                """
-                {"sinkingFundId":%s,"version":%d}
-                """
-                    .formatted(sinkingFundJson, version)),
-        expectedStatus);
-  }
-
   private void updateOpeningBalanceDate(String fundId, String effectiveDate) {
     jdbcTemplate.update(
         """
@@ -473,6 +694,91 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
         UUID.fromString(fundId));
   }
 
+  private JsonNode postedContribution(String token, JsonNode fund, String name, long amountMinor)
+      throws Exception {
+    JsonNode paycheck = createPaycheck(token, name, amountMinor);
+    JsonNode entry =
+        addEntry(
+            token,
+            paycheck.path("id").asText(),
+            "SINKING_FUND",
+            name,
+            amountMinor,
+            fund.path("id").asText(),
+            201);
+    return changeStatus(
+        token, entry.path("id").asText(), "POSTED", entry.path("version").asLong(), 200);
+  }
+
+  private JsonNode entryById(JsonNode paycheck, String entryId) {
+    for (JsonNode entry : paycheck.path("entries")) {
+      if (entryId.equals(entry.path("id").asText())) {
+        return entry;
+      }
+    }
+    throw new AssertionError("Entry not found: " + entryId);
+  }
+
+  private void insertOpeningBalance(String fundId, long amountMinor) {
+    UUID fundUuid = UUID.fromString(fundId);
+    UUID ownerId =
+        jdbcTemplate.queryForObject(
+            "select owner_id from sinking_funds where id = ?", UUID.class, fundUuid);
+    jdbcTemplate.update(
+        """
+        insert into sinking_fund_transactions (
+            id, owner_id, sinking_fund_id, entry_id, transaction_type, amount_minor,
+            effective_date, reason, notes, created_at, updated_at, version
+        )
+        values (?, ?, ?, null, 'OPENING_BALANCE', ?, current_date, 'Manual test balance', null, now(), now(), 0)
+        """,
+        UUID.randomUUID(),
+        ownerId,
+        fundUuid,
+        amountMinor);
+  }
+
+  private long sinkingFundTransactionCount(String fundId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from sinking_fund_transactions where sinking_fund_id = ?",
+        Long.class,
+        UUID.fromString(fundId));
+  }
+
+  private long statusEventCount(String entryId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from entry_status_events where entry_id = ?",
+        Long.class,
+        UUID.fromString(entryId));
+  }
+
+  private long auditCount(String entityType, UUID entityId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from audit_events where entity_type = ? and entity_id = ?",
+        Long.class,
+        entityType,
+        entityId);
+  }
+
+  private String entryStatus(String entryId) {
+    return jdbcTemplate.queryForObject(
+        "select status from paycheck_entries where id = ?", String.class, UUID.fromString(entryId));
+  }
+
+  private java.time.Instant entryDeletedAt(String entryId) {
+    return jdbcTemplate.queryForObject(
+        "select deleted_at from paycheck_entries where id = ?",
+        java.time.Instant.class,
+        UUID.fromString(entryId));
+  }
+
+  private java.time.Instant transactionReversedAt(String transactionId) {
+    return jdbcTemplate.queryForObject(
+        "select reversed_at from sinking_fund_transactions where id = ?",
+        java.time.Instant.class,
+        UUID.fromString(transactionId));
+  }
+
   private long totalContributionCount(String fundId) {
     return jdbcTemplate.queryForObject(
         """
@@ -492,7 +798,7 @@ class SinkingFundWorkflowTests extends AbstractIntegrationTest {
     return body.isBlank() ? objectMapper.createObjectNode() : objectMapper.readTree(body);
   }
 
-  private String nullableNumber(Integer value) {
+  private String nullableNumber(Number value) {
     return value == null ? "null" : value.toString();
   }
 

@@ -2,7 +2,6 @@ package com.yuuka.backend.sinkingfund.api;
 
 import com.yuuka.backend.common.api.PageResponse;
 import com.yuuka.backend.common.security.AuthenticatedOwner;
-import com.yuuka.backend.sinkingfund.api.dto.AssignSinkingFundRequest;
 import com.yuuka.backend.sinkingfund.api.dto.CreateSinkingFundRequest;
 import com.yuuka.backend.sinkingfund.api.dto.CreateSinkingFundWithdrawalRequest;
 import com.yuuka.backend.sinkingfund.api.dto.ReorderSinkingFundsRequest;
@@ -131,14 +130,5 @@ public class SinkingFundController {
       @PathVariable UUID transactionId,
       @Valid @RequestBody ReverseSinkingFundWithdrawalRequest request) {
     return service.reverseWithdrawal(AuthenticatedOwner.id(jwt), transactionId, request);
-  }
-
-  @PostMapping("/entries/{entryId}/sinking-fund-assignment")
-  @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void assignEntry(
-      @AuthenticationPrincipal Jwt jwt,
-      @PathVariable UUID entryId,
-      @Valid @RequestBody AssignSinkingFundRequest request) {
-    service.assignEntry(AuthenticatedOwner.id(jwt), entryId, request);
   }
 }
