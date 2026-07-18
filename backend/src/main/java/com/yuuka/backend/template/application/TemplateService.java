@@ -344,6 +344,7 @@ public class TemplateService {
               source.notes(),
               source.targetMinor(),
               source.targetDate(),
+              null,
               null);
       validateRecurringSource(
           source.entryType(),

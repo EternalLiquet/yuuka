@@ -65,6 +65,17 @@ public interface JpaPaycheckEntryRepository extends JpaRepository<PaycheckEntry,
 
   long countByPaybackIdAndOwnerIdAndDeletedAtIsNull(UUID paybackId, UUID ownerId);
 
+  long countBySinkingFundIdAndOwnerIdAndDeletedAtIsNull(UUID sinkingFundId, UUID ownerId);
+
+  @Query(
+      "select count(entry) from PaycheckEntry entry "
+          + "where entry.sinkingFundId = :sinkingFundId and entry.ownerId = :ownerId "
+          + "and entry.deletedAt is null and entry.status <> :postedStatus")
+  long countLivePendingBySinkingFundIdAndOwnerId(
+      @Param("sinkingFundId") UUID sinkingFundId,
+      @Param("ownerId") UUID ownerId,
+      @Param("postedStatus") com.yuuka.backend.paycheck.domain.EntryStatus postedStatus);
+
   @Query(
       "select entry from PaycheckEntry entry "
           + "where entry.ownerId = :ownerId "
@@ -85,4 +96,13 @@ public interface JpaPaycheckEntryRepository extends JpaRepository<PaycheckEntry,
           + "order by entry.paycheckId, entry.position, entry.id")
   List<PaycheckEntry> findLiveAssignedToPaybackForUpdate(
       @Param("paybackId") UUID paybackId, @Param("ownerId") UUID ownerId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select entry from PaycheckEntry entry "
+          + "where entry.sinkingFundId = :sinkingFundId and entry.ownerId = :ownerId "
+          + "and entry.deletedAt is null "
+          + "order by entry.paycheckId, entry.position, entry.id")
+  List<PaycheckEntry> findLiveAssignedToSinkingFundForUpdate(
+      @Param("sinkingFundId") UUID sinkingFundId, @Param("ownerId") UUID ownerId);
 }

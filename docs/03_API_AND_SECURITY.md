@@ -75,6 +75,8 @@ statuses, bucket purchases, Payback assignments, or copied history.
 
 - `POST /paychecks/{paycheckId}/entries`
 - `paybackId` may be supplied on entry create/update to assign that entry to an Active Payback.
+- `sinkingFundId` may be supplied on `SINKING_FUND` entry create/update to assign that entry to an
+  Active persistent Sinking Fund.
 - Bill entry create/update requests and responses include optional `paymentMethod` values of `AUTOPAY` or `MANUAL`; non-Bill entries must not carry a payment method.
 - `POST /paychecks/{paycheckId}/leftover-entry` creates a normal `BILL` named `LEFTOVER` for the exact current unallocated amount when the supplied paycheck version is current.
 - `PATCH /entries/{id}`
@@ -115,6 +117,29 @@ Status-change request:
 Payback business-rule errors use structured money details for mobile formatting. For example,
 overpayment uses `PAYBACK_REPAYMENT_OVERPAID` with `details.amountMinor` and `details.currencyCode`
 instead of embedding raw storage values in the message.
+
+### Sinking Funds
+
+- `GET /sinking-funds?includeArchived=false` returns owner-scoped Sinking Funds plus a summary of
+  active balances.
+- `POST /sinking-funds` creates a persistent Sinking Fund with optional target fields, notes, and
+  optional opening balance transaction.
+- `GET /sinking-funds/{id}`
+- `PATCH /sinking-funds/{id}`
+- `POST /sinking-funds/reorder` persists the owner-defined order for Active Sinking Funds.
+- `POST /sinking-funds/{id}/archive` archives a fund after version validation, blocks pending live
+  linked entries, and requires positive-balance confirmation when applicable.
+- `POST /sinking-funds/{id}/restore` restores an archived fund.
+- `GET /sinking-funds/{id}/transactions` returns paged transaction history ordered by effective
+  date, creation time, and ID descending.
+- `POST /sinking-funds/{id}/withdrawals` creates a withdrawal transaction after version and balance
+  validation.
+- `POST /sinking-fund-transactions/{id}/reverse` reverses a withdrawal without deleting history.
+- `POST /entries/{entryId}/sinking-fund-assignment` assigns or clears a persistent Sinking Fund on
+  an existing live entry after optimistic-lock validation.
+
+Persistent Sinking Fund balances and progress are derived from transaction history. Controllers and
+mobile clients must not persist or duplicate the authoritative balance calculation.
 
 ### Templates
 

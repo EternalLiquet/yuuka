@@ -10,6 +10,9 @@ import {
   pageSchema,
   paycheckSchema,
   rollingSpendingBucketPerformanceSchema,
+  sinkingFundListSchema,
+  sinkingFundSchema,
+  sinkingFundTransactionSchema,
   spendingBucketPerformanceSummarySchema,
   statusEventSchema,
   templateEntrySchema,
@@ -40,6 +43,7 @@ const entry = {
   targetMinor: null,
   sourceRecurringBillDefinitionId: null,
   sourceRecurringOccurrenceDate: null,
+  sinkingFundId: null,
   updatedAt: '2026-07-10T12:30:00Z',
   version: 0,
 };
@@ -216,6 +220,54 @@ describe('API response contracts', () => {
         totalPages: 1,
       }),
     ).toMatchObject({ items: [expect.objectContaining({ id: entry.id })] });
+    const sinkingFund = {
+      archivedAt: null,
+      createdAt: '2026-07-10T12:00:00Z',
+      currentBalanceMinor: 2500,
+      id: '11111111-1111-4111-8111-111111111124',
+      name: 'Vacation',
+      notes: null,
+      position: 0,
+      progressPercent: 25,
+      remainingTargetMinor: 7500,
+      state: 'ACTIVE',
+      targetDate: '2026-12-31',
+      targetMinor: 10000,
+      transactionCount: 2,
+      updatedAt: '2026-07-10T12:30:00Z',
+      version: 0,
+    };
+    expect(sinkingFundSchema.parse(sinkingFund)).toMatchObject({
+      currentBalanceMinor: 2500,
+      name: 'Vacation',
+    });
+    expect(
+      sinkingFundListSchema.parse({
+        items: [sinkingFund],
+        summary: { activeCount: 1, archivedCount: 0, totalActiveBalanceMinor: 2500 },
+      }),
+    ).toMatchObject({ summary: { activeCount: 1 } });
+    expect(
+      sinkingFundTransactionSchema.parse({
+        amountMinor: 2500,
+        createdAt: '2026-07-10T12:00:00Z',
+        effectiveDate: '2026-07-10',
+        entryId: entry.id,
+        entryName: 'Work Food',
+        entryStatus: 'POSTED',
+        id: '11111111-1111-4111-8111-111111111125',
+        notes: null,
+        paycheckIncomeDate: '2026-07-10',
+        paycheckName: 'UTILITIES 1/2',
+        reason: null,
+        reversalReason: null,
+        reversedAt: null,
+        sinkingFundId: sinkingFund.id,
+        transactionType: 'CONTRIBUTION',
+        updatedAt: '2026-07-10T12:30:00Z',
+        version: 0,
+      }),
+    ).toMatchObject({ transactionType: 'CONTRIBUTION' });
   });
 
   it('validates and formats backend version responses', () => {

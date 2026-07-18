@@ -5,7 +5,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
-import { Entry, EntryPaymentMethod, Payback } from '@/api/contracts';
+import { Entry, EntryPaymentMethod, Payback, SinkingFund } from '@/api/contracts';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { SegmentedControl } from '@/components/segmented-control';
@@ -31,7 +31,11 @@ export function EntryEditor({
   paybacksError,
   paybacksLoading,
   onRetryPaybacks,
+  onRetrySinkingFunds,
   visible,
+  sinkingFunds = [],
+  sinkingFundsError,
+  sinkingFundsLoading,
 }: {
   entry?: Entry | null;
   onClose: () => void;
@@ -46,13 +50,18 @@ export function EntryEditor({
     paymentMethod: EntryPaymentMethod | null;
     payee: string | null;
     paybackId: string | null;
+    sinkingFundId: string | null;
     targetDate: string | null;
     targetMinor: number | null;
   }) => Promise<void>;
   onRetryPaybacks?: () => void;
+  onRetrySinkingFunds?: () => void;
   paybacks?: Payback[];
   paybacksError?: string | null;
   paybacksLoading?: boolean;
+  sinkingFunds?: SinkingFund[];
+  sinkingFundsError?: string | null;
+  sinkingFundsLoading?: boolean;
   visible: boolean;
 }) {
   const { colors } = useAppTheme();
@@ -69,6 +78,7 @@ export function EntryEditor({
     defaultValues: defaults(entry),
   });
   const entryType = useWatch({ control, name: 'entryType' });
+  const sinkingFundId = useWatch({ control, name: 'sinkingFundId' });
 
   useEffect(() => {
     if (visible) reset(defaults(entry));
@@ -77,6 +87,9 @@ export function EntryEditor({
   useEffect(() => {
     if (entryType !== 'BILL') {
       setValue('manualPay', false);
+    }
+    if (entryType !== 'SINKING_FUND') {
+      setValue('sinkingFundId', '');
     }
   }, [entryType, setValue]);
 
@@ -96,12 +109,15 @@ export function EntryEditor({
         payee: values.entryType === 'BILL' && values.payee.trim() ? values.payee.trim() : null,
         notes: values.notes.trim() || null,
         paybackId: values.paybackId || null,
+        sinkingFundId: values.entryType === 'SINKING_FUND' ? values.sinkingFundId || null : null,
         targetMinor:
-          values.entryType === 'SINKING_FUND' && values.target
+          values.entryType === 'SINKING_FUND' && !values.sinkingFundId && values.target
             ? parseMoneyToMinor(values.target)
             : null,
         targetDate:
-          values.entryType === 'SINKING_FUND' && values.targetDate ? values.targetDate : null,
+          values.entryType === 'SINKING_FUND' && !values.sinkingFundId && values.targetDate
+            ? values.targetDate
+            : null,
       });
       onClose();
     } catch (error) {
@@ -215,20 +231,41 @@ export function EntryEditor({
           ) : null}
           {entryType === 'SINKING_FUND' ? (
             <>
-              <ControlledField
+              <Controller
                 control={control}
-                error={errors.target?.message}
-                keyboardType="decimal-pad"
-                label="Target amount (optional)"
-                name="target"
+                name="sinkingFundId"
+                render={({ field }) => (
+                  <View style={styles.fieldGroup}>
+                    <SinkingFundSelector
+                      currentSinkingFundId={entry?.sinkingFundId ?? null}
+                      error={sinkingFundsError}
+                      loading={sinkingFundsLoading}
+                      onChange={field.onChange}
+                      onRetry={onRetrySinkingFunds}
+                      sinkingFunds={sinkingFunds}
+                      value={field.value}
+                    />
+                  </View>
+                )}
               />
-              <ControlledField
-                control={control}
-                error={errors.targetDate?.message}
-                label="Target date (optional)"
-                name="targetDate"
-                placeholder="YYYY-MM-DD"
-              />
+              {!sinkingFundId ? (
+                <>
+                  <ControlledField
+                    control={control}
+                    error={errors.target?.message}
+                    keyboardType="decimal-pad"
+                    label="Target amount (optional)"
+                    name="target"
+                  />
+                  <ControlledField
+                    control={control}
+                    error={errors.targetDate?.message}
+                    label="Target date (optional)"
+                    name="targetDate"
+                    placeholder="YYYY-MM-DD"
+                  />
+                </>
+              ) : null}
             </>
           ) : null}
           <ControlledField control={control} label="Notes (optional)" multiline name="notes" />
@@ -317,9 +354,138 @@ function defaults(entry?: Entry | null): EntryFormValues {
     payee: entry?.payee ?? '',
     notes: entry?.notes ?? '',
     paybackId: entry?.paybackId ?? '',
+    sinkingFundId: entry?.sinkingFundId ?? '',
     target: entry?.targetMinor == null ? '' : minorToInput(entry.targetMinor),
     targetDate: entry?.targetDate ?? '',
   };
+}
+
+function SinkingFundSelector({
+  currentSinkingFundId,
+  error,
+  loading,
+  onChange,
+  onRetry,
+  sinkingFunds,
+  value,
+}: {
+  currentSinkingFundId: string | null;
+  error?: string | null;
+  loading?: boolean;
+  onChange: (value: string) => void;
+  onRetry?: () => void;
+  sinkingFunds: SinkingFund[];
+  value: string;
+}) {
+  const { colors } = useAppTheme();
+  const [open, setOpen] = useState(false);
+  const options = useMemo(
+    () =>
+      sinkingFunds
+        .filter((fund) => fund.state === 'ACTIVE' || fund.id === currentSinkingFundId)
+        .sort(
+          (left, right) => left.position - right.position || left.name.localeCompare(right.name),
+        ),
+    [currentSinkingFundId, sinkingFunds],
+  );
+  const selected = options.find((fund) => fund.id === value);
+  const selectedLabel = selected?.name ?? 'No persistent fund';
+  return (
+    <>
+      <AppText variant="label">Sinking Fund</AppText>
+      <AppText style={{ color: colors.muted }} variant="caption">
+        Posted entries add to the selected fund balance.
+      </AppText>
+      <Pressable
+        accessible
+        accessibilityLabel={`Sinking Fund, selected ${selectedLabel}`}
+        accessibilityRole="button"
+        onPress={() => setOpen(true)}
+        style={({ pressed }) => [
+          styles.paybackSelect,
+          { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+          pressed && styles.pressed,
+        ]}
+      >
+        <View style={styles.paybackSelectText}>
+          <AppText numberOfLines={1} variant="label">
+            {selectedLabel}
+          </AppText>
+          <AppText style={{ color: colors.muted }} variant="caption">
+            {loading ? 'Loading Sinking Funds...' : 'Choose fund'}
+          </AppText>
+        </View>
+        <ChevronDown color={colors.text} size={20} />
+      </Pressable>
+      <Modal animationType="slide" onRequestClose={() => setOpen(false)} transparent visible={open}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+            <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
+              <View>
+                <AppText variant="title">Sinking Fund</AppText>
+                <AppText style={{ color: colors.muted }} variant="caption">
+                  Choose where Posted contributions are tracked.
+                </AppText>
+              </View>
+              <Pressable
+                accessibilityLabel="Close Sinking Fund selector"
+                onPress={() => setOpen(false)}
+                style={styles.close}
+              >
+                <X color={colors.text} size={23} />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.optionList}>
+              <PaybackSelectOption
+                label="No persistent fund"
+                onPress={() => {
+                  onChange('');
+                  setOpen(false);
+                }}
+                selected={!value}
+              />
+              {loading ? (
+                <View style={styles.selectorState}>
+                  <ActivityIndicator color={colors.accent} />
+                  <AppText style={{ color: colors.muted }} variant="caption">
+                    Loading Sinking Funds...
+                  </AppText>
+                </View>
+              ) : error ? (
+                <View style={styles.selectorState}>
+                  <AppText style={{ color: colors.danger }} variant="error">
+                    {error}
+                  </AppText>
+                  {onRetry ? (
+                    <Button icon={RefreshCw} label="Retry" onPress={onRetry} variant="secondary" />
+                  ) : null}
+                </View>
+              ) : options.length ? (
+                options.map((fund) => (
+                  <PaybackSelectOption
+                    key={fund.id}
+                    label={fund.name}
+                    onPress={() => {
+                      onChange(fund.id);
+                      setOpen(false);
+                    }}
+                    selected={value === fund.id}
+                  />
+                ))
+              ) : (
+                <View style={styles.selectorState}>
+                  <AppText variant="label">No active Sinking Funds</AppText>
+                  <AppText style={{ color: colors.muted, textAlign: 'center' }} variant="caption">
+                    Create an active Sinking Fund before assigning contributions.
+                  </AppText>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
 }
 
 function PaybackSelector({

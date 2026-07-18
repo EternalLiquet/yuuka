@@ -338,6 +338,7 @@ public class RecurringBillService {
               definition.getNotes(),
               null,
               null,
+              null,
               null);
       entry.setRecurringSource(definition.getId(), item.occurrenceDate());
       entry = entries.saveAndFlush(entry);

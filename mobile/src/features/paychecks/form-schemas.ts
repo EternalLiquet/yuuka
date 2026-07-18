@@ -34,6 +34,7 @@ export const entryFormSchema = z
     payee: z.string().max(160),
     notes: z.string().max(2000),
     paybackId: z.string(),
+    sinkingFundId: z.string(),
     target: z.string(),
     targetDate: z.string(),
   })

@@ -10,6 +10,7 @@ const baseEntry = {
   notes: '',
   paybackId: '',
   payee: '',
+  sinkingFundId: '',
   target: '',
   targetDate: '',
 };

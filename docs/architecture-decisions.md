@@ -55,6 +55,25 @@ Paybacks store an integer `position` scoped to the owner. New Paybacks append to
 reorder requests must include every live Payback ID exactly once. Active and Paid Off sections may
 be shown separately, but each section preserves the persisted order.
 
+## Persistent Sinking Funds
+
+Persistent Sinking Funds are owner-scoped aggregates separate from paycheck allocation. A paycheck
+entry may link to at most one Active Sinking Fund, but the entry still reserves only its own
+paycheck contribution. Posted status creates one active contribution transaction for the entry
+amount; moving backward, deleting the entry, or changing a Posted linked entry reverses the active
+contribution instead of deleting history. Returning to Posted creates a new active contribution,
+while a partial unique index prevents duplicate active contribution rows for the same entry.
+
+Current Sinking Fund balances are derived from unreversed opening-balance, contribution, and
+withdrawal transactions. The Sinking Fund table stores metadata, state, order, and target fields,
+not current balance totals. Withdrawals and withdrawal reversals are explicit transaction rows and
+version-guarded workflows so mobile and controllers do not duplicate the authoritative balance
+rules.
+
+Sinking Funds store an integer `position` scoped to the owner. New funds append to the active
+order, and reorder requests must include every active Sinking Fund ID exactly once. Archived funds
+remain readable with transaction history and can be restored.
+
 ## Runtime version reporting
 
 Yuuka release tags are the version source of truth. CI converts a successful `master` release tag

@@ -40,6 +40,15 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/paybacks",
           "/api/v1/paybacks/{paybackId}",
           "/api/v1/paybacks/{paybackId}/repayments",
+          "/api/v1/sinking-funds",
+          "/api/v1/sinking-funds/{fundId}",
+          "/api/v1/sinking-funds/{fundId}/archive",
+          "/api/v1/sinking-funds/{fundId}/restore",
+          "/api/v1/sinking-funds/reorder",
+          "/api/v1/sinking-funds/{fundId}/transactions",
+          "/api/v1/sinking-funds/{fundId}/withdrawals",
+          "/api/v1/sinking-fund-transactions/{transactionId}/reverse",
+          "/api/v1/entries/{entryId}/sinking-fund-assignment",
           "/api/v1/templates",
           "/health/live",
           "/health/version");
@@ -139,6 +148,27 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     assertThat(sizeSchema.path("maximum").asInt()).isEqualTo(100);
     assertThat(sizeSchema.path("default").isInt()).isTrue();
     assertThat(sizeSchema.path("default").asInt()).isEqualTo(50);
+
+    JsonNode sinkingFundTransactionParameters =
+        generated
+            .path("paths")
+            .path("/api/v1/sinking-funds/{fundId}/transactions")
+            .path("get")
+            .path("parameters");
+    assertThat(sinkingFundTransactionParameters.findValuesAsText("name")).contains("page", "size");
+    JsonNode sinkingFundPageSchema =
+        parameterNamed(sinkingFundTransactionParameters, "page").path("schema");
+    assertThat(sinkingFundPageSchema.path("type").asText()).isEqualTo("integer");
+    assertThat(sinkingFundPageSchema.path("format").asText()).isEqualTo("int32");
+    assertThat(sinkingFundPageSchema.path("minimum").asInt()).isEqualTo(0);
+    assertThat(sinkingFundPageSchema.path("default").asInt()).isEqualTo(0);
+    JsonNode sinkingFundSizeSchema =
+        parameterNamed(sinkingFundTransactionParameters, "size").path("schema");
+    assertThat(sinkingFundSizeSchema.path("type").asText()).isEqualTo("integer");
+    assertThat(sinkingFundSizeSchema.path("format").asText()).isEqualTo("int32");
+    assertThat(sinkingFundSizeSchema.path("minimum").asInt()).isEqualTo(1);
+    assertThat(sinkingFundSizeSchema.path("maximum").asInt()).isEqualTo(100);
+    assertThat(sinkingFundSizeSchema.path("default").asInt()).isEqualTo(50);
 
     Path generatedPath = Path.of("build", "generated", "openapi.json");
     Files.createDirectories(generatedPath.getParent());

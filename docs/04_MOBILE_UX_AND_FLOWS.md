@@ -197,8 +197,12 @@ Spending Bucket:
 Sinking Fund:
 
 - contribution amount,
+- optional persistent Sinking Fund assignment,
 - optional target,
 - optional target date.
+
+When a persistent Sinking Fund is selected, the editor sends the assignment and clears entry-level
+target fields. Posted contributions and derived balances are read back from the API.
 
 ## History
 
@@ -341,6 +345,28 @@ Create/edit fields:
 Helper text must explain the difference between original amount owed and amount currently left.
 Paycheck entry editing exposes an "Apply to Payback" selector. Repayment applies only when the
 linked entry reaches Posted status.
+
+## Sinking Funds menu destination
+
+The Sinking Funds menu destination focuses on money reserved for future purposes:
+
+- summary card: total active balance, active count, archived count,
+- active Sinking Funds first,
+- archived Sinking Funds in a separate section,
+- each card shows current balance, optional target, optional target date, transaction count, state,
+  and accessible progress when a target amount exists.
+
+Create/edit fields:
+
+- name,
+- target amount,
+- target date,
+- opening balance on create,
+- notes.
+
+Detail supports edit, archive, restore, withdrawal creation, transaction history, and withdrawal
+reversal. The mobile app displays backend-derived balances and progress instead of calculating
+authoritative Sinking Fund totals locally.
 
 ### Fully allocated but incomplete
 

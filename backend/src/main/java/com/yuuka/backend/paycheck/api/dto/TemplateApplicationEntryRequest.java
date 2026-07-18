@@ -21,5 +21,6 @@ public record TemplateApplicationEntryRequest(
     @PositiveOrZero(message = "Target amount must be greater than or equal to $0.00.")
         Long targetMinor,
     LocalDate targetDate,
+    UUID sinkingFundId,
     UUID sourceRecurringBillDefinitionId,
     LocalDate sourceRecurringOccurrenceDate) {}
