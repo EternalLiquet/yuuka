@@ -266,10 +266,15 @@ reorder requests and stale writes surface conflict errors.
 ## Recurring Bills
 
 The Recurring Bills menu destination opens a vertically scrollable occurrence timeline with an
-always-visible Today divider, month/date grouping, pull-to-refresh, and a Jump to today action.
-Definition management supports search, active/inactive filtering, create, edit, deactivate,
-reactivate, and delete. Monthly dates shown in the timeline come from the backend's clamped calendar
-policy.
+always-visible Today divider, month/date grouping, pull-to-refresh, and a Jump to today action. The
+initial window contains the current calendar month, plus the prior month's final seven days when
+today is day 1 through 7 or the next month's first seven days when today is within the current
+month's final seven days. Scrolling near either edge loads the next non-overlapping calendar range
+and retains the loaded pages during refresh and navigation. A safe-area-aware floating create action
+remains visible while scrolling. Long-pressing an occurrence, or invoking its accessibility edit
+action, edits the underlying recurring Bill definition. Definition management supports search,
+active/inactive filtering, create, edit, deactivate, reactivate, and delete. Monthly dates shown in
+the timeline come from the backend's clamped calendar policy.
 
 Scratch, template, duplicate, and existing-paycheck entry drafts expose Import recurring bills.
 Suggested results use the owner setting around the paycheck income date; All shows the relevant
