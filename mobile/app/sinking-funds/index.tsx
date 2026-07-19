@@ -1,13 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';
-import { ArrowDown, ArrowUp, Plus } from 'lucide-react-native';
+import { ArrowDown, ArrowUp } from 'lucide-react-native';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { SinkingFund } from '@/api/contracts';
 import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
-import { Button } from '@/components/button';
+import {
+  FloatingCreateAction,
+  useFloatingCreateActionBottomPadding,
+} from '@/components/floating-create-action';
 import { IconButton } from '@/components/icon-button';
 import { Screen } from '@/components/screen';
 import {
@@ -33,6 +36,7 @@ export default function SinkingFundsScreen() {
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const listBottomPadding = useFloatingCreateActionBottomPadding();
   const query = useQuery({ queryKey: ['sinking-funds'], queryFn: () => api.sinkingFunds(true) });
   const active = query.data?.items.filter((fund) => fund.state === 'ACTIVE') ?? [];
   const archived = query.data?.items.filter((fund) => fund.state === 'ARCHIVED') ?? [];
@@ -74,7 +78,7 @@ export default function SinkingFundsScreen() {
     <Screen>
       <Stack.Screen options={{ headerShown: true, title: 'Planned Savings' }} />
       <FlatList
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: listBottomPadding }]}
         data={rows}
         keyExtractor={(item) => (item.kind === 'section' ? item.id : item.sinkingFund.id)}
         ListEmptyComponent={
@@ -96,19 +100,12 @@ export default function SinkingFundsScreen() {
           )
         }
         ListHeaderComponent={
-          <View style={styles.header}>
-            <View style={styles.titleRow}>
-              <View style={styles.titleBlock}>
-                <AppText variant="title">Planned Savings</AppText>
-                <AppText style={{ color: colors.muted }} variant="caption">
-                  {query.data?.summary.activeCount ?? 0} active
-                </AppText>
-              </View>
-              <Button
-                icon={Plus}
-                label="New Planned Savings"
-                onPress={() => router.push('/sinking-funds/new')}
-              />
+          <View style={styles.header} testID="planned-savings-list-header">
+            <View style={styles.titleBlock} testID="planned-savings-title-block">
+              <AppText variant="title">Planned Savings</AppText>
+              <AppText style={{ color: colors.muted }} variant="caption">
+                {query.data?.summary.activeCount ?? 0} active
+              </AppText>
             </View>
             <View
               style={[
@@ -193,6 +190,11 @@ export default function SinkingFundsScreen() {
           )
         }
       />
+      <FloatingCreateAction
+        label="New Planned Savings"
+        onPress={() => router.push('/sinking-funds/new')}
+        testID="planned-savings-floating-create"
+      />
     </Screen>
   );
 }
@@ -220,5 +222,4 @@ const styles = StyleSheet.create({
   reorderActions: { gap: 6 },
   summary: { borderRadius: 8, borderWidth: 1, gap: 9, padding: 15 },
   titleBlock: { gap: 3 },
-  titleRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
 });

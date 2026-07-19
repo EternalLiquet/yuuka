@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import type { PropsWithChildren, ReactElement, ReactNode } from 'react';
 import { StyleSheet } from 'react-native';
 
@@ -9,6 +9,7 @@ import {
   initialTimelineRange,
   nextTimelineRange,
   previousTimelineRange,
+  timelineBounds,
 } from '@/features/recurring-bills/timeline';
 
 import RecurringBillsTimelineScreen from '../../app/recurring-bills';
@@ -133,6 +134,49 @@ describe('Recurring Bills timeline route', () => {
     expect(contentStyle.paddingBottom).toBeGreaterThanOrEqual(100);
   });
 
+  it('keeps the Today control compact, separate from the create FAB, and hides it when today is visible', async () => {
+    const view = await render(<RecurringBillsTimelineScreen />, { wrapper: wrapper(client()) });
+    expect(await view.findByText('Electric')).toBeTruthy();
+    await waitFor(() => expect(mockScrollToIndex).toHaveBeenCalledTimes(1));
+
+    expect(view.queryByLabelText('Jump to today')).toBeNull();
+
+    await fireEvent.press(view.getByTestId('mark-today-hidden'));
+    const jump = await view.findByTestId('recurring-bills-jump-today');
+    expect(view.getByLabelText('Jump to today')).toBeTruthy();
+    expect(view.getByText('Today')).toBeTruthy();
+
+    const jumpStyle = StyleSheet.flatten(jump.props.style) as {
+      maxWidth?: string;
+      minHeight?: number;
+      position?: string;
+    };
+    expect(jumpStyle.maxWidth).toBe('58%');
+    expect(jumpStyle.minHeight).toBeGreaterThanOrEqual(44);
+    expect(jumpStyle.position).toBeUndefined();
+
+    const create = view.getByTestId('recurring-bills-floating-create');
+    const createStyle = StyleSheet.flatten(create.props.style) as {
+      bottom?: number;
+      height?: number;
+      position?: string;
+      right?: number;
+      width?: number;
+    };
+    expect(createStyle.position).toBe('absolute');
+    expect(createStyle.bottom).toBe(18);
+    expect(createStyle.right).toBe(18);
+    expect(createStyle.height).toBe(58);
+    expect(createStyle.width).toBe(58);
+
+    await act(async () => {
+      (latestListProps.onViewableItemsChanged as (info: { viewableItems: unknown[] }) => void)({
+        viewableItems: [{ item: { date: localToday(), items: [] } }],
+      });
+    });
+    await waitFor(() => expect(view.queryByLabelText('Jump to today')).toBeNull());
+  });
+
   it('edits the stable definition on long press or accessibility action, but not normal press', async () => {
     const view = await render(<RecurringBillsTimelineScreen />, { wrapper: wrapper(client()) });
     const card = await view.findByLabelText(/Electric, \$10\.00, Autopay/);
@@ -186,11 +230,12 @@ describe('Recurring Bills timeline route', () => {
     );
   });
 
-  it('paginates, deduplicates, refreshes, and reports either edge without losing position', async () => {
+  it('paginates, deduplicates, refreshes, and reports retryable edge errors without losing position', async () => {
     const view = await render(<RecurringBillsTimelineScreen />, { wrapper: wrapper(client()) });
     expect(await view.findByText('Electric')).toBeTruthy();
     await waitFor(() => expect(mockScrollToIndex).toHaveBeenCalledTimes(1));
     (latestListProps.onScrollBeginDrag as () => void)();
+    const today = localToday();
     const [initialFrom, initialThrough] = mockApi.recurringBillTimeline.mock.calls[0] as [
       string,
       string,
@@ -198,24 +243,19 @@ describe('Recurring Bills timeline route', () => {
 
     await (latestListProps.onStartReached as () => Promise<void>)();
     await waitFor(() => expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(2));
-    const previous = previousTimelineRange(initialFrom);
+    const previous = previousTimelineRange(initialFrom, today)!;
     expect(mockApi.recurringBillTimeline).toHaveBeenNthCalledWith(
       2,
       previous.from,
       previous.through,
     );
 
-    await (latestListProps.onStartReached as () => Promise<void>)();
-    await waitFor(() => expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(3));
-    const earlier = previousTimelineRange(previous.from);
-    expect(mockApi.recurringBillTimeline).toHaveBeenNthCalledWith(3, earlier.from, earlier.through);
-
     await (latestListProps.onEndReached as () => Promise<void>)();
-    await waitFor(() => expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(4));
-    const next = nextTimelineRange(initialThrough);
-    expect(mockApi.recurringBillTimeline).toHaveBeenNthCalledWith(4, next.from, next.through);
+    await waitFor(() => expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(3));
+    const next = nextTimelineRange(initialThrough, today)!;
+    expect(mockApi.recurringBillTimeline).toHaveBeenNthCalledWith(3, next.from, next.through);
 
-    await waitFor(() => expect(view.getAllByText('Electric')).toHaveLength(4));
+    await waitFor(() => expect(view.getAllByText('Electric')).toHaveLength(3));
     expect(view.getAllByLabelText(/^Today,/)).toHaveLength(1);
     expect(latestListProps.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 });
     expect(mockScrollToIndex).toHaveBeenCalledTimes(1);
@@ -224,43 +264,99 @@ describe('Recurring Bills timeline route', () => {
     const refreshControl = latestListProps.refreshControl as ReactElement<{
       onRefresh: () => Promise<unknown>;
     }>;
-    await refreshControl.props.onRefresh();
-    await waitFor(() => expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(4));
+    await act(async () => {
+      await refreshControl.props.onRefresh();
+    });
+    await waitFor(() => expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(3));
     await waitFor(() =>
       expect(
         (latestListProps.refreshControl as ReactElement<{ refreshing: boolean }>).props.refreshing,
       ).toBe(false),
     );
-    expect(view.getAllByText('Electric')).toHaveLength(4);
+    expect(view.getAllByText('Electric')).toHaveLength(3);
     expect(mockScrollToIndex).toHaveBeenCalledTimes(1);
 
-    let resolveNext: (value: RecurringBillTimeline) => void = () => undefined;
-    const pendingNext = new Promise<RecurringBillTimeline>((resolve) => {
-      resolveNext = resolve;
-    });
-    mockApi.recurringBillTimeline.mockClear().mockImplementationOnce(() => pendingNext);
-    const afterNext = nextTimelineRange(next.through);
-
-    const first = (latestListProps.onEndReached as () => Promise<void>)();
-    const repeated = (latestListProps.onEndReached as () => Promise<void>)();
-    expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(1);
-    expect(mockApi.recurringBillTimeline).toHaveBeenCalledWith(afterNext.from, afterNext.through);
-    expect(await view.findByText('Loading later timeline data…')).toBeTruthy();
-    resolveNext(timeline(afterNext.from, afterNext.through, [occurrence(afterNext.from)]));
-    await Promise.all([first, repeated]);
-    expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(view.getAllByText('Electric')).toHaveLength(5));
-    await waitFor(() => expect(view.queryByText('Loading later timeline data…')).toBeNull());
+    mockApi.recurringBillTimeline.mockRejectedValueOnce(new Error('Later unavailable'));
+    await (latestListProps.onEndReached as () => Promise<void>)();
+    expect(await view.findByText('Later timeline data could not load.')).toBeTruthy();
+    const laterRetry = view.getByLabelText('Retry later timeline data');
+    expect(laterRetry).toBeTruthy();
+    await fireEvent.press(laterRetry);
+    await waitFor(() => expect(view.queryByText('Later timeline data could not load.')).toBeNull());
+    await waitFor(() => expect(view.getAllByText('Electric')).toHaveLength(4));
 
     mockApi.recurringBillTimeline.mockRejectedValueOnce(new Error('Earlier unavailable'));
     await (latestListProps.onStartReached as () => Promise<void>)();
     expect(await view.findByText('Earlier timeline data could not load.')).toBeTruthy();
     expect(view.getByLabelText('Retry earlier timeline data')).toBeTruthy();
+  });
 
-    mockApi.recurringBillTimeline.mockRejectedValueOnce(new Error('Later unavailable'));
+  it('does not request or expose retry UI beyond the hard timeline boundaries', async () => {
+    const queryClient = client();
+    const today = localToday();
+    const bounds = timelineBounds(today);
+    queryClient.setQueryData(['recurring-bills', 'timeline', today], {
+      pageParams: [bounds],
+      pages: [timeline(bounds.from, bounds.through, [occurrence(today)])],
+    });
+    const view = await render(<RecurringBillsTimelineScreen />, {
+      wrapper: wrapper(queryClient),
+    });
+    expect(await view.findByText('Electric')).toBeTruthy();
+    await waitFor(() => expect(mockScrollToIndex).toHaveBeenCalledTimes(1));
+    (latestListProps.onScrollBeginDrag as () => void)();
+
+    await (latestListProps.onStartReached as () => Promise<void>)();
     await (latestListProps.onEndReached as () => Promise<void>)();
-    expect(await view.findByText('Later timeline data could not load.')).toBeTruthy();
-    expect(view.getByLabelText('Retry later timeline data')).toBeTruthy();
+    expect(mockApi.recurringBillTimeline).not.toHaveBeenCalled();
+    expect(view.queryByText('Earlier timeline data could not load.')).toBeNull();
+    expect(view.queryByText('Later timeline data could not load.')).toBeNull();
+    expect(view.queryByLabelText('Retry earlier timeline data')).toBeNull();
+    expect(view.queryByLabelText('Retry later timeline data')).toBeNull();
+  });
+
+  it('keeps jump-to-today and pull-to-refresh bounded after browsing both edges', async () => {
+    const queryClient = client();
+    const today = localToday();
+    const bounds = timelineBounds(today);
+    const currentRange = initialTimelineRange(today);
+    const lowerRange = { from: bounds.from, through: endOfMonth(bounds.from) };
+    const upperRange = { from: startOfMonth(bounds.through), through: bounds.through };
+    queryClient.setQueryData(['recurring-bills', 'timeline', today], {
+      pageParams: [lowerRange, upperRange],
+      pages: [
+        timeline(lowerRange.from, lowerRange.through, [occurrence(lowerRange.from)]),
+        timeline(upperRange.from, upperRange.through, [occurrence(upperRange.from)]),
+      ],
+    });
+    const view = await render(<RecurringBillsTimelineScreen />, {
+      wrapper: wrapper(queryClient),
+    });
+    expect(await view.findAllByText('Electric')).toHaveLength(2);
+
+    await fireEvent.press(view.getByTestId('mark-today-hidden'));
+    await fireEvent.press(await view.findByLabelText('Jump to today'));
+    await waitFor(() =>
+      expect(mockApi.recurringBillTimeline).toHaveBeenCalledWith(
+        currentRange.from,
+        currentRange.through,
+      ),
+    );
+
+    mockApi.recurringBillTimeline.mockClear();
+    const refreshControl = latestListProps.refreshControl as ReactElement<{
+      onRefresh: () => Promise<unknown>;
+    }>;
+    await act(async () => {
+      await refreshControl.props.onRefresh();
+    });
+    await waitFor(() => expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(3));
+    expect(mockApi.recurringBillTimeline).toHaveBeenCalledWith(lowerRange.from, lowerRange.through);
+    expect(mockApi.recurringBillTimeline).toHaveBeenCalledWith(
+      currentRange.from,
+      currentRange.through,
+    );
+    expect(mockApi.recurringBillTimeline).toHaveBeenCalledWith(upperRange.from, upperRange.through);
   });
 });
 
@@ -291,4 +387,13 @@ function occurrence(date: string): RecurringBillOccurrence {
 function localToday() {
   const value = new Date();
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+}
+
+function endOfMonth(date: string) {
+  const [year, month] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
+function startOfMonth(date: string) {
+  return `${date.slice(0, 8)}01`;
 }

@@ -6,29 +6,69 @@ export type TimelineDay = { date: string; items: RecurringBillOccurrence[] };
 export type TimelineRange = { from: string; through: string };
 export type TimelineInfiniteData = InfiniteData<RecurringBillTimeline, TimelineRange>;
 
+export function timelineBounds(today: string): TimelineRange {
+  return {
+    from: startOfMonth(addCalendarMonths(today, -2)),
+    through: endOfMonth(addCalendarMonths(today, 2)),
+  };
+}
+
 export function initialTimelineRange(today: string): TimelineRange {
   const currentMonthFrom = startOfMonth(today);
   const currentMonthThrough = endOfMonth(today);
   const todayDay = dayOfMonth(today);
   const daysInCurrentMonth = dayOfMonth(currentMonthThrough);
 
+  return clampTimelineRange(
+    {
+      from: todayDay <= 7 ? addCalendarDays(currentMonthFrom, -7) : currentMonthFrom,
+      through:
+        todayDay >= daysInCurrentMonth - 6
+          ? addCalendarDays(currentMonthThrough, 7)
+          : currentMonthThrough,
+    },
+    timelineBounds(today),
+  );
+}
+
+export function previousTimelineRange(
+  earliestLoadedDate: string,
+  today: string,
+): TimelineRange | undefined {
+  const bounds = timelineBounds(today);
+  const through = addCalendarDays(earliestLoadedDate, -1);
+  if (through < bounds.from) return undefined;
+  return clampTimelineRange({ from: startOfMonth(through), through }, bounds);
+}
+
+export function nextTimelineRange(
+  latestLoadedDate: string,
+  today: string,
+): TimelineRange | undefined {
+  const bounds = timelineBounds(today);
+  const from = addCalendarDays(latestLoadedDate, 1);
+  if (from > bounds.through) return undefined;
+  return clampTimelineRange({ from, through: endOfMonth(from) }, bounds);
+}
+
+function clampTimelineRange(range: TimelineRange, bounds: TimelineRange): TimelineRange {
   return {
-    from: todayDay <= 7 ? addCalendarDays(currentMonthFrom, -7) : currentMonthFrom,
-    through:
-      todayDay >= daysInCurrentMonth - 6
-        ? addCalendarDays(currentMonthThrough, 7)
-        : currentMonthThrough,
+    from: maxDate(range.from, bounds.from),
+    through: minDate(range.through, bounds.through),
   };
 }
 
-export function previousTimelineRange(earliestLoadedDate: string): TimelineRange {
-  const through = addCalendarDays(earliestLoadedDate, -1);
-  return { from: startOfMonth(through), through };
+function maxDate(left: string, right: string) {
+  return left > right ? left : right;
 }
 
-export function nextTimelineRange(latestLoadedDate: string): TimelineRange {
-  const from = addCalendarDays(latestLoadedDate, 1);
-  return { from, through: endOfMonth(from) };
+function minDate(left: string, right: string) {
+  return left < right ? left : right;
+}
+
+function addCalendarMonths(date: string, months: number) {
+  const value = parseDate(date);
+  return formatDate(new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + months, 1)));
 }
 
 export function timelineContainsDate(

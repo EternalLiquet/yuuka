@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';
-import { Plus, Settings2 } from 'lucide-react-native';
+import { CalendarDays, Settings2 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +19,10 @@ import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppMenuButton } from '@/components/app-menu';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
+import {
+  FloatingCreateAction,
+  useFloatingCreateActionBottomPadding,
+} from '@/components/floating-create-action';
 import { Screen } from '@/components/screen';
 import { ErrorState, YuukaLoadingState } from '@/components/states';
 import { formatMoney } from '@/domain/money';
@@ -45,6 +49,7 @@ export default function RecurringBillsTimelineScreen() {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const insets = useSafeAreaInsets();
+  const listBottomPadding = useFloatingCreateActionBottomPadding();
   const [today] = useState(() => todayDate());
   const initialRange = useMemo(() => initialTimelineRange(today), [today]);
   const queryKey = useMemo(() => ['recurring-bills', 'timeline', today] as const, [today]);
@@ -57,6 +62,7 @@ export default function RecurringBillsTimelineScreen() {
   const [todayVisible, setTodayVisible] = useState(true);
   const [jumpPending, setJumpPending] = useState(false);
   const [jumpError, setJumpError] = useState(false);
+  const [refreshPending, setRefreshPending] = useState(false);
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<TimelineDay>[] }) => {
       setTodayVisible(viewableItems.some((item) => item.item.date === today));
@@ -68,8 +74,8 @@ export default function RecurringBillsTimelineScreen() {
     queryFn: ({ pageParam }: { pageParam: TimelineRange }) =>
       api.recurringBillTimeline(pageParam.from, pageParam.through),
     initialPageParam: initialRange,
-    getPreviousPageParam: (firstPage) => previousTimelineRange(firstPage.from),
-    getNextPageParam: (lastPage) => nextTimelineRange(lastPage.through),
+    getPreviousPageParam: (firstPage) => previousTimelineRange(firstPage.from, today),
+    getNextPageParam: (lastPage) => nextTimelineRange(lastPage.through, today),
   });
   const occurrences = useMemo(
     () => query.data?.pages.flatMap((page) => page.items) ?? [],
@@ -104,6 +110,7 @@ export default function RecurringBillsTimelineScreen() {
         !userScrolled.current ||
         previousRequestPending.current ||
         query.isFetchingPreviousPage ||
+        !query.hasPreviousPage ||
         (!retry && query.isFetchPreviousPageError)
       ) {
         return;
@@ -125,6 +132,7 @@ export default function RecurringBillsTimelineScreen() {
         !userScrolled.current ||
         nextRequestPending.current ||
         query.isFetchingNextPage ||
+        !query.hasNextPage ||
         (!retry && query.isFetchNextPageError)
       ) {
         return;
@@ -184,6 +192,26 @@ export default function RecurringBillsTimelineScreen() {
     scrollToToday,
     today,
   ]);
+  const refreshTimeline = useCallback(async () => {
+    setRefreshPending(true);
+    try {
+      const cached = queryClient.getQueryData<TimelineInfiniteData>(queryKey);
+      if (!cached) {
+        await query.refetch();
+        return;
+      }
+      const pages = await Promise.all(
+        cached.pageParams.map((range) => api.recurringBillTimeline(range.from, range.through)),
+      );
+      queryClient.setQueryData<TimelineInfiniteData>(queryKey, {
+        pageParams: cached.pageParams,
+        pages,
+      });
+    } finally {
+      setRefreshPending(false);
+    }
+  }, [api, query, queryClient, queryKey]);
+  const showJumpToToday = !todayVisible || !currentRangeLoaded;
 
   if (query.isPending && !query.data) {
     return <YuukaLoadingState message="Loading recurring Bill timeline..." />;
@@ -209,13 +237,23 @@ export default function RecurringBillsTimelineScreen() {
         }}
       />
       <Screen>
+        {showJumpToToday ? (
+          <View style={[styles.todayToolbar, { paddingRight: 18 + insets.right }]}>
+            <JumpToTodayControl
+              error={jumpError}
+              loading={jumpPending}
+              onPress={() => void jumpToToday()}
+            />
+          </View>
+        ) : null}
         <FlatList
-          contentContainerStyle={[styles.list, { paddingBottom: 160 + insets.bottom }]}
+          contentContainerStyle={[styles.list, { paddingBottom: listBottomPadding }]}
           data={days}
           keyExtractor={(day) => day.date}
           ListHeaderComponent={
             <View style={styles.header}>
               <EdgeFeedback
+                available={query.hasPreviousPage}
                 direction="earlier"
                 error={query.isFetchPreviousPageError}
                 loading={query.isFetchingPreviousPage}
@@ -237,6 +275,7 @@ export default function RecurringBillsTimelineScreen() {
           }
           ListFooterComponent={
             <EdgeFeedback
+              available={query.hasNextPage}
               direction="later"
               error={query.isFetchNextPageError}
               loading={query.isFetchingNextPage}
@@ -271,9 +310,11 @@ export default function RecurringBillsTimelineScreen() {
           refreshControl={
             <RefreshControl
               accessibilityLabel="Refresh recurring Bill timeline"
-              onRefresh={() => query.refetch()}
+              onRefresh={() => refreshTimeline()}
               refreshing={
-                query.isRefetching && !query.isFetchingPreviousPage && !query.isFetchingNextPage
+                (refreshPending || query.isRefetching) &&
+                !query.isFetchingPreviousPage &&
+                !query.isFetchingNextPage
               }
               tintColor={colors.accent}
             />
@@ -287,50 +328,73 @@ export default function RecurringBillsTimelineScreen() {
           )}
           viewabilityConfig={{ itemVisiblePercentThreshold: 30 }}
         />
-        {!todayVisible || !currentRangeLoaded ? (
-          <View style={[styles.jumpAction, { bottom: 88 + insets.bottom }]}>
-            <Button
-              label={jumpError ? 'Retry jump to today' : 'Jump to today'}
-              loading={jumpPending}
-              onPress={() => jumpToToday()}
-              variant="secondary"
-            />
-          </View>
-        ) : null}
-        <Pressable
-          accessibilityLabel="New recurring Bill"
-          accessibilityRole="button"
+        <FloatingCreateAction
+          label="New recurring Bill"
           onPress={() => router.push('/recurring-bills/new')}
-          style={({ pressed }) => [
-            styles.floatingAction,
-            {
-              backgroundColor: colors.accent,
-              bottom: 18 + insets.bottom,
-              shadowColor: colors.text,
-            },
-            pressed && styles.pressedAction,
-          ]}
           testID="recurring-bills-floating-create"
-        >
-          <Plus color={colors.accentText} size={28} strokeWidth={2.5} />
-        </Pressable>
+        />
       </Screen>
     </>
   );
 }
 
+function JumpToTodayControl({
+  error,
+  loading,
+  onPress,
+}: {
+  error: boolean;
+  loading: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Pressable
+      accessibilityHint={error ? 'Previous jump failed. Activates another attempt.' : undefined}
+      accessibilityLabel="Jump to today"
+      accessibilityRole="button"
+      accessibilityState={{ busy: loading }}
+      disabled={loading}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.todayAction,
+        {
+          backgroundColor: colors.surfaceElevated,
+          borderColor: error ? colors.danger : colors.border,
+        },
+        pressed && styles.pressedCard,
+      ]}
+      testID="recurring-bills-jump-today"
+    >
+      {loading ? (
+        <ActivityIndicator color={colors.accent} size="small" />
+      ) : (
+        <>
+          <CalendarDays color={error ? colors.danger : colors.accent} size={17} strokeWidth={2.2} />
+          <AppText style={{ color: error ? colors.danger : colors.text }} variant="label">
+            Today
+          </AppText>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
 function EdgeFeedback({
+  available,
   direction,
   error,
   loading,
   onRetry,
 }: {
+  available: boolean;
   direction: 'earlier' | 'later';
   error: boolean;
   loading: boolean;
   onRetry: () => void;
 }) {
   const { colors } = useAppTheme();
+  if (!available) return null;
   if (!error && !loading) return null;
   if (loading) {
     return (
@@ -485,26 +549,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 10,
   },
-  floatingAction: {
-    alignItems: 'center',
-    borderRadius: 29,
-    elevation: 7,
-    height: 58,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 18,
-    shadowOffset: { height: 3, width: 0 },
-    shadowOpacity: 0.24,
-    shadowRadius: 5,
-    width: 58,
-  },
   header: { gap: 10, paddingBottom: 12 },
   heading: { gap: 5, paddingBottom: 4 },
-  jumpAction: { position: 'absolute', right: 18 },
   line: { flex: 1, height: 1 },
   list: { padding: 18 },
   posted: { opacity: 0.68 },
-  pressedAction: { opacity: 0.72, transform: [{ scale: 0.96 }] },
   pressedCard: { opacity: 0.74 },
+  todayAction: {
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    justifyContent: 'center',
+    maxWidth: '58%',
+    minHeight: 44,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
   todayDivider: { alignItems: 'center', flexDirection: 'row', gap: 10 },
+  todayToolbar: {
+    alignItems: 'flex-end',
+    paddingBottom: 2,
+    paddingLeft: 18,
+    paddingTop: 12,
+  },
 });
