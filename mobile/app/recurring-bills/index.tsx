@@ -63,6 +63,7 @@ export default function RecurringBillsTimelineScreen() {
   const [jumpPending, setJumpPending] = useState(false);
   const [jumpError, setJumpError] = useState(false);
   const [refreshPending, setRefreshPending] = useState(false);
+  const [refreshError, setRefreshError] = useState(false);
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<TimelineDay>[] }) => {
       setTodayVisible(viewableItems.some((item) => item.item.date === today));
@@ -193,24 +194,46 @@ export default function RecurringBillsTimelineScreen() {
     today,
   ]);
   const refreshTimeline = useCallback(async () => {
+    if (refreshPending) return;
     setRefreshPending(true);
     try {
       const cached = queryClient.getQueryData<TimelineInfiniteData>(queryKey);
       if (!cached) {
-        await query.refetch();
+        const result = await query.refetch();
+        if (result.isError) {
+          setRefreshError(true);
+          return;
+        }
+        setRefreshError(false);
         return;
       }
       const pages = await Promise.all(
         cached.pageParams.map((range) => api.recurringBillTimeline(range.from, range.through)),
       );
-      queryClient.setQueryData<TimelineInfiniteData>(queryKey, {
-        pageParams: cached.pageParams,
-        pages,
+      queryClient.setQueryData<TimelineInfiniteData>(queryKey, (latest) => {
+        const refreshedByRange = new Map(pages.map((page) => [timelineRangeKey(page), page]));
+        const mergedByRange = new Map(
+          (latest ?? cached).pages.map((page) => [
+            timelineRangeKey(page),
+            refreshedByRange.get(timelineRangeKey(page)) ?? page,
+          ]),
+        );
+        for (const page of pages) {
+          mergedByRange.set(timelineRangeKey(page), page);
+        }
+        const mergedPages = [...mergedByRange.values()].sort(compareTimelineRanges);
+        return {
+          pageParams: mergedPages.map(({ from, through }) => ({ from, through })),
+          pages: mergedPages,
+        };
       });
+      setRefreshError(false);
+    } catch {
+      setRefreshError(true);
     } finally {
       setRefreshPending(false);
     }
-  }, [api, query, queryClient, queryKey]);
+  }, [api, query, queryClient, queryKey, refreshPending]);
   const showJumpToToday = !todayVisible || !currentRangeLoaded;
 
   if (query.isPending && !query.data) {
@@ -265,6 +288,9 @@ export default function RecurringBillsTimelineScreen() {
                   Monthly Bills around today. Past dates are informational, not overdue labels.
                 </AppText>
               </View>
+              {refreshError ? (
+                <RefreshErrorFeedback loading={refreshPending} onRetry={refreshTimeline} />
+              ) : null}
               <Button
                 icon={Settings2}
                 label="Manage recurring Bills"
@@ -335,6 +361,30 @@ export default function RecurringBillsTimelineScreen() {
         />
       </Screen>
     </>
+  );
+}
+
+function RefreshErrorFeedback({ loading, onRetry }: { loading: boolean; onRetry: () => void }) {
+  const { colors } = useAppTheme();
+  return (
+    <View
+      accessibilityLiveRegion="polite"
+      style={[
+        styles.refreshError,
+        { backgroundColor: colors.dangerSoft, borderColor: colors.danger },
+      ]}
+    >
+      <AppText style={{ color: colors.danger }} variant="caption">
+        Timeline refresh failed. Existing timeline data is still shown.
+      </AppText>
+      <Button
+        accessibilityLabel="Retry recurring Bill timeline refresh"
+        label="Retry refresh"
+        loading={loading}
+        onPress={onRetry}
+        variant="ghost"
+      />
+    </View>
   );
 }
 
@@ -532,6 +582,14 @@ function statusLabel(status: 'NOT_PAID' | 'PROCESSING' | 'POSTED') {
   return 'Posted';
 }
 
+function timelineRangeKey(range: TimelineRange) {
+  return `${range.from}|${range.through}`;
+}
+
+function compareTimelineRanges(left: TimelineRange, right: TimelineRange) {
+  return left.from.localeCompare(right.from) || left.through.localeCompare(right.through);
+}
+
 const styles = StyleSheet.create({
   card: { borderRadius: 8, borderWidth: 1, gap: 5, padding: 13 },
   cardHeading: {
@@ -555,6 +613,7 @@ const styles = StyleSheet.create({
   list: { padding: 18 },
   posted: { opacity: 0.68 },
   pressedCard: { opacity: 0.74 },
+  refreshError: { borderRadius: 8, borderWidth: 1, gap: 6, padding: 10 },
   todayAction: {
     alignItems: 'center',
     alignSelf: 'flex-end',

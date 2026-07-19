@@ -7,6 +7,8 @@ import { StyleSheet } from 'react-native';
 import type { RecurringBillOccurrence, RecurringBillTimeline } from '@/api/contracts';
 import {
   initialTimelineRange,
+  type TimelineInfiniteData,
+  type TimelineRange,
   nextTimelineRange,
   previousTimelineRange,
   timelineBounds,
@@ -358,6 +360,127 @@ describe('Recurring Bills timeline route', () => {
     );
     expect(mockApi.recurringBillTimeline).toHaveBeenCalledWith(upperRange.from, upperRange.through);
   });
+
+  it('preserves cached rows and shows retryable feedback when one refresh range fails', async () => {
+    const queryClient = client();
+    const today = localToday();
+    const currentRange = initialTimelineRange(today);
+    const nextRange = nextTimelineRange(currentRange.through, today)!;
+    queryClient.setQueryData<TimelineInfiniteData>(['recurring-bills', 'timeline', today], {
+      pageParams: [currentRange, nextRange],
+      pages: [
+        timeline(currentRange.from, currentRange.through, [
+          occurrence(currentRange.from, 'Electric'),
+        ]),
+        timeline(nextRange.from, nextRange.through, [occurrence(nextRange.from, 'Internet')]),
+      ],
+    });
+    mockApi.recurringBillTimeline.mockImplementation(async (from: string, through: string) => {
+      if (from === nextRange.from && through === nextRange.through) {
+        throw new Error('Refresh failed');
+      }
+      return timeline(from, through, [occurrence(from, 'Refreshed Electric')]);
+    });
+    const view = await render(<RecurringBillsTimelineScreen />, {
+      wrapper: wrapper(queryClient),
+    });
+    expect(await view.findByText('Electric')).toBeTruthy();
+    expect(view.getByText('Internet')).toBeTruthy();
+
+    const refreshControl = latestListProps.refreshControl as ReactElement<{
+      onRefresh: () => Promise<unknown>;
+    }>;
+    await act(async () => {
+      await expect(refreshControl.props.onRefresh()).resolves.toBeUndefined();
+    });
+
+    expect(view.getByText('Electric')).toBeTruthy();
+    expect(view.getByText('Internet')).toBeTruthy();
+    expect(
+      await view.findByText('Timeline refresh failed. Existing timeline data is still shown.'),
+    ).toBeTruthy();
+    const retry = view.getByLabelText('Retry recurring Bill timeline refresh');
+    expect(retry).toBeTruthy();
+
+    mockApi.recurringBillTimeline.mockImplementation(async (from: string, through: string) =>
+      timeline(from, through, [
+        occurrence(from, from === nextRange.from ? 'Internet' : 'Electric'),
+      ]),
+    );
+    await act(async () => {
+      await fireEvent.press(retry);
+    });
+
+    await waitFor(() =>
+      expect(
+        view.queryByText('Timeline refresh failed. Existing timeline data is still shown.'),
+      ).toBeNull(),
+    );
+    expect(view.getByText('Electric')).toBeTruthy();
+    expect(view.getByText('Internet')).toBeTruthy();
+  });
+
+  it('retains a page added while refresh requests are pending', async () => {
+    const queryClient = client();
+    const today = localToday();
+    const currentRange = initialTimelineRange(today);
+    const previousRange = previousTimelineRange(currentRange.from, today)!;
+    const refreshed = deferred<RecurringBillTimeline>();
+    queryClient.setQueryData<TimelineInfiniteData>(['recurring-bills', 'timeline', today], {
+      pageParams: [currentRange],
+      pages: [
+        timeline(currentRange.from, currentRange.through, [
+          occurrence(currentRange.from, 'Electric'),
+        ]),
+      ],
+    });
+    mockApi.recurringBillTimeline.mockImplementation(async (from: string, through: string) =>
+      from === currentRange.from && through === currentRange.through
+        ? refreshed.promise
+        : timeline(from, through, [occurrence(from)]),
+    );
+    const view = await render(<RecurringBillsTimelineScreen />, {
+      wrapper: wrapper(queryClient),
+    });
+    expect(await view.findByText('Electric')).toBeTruthy();
+
+    const refreshControl = latestListProps.refreshControl as ReactElement<{
+      onRefresh: () => Promise<unknown>;
+    }>;
+    let refreshPromise: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      refreshPromise = refreshControl.props.onRefresh();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      queryClient.setQueryData<TimelineInfiniteData>(
+        ['recurring-bills', 'timeline', today],
+        (data) =>
+          appendTimelinePage(data!, previousRange, occurrence(previousRange.from, 'Mortgage')),
+      );
+      await Promise.resolve();
+    });
+    expect(await view.findByText('Mortgage')).toBeTruthy();
+
+    await act(async () => {
+      refreshed.resolve(
+        timeline(currentRange.from, currentRange.through, [
+          occurrence(currentRange.from, 'Refreshed Electric'),
+        ]),
+      );
+      await refreshPromise;
+    });
+
+    const cached = queryClient.getQueryData<TimelineInfiniteData>([
+      'recurring-bills',
+      'timeline',
+      today,
+    ])!;
+    expect(cached.pageParams).toEqual([previousRange, currentRange]);
+    expect(cached.pages.map((page) => page.from)).toEqual([previousRange.from, currentRange.from]);
+    expect(view.getByText('Mortgage')).toBeTruthy();
+    expect(await view.findByText('Refreshed Electric')).toBeTruthy();
+  });
 });
 
 function timeline(
@@ -368,14 +491,14 @@ function timeline(
   return { from, items, through };
 }
 
-function occurrence(date: string): RecurringBillOccurrence {
+function occurrence(date: string, name = 'Electric'): RecurringBillOccurrence {
   return {
     accountName: null,
     definitionId,
     definitionVersion: 2,
     importCount: 0,
     imports: [],
-    name: 'Electric',
+    name,
     notes: null,
     occurrenceDate: date,
     payee: null,
@@ -396,4 +519,25 @@ function endOfMonth(date: string) {
 
 function startOfMonth(date: string) {
   return `${date.slice(0, 8)}01`;
+}
+
+function appendTimelinePage(
+  data: TimelineInfiniteData,
+  range: TimelineRange,
+  item: RecurringBillOccurrence,
+): TimelineInfiniteData {
+  return {
+    pageParams: [...data.pageParams, range],
+    pages: [...data.pages, timeline(range.from, range.through, [item])],
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
 }
