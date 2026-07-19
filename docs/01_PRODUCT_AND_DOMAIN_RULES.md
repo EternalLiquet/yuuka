@@ -163,6 +163,9 @@ soft-deleted purchases, non-bucket entries, and purchases effective after `asOfD
 A contribution toward a future purpose, such as tires, travel, car maintenance, or an emergency
 reserve.
 
+The mobile UI calls this domain concept **Planned Savings**. Internal domain, API, and persistence
+terminology remains Sinking Fund.
+
 A Sinking Fund may be a persistent owner-scoped fund with an optional target amount, target date,
 notes, owner-defined order, current balance derived from transactions, and Active or Archived
 state. A persistent fund can start with an optional opening balance. Opening balances,

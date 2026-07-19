@@ -130,7 +130,7 @@ describe('EntryEditor', () => {
       />,
     );
 
-    await fireEvent.press(view.getByLabelText('Sinking Fund, selected No persistent fund'));
+    await fireEvent.press(view.getByLabelText('Planned Savings, selected No planned savings'));
     await fireEvent.press(view.getByText('Car fund'));
     await fireEvent.press(view.getByLabelText('Save entry'));
 

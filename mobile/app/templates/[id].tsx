@@ -43,7 +43,7 @@ import { useAppTheme } from '@/theme/use-app-theme';
 const typeLabels = {
   BILL: 'Bill',
   SPENDING_BUCKET: 'Spending Bucket',
-  SINKING_FUND: 'Sinking Fund',
+  SINKING_FUND: 'Planned Savings',
 } as const;
 
 export default function EditTemplateScreen() {
@@ -232,7 +232,7 @@ export default function EditTemplateScreen() {
                 )
               }
               mascot="clipboard"
-              message="Add bills, spending buckets, or sinking funds to this template."
+              message="Add bills, spending buckets, or planned savings to this template."
               title="No template entries"
             />
           }

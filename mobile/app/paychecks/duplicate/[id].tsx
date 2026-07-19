@@ -544,7 +544,7 @@ function entryDescription(entry: TemplateApplicationDraftEntry, incomeDate: stri
     return dueDate ? `Bill | ${method} | Due ${dueDate}` : `Bill | ${method}`;
   }
   if (entry.entryType === 'SPENDING_BUCKET') return 'Spending Bucket';
-  return 'Sinking Fund';
+  return 'Planned Savings';
 }
 
 function newDraftClientId() {

@@ -34,7 +34,7 @@ export type TemplateEntryEditorEntry = Pick<
 const typeOptions = [
   { label: 'Bill', value: 'BILL' },
   { label: 'Spending Bucket', value: 'SPENDING_BUCKET' },
-  { label: 'Sinking Fund', value: 'SINKING_FUND' },
+  { label: 'Planned Savings', value: 'SINKING_FUND' },
 ] as const;
 
 export function TemplateEntryEditor({

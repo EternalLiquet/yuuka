@@ -67,6 +67,34 @@ describe('API error mapping', () => {
     expect(displayError(error, 'USD')).toBe('Finalize this Expense List before settling it.');
   });
 
+  it('maps the empty Expense List error by its stable server code', () => {
+    const error = mapApiError(422, {
+      code: 'EXPENSE_LEDGER_EMPTY',
+      message: 'Add at least one positive expense before finalizing this ledger.',
+      details: {},
+      fieldErrors: {},
+      traceId: 'trace-1',
+    });
+
+    expect(displayError(error, 'USD')).toBe(
+      'Add at least one positive expense before finalizing this expense list.',
+    );
+  });
+
+  it('uses Planned Savings terminology for server-supplied domain errors', () => {
+    const error = mapApiError(422, {
+      code: 'BUSINESS_RULE_VIOLATION',
+      message: 'Withdrawal cannot exceed the current Sinking Fund balance.',
+      details: {},
+      fieldErrors: {},
+      traceId: 'trace-1',
+    });
+
+    expect(displayError(error, 'USD')).toBe(
+      'Withdrawal cannot exceed the current Planned Savings balance.',
+    );
+  });
+
   it('does not show stale internal money terminology if details are missing', () => {
     const error = mapApiError(422, {
       code: 'BUSINESS_RULE_VIOLATION',

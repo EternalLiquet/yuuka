@@ -45,7 +45,7 @@ export default function SinkingFundsScreen() {
   const showColdLoader = useMinimumVisibleDuration(query.isPending && !query.data, 1000);
   const rows: Row[] = [
     ...(active.length
-      ? [{ kind: 'section' as const, id: 'active', title: 'Active Sinking Funds' }]
+      ? [{ kind: 'section' as const, id: 'active', title: 'Active Planned Savings' }]
       : []),
     ...active.map((sinkingFund) => ({ kind: 'sinking-fund' as const, sinkingFund })),
     ...(archived.length ? [{ kind: 'section' as const, id: 'archived', title: 'Archived' }] : []),
@@ -65,14 +65,14 @@ export default function SinkingFundsScreen() {
   if (showColdLoader) {
     return (
       <Screen contentContainerStyle={styles.center}>
-        <YuukaLoadingState message="Loading Sinking Funds..." />
+        <YuukaLoadingState message="Loading Planned Savings..." />
       </Screen>
     );
   }
 
   return (
     <Screen>
-      <Stack.Screen options={{ headerShown: true, title: 'Sinking Funds' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Planned Savings' }} />
       <FlatList
         contentContainerStyle={styles.content}
         data={rows}
@@ -90,8 +90,8 @@ export default function SinkingFundsScreen() {
           ) : (
             <EmptyState
               mascot="idle"
-              message="Create persistent funds and link paycheck entries as contributions."
-              title="No Sinking Funds yet"
+              message="Create savings plans and link paycheck entries as contributions."
+              title="No Planned Savings yet"
             />
           )
         }
@@ -99,14 +99,14 @@ export default function SinkingFundsScreen() {
           <View style={styles.header}>
             <View style={styles.titleRow}>
               <View style={styles.titleBlock}>
-                <AppText variant="title">Sinking Funds</AppText>
+                <AppText variant="title">Planned Savings</AppText>
                 <AppText style={{ color: colors.muted }} variant="caption">
                   {query.data?.summary.activeCount ?? 0} active
                 </AppText>
               </View>
               <Button
                 icon={Plus}
-                label="New Sinking Fund"
+                label="New Planned Savings"
                 onPress={() => router.push('/sinking-funds/new')}
               />
             </View>
@@ -137,7 +137,7 @@ export default function SinkingFundsScreen() {
                 {displayError(
                   reorderMutation.error,
                   settings.currencyCode,
-                  'Sinking Fund order was not saved.',
+                  'Planned Savings order was not saved.',
                 )}
               </AppText>
             ) : null}
@@ -145,7 +145,7 @@ export default function SinkingFundsScreen() {
         }
         refreshControl={
           <RefreshControl
-            accessibilityLabel="Refresh Sinking Funds"
+            accessibilityLabel="Refresh Planned Savings"
             colors={['transparent']}
             onRefresh={() => void query.refetch()}
             progressBackgroundColor="transparent"

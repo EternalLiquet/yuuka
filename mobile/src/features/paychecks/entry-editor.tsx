@@ -19,7 +19,7 @@ import { EntryFormValues, entryFormSchema } from './form-schemas';
 const typeOptions = [
   { label: 'Bill', value: 'BILL' },
   { label: 'Spending Bucket', value: 'SPENDING_BUCKET' },
-  { label: 'Sinking Fund', value: 'SINKING_FUND' },
+  { label: 'Planned Savings', value: 'SINKING_FUND' },
 ] as const;
 
 export function EntryEditor({
@@ -397,16 +397,16 @@ function SinkingFundSelector({
     [currentSinkingFundId, sinkingFunds],
   );
   const selected = options.find((fund) => fund.id === value);
-  const selectedLabel = selected?.name ?? 'No persistent fund';
+  const selectedLabel = selected?.name ?? 'No planned savings';
   return (
     <>
-      <AppText variant="label">Sinking Fund</AppText>
+      <AppText variant="label">Planned Savings</AppText>
       <AppText style={{ color: colors.muted }} variant="caption">
-        Posted entries add to the selected fund balance.
+        Posted entries add to the selected Planned Savings balance.
       </AppText>
       <Pressable
         accessible
-        accessibilityLabel={`Sinking Fund, selected ${selectedLabel}`}
+        accessibilityLabel={`Planned Savings, selected ${selectedLabel}`}
         accessibilityRole="button"
         onPress={() => setOpen(true)}
         style={({ pressed }) => [
@@ -420,7 +420,7 @@ function SinkingFundSelector({
             {selectedLabel}
           </AppText>
           <AppText style={{ color: colors.muted }} variant="caption">
-            {loading ? 'Loading Sinking Funds...' : 'Choose fund'}
+            {loading ? 'Loading Planned Savings...' : 'Choose Planned Savings'}
           </AppText>
         </View>
         <ChevronDown color={colors.text} size={20} />
@@ -430,13 +430,13 @@ function SinkingFundSelector({
           <View style={[styles.sheet, { backgroundColor: colors.background }]}>
             <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
               <View>
-                <AppText variant="title">Sinking Fund</AppText>
+                <AppText variant="title">Planned Savings</AppText>
                 <AppText style={{ color: colors.muted }} variant="caption">
                   Choose where Posted contributions are tracked.
                 </AppText>
               </View>
               <Pressable
-                accessibilityLabel="Close Sinking Fund selector"
+                accessibilityLabel="Close Planned Savings selector"
                 onPress={() => setOpen(false)}
                 style={styles.close}
               >
@@ -445,7 +445,7 @@ function SinkingFundSelector({
             </View>
             <ScrollView contentContainerStyle={styles.optionList}>
               <PaybackSelectOption
-                label="No persistent fund"
+                label="No planned savings"
                 onPress={() => {
                   onChange('');
                   setOpen(false);
@@ -456,7 +456,7 @@ function SinkingFundSelector({
                 <View style={styles.selectorState}>
                   <ActivityIndicator color={colors.accent} />
                   <AppText style={{ color: colors.muted }} variant="caption">
-                    Loading Sinking Funds...
+                    Loading Planned Savings...
                   </AppText>
                 </View>
               ) : error ? (
@@ -482,9 +482,9 @@ function SinkingFundSelector({
                 ))
               ) : (
                 <View style={styles.selectorState}>
-                  <AppText variant="label">No active Sinking Funds</AppText>
+                  <AppText variant="label">No active Planned Savings</AppText>
                   <AppText style={{ color: colors.muted, textAlign: 'center' }} variant="caption">
-                    Create an active Sinking Fund before assigning contributions.
+                    Create active Planned Savings before assigning contributions.
                   </AppText>
                 </View>
               )}

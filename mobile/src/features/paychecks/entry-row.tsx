@@ -19,7 +19,7 @@ import { useAppTheme } from '@/theme/use-app-theme';
 const typeLabels = {
   BILL: 'Bill',
   SPENDING_BUCKET: 'Spending Bucket',
-  SINKING_FUND: 'Sinking Fund',
+  SINKING_FUND: 'Planned Savings',
 } as const;
 
 type EntryRowProps = {

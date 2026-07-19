@@ -25,7 +25,7 @@ const destinations: { href: Href; icon: LucideIcon; label: string }[] = [
   { href: '/(tabs)/expense-ledgers', icon: ClipboardList, label: 'Expense Lists' },
   { href: '/(tabs)/history', icon: History, label: 'History' },
   { href: '/(tabs)/paybacks', icon: RotateCcw, label: 'Paybacks' },
-  { href: '/sinking-funds', icon: PiggyBank, label: 'Sinking Funds' },
+  { href: '/sinking-funds', icon: PiggyBank, label: 'Planned Savings' },
   { href: '/(tabs)/templates', icon: LayoutTemplate, label: 'Templates' },
   { href: '/recurring-bills', icon: ReceiptText, label: 'Recurring Bills' },
   { href: '/(tabs)/settings', icon: Settings, label: 'Settings' },

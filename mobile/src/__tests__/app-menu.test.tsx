@@ -21,7 +21,7 @@ describe('AppMenuButton', () => {
     expect(view.getByLabelText('Open Expense Lists')).toBeTruthy();
     expect(view.getByLabelText('Open History')).toBeTruthy();
     expect(view.getByLabelText('Open Paybacks')).toBeTruthy();
-    expect(view.getByLabelText('Open Sinking Funds')).toBeTruthy();
+    expect(view.getByLabelText('Open Planned Savings')).toBeTruthy();
     expect(view.getByLabelText('Open Templates')).toBeTruthy();
     expect(view.getByLabelText('Open Recurring Bills')).toBeTruthy();
     expect(view.getByLabelText('Open Settings')).toBeTruthy();

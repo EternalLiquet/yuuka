@@ -493,7 +493,7 @@ function TemplateDraft({
                   : 'Bill | Autopay'
                 : entry.entryType === 'SPENDING_BUCKET'
                   ? 'Spending Bucket'
-                  : 'Sinking Fund'}
+                  : 'Planned Savings'}
             </AppText>
           </View>
           <AppText variant="caption">
