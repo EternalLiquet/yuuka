@@ -5,6 +5,7 @@ import {
   insertTimelinePage,
   nextTimelineRange,
   previousTimelineRange,
+  timelineBounds,
   timelineContainsDate,
 } from '@/features/recurring-bills/timeline';
 
@@ -33,6 +34,13 @@ describe('recurring Bill timeline date ranges', () => {
     expect(initialTimelineRange('2026-07-14')).toEqual({
       from: '2026-07-01',
       through: '2026-07-31',
+    });
+  });
+
+  it('bounds the timeline to two calendar months around the current month', () => {
+    expect(timelineBounds('2026-07-19')).toEqual({
+      from: '2026-05-01',
+      through: '2026-09-30',
     });
   });
 
@@ -74,19 +82,46 @@ describe('recurring Bill timeline date ranges', () => {
   });
 
   it('extends backward without overlapping the initial preview, then by full months', () => {
-    const first = previousTimelineRange('2026-06-24');
-    const second = previousTimelineRange(first.from);
+    const first = previousTimelineRange('2026-06-24', '2026-07-03');
+    const second = previousTimelineRange(first!.from, '2026-07-03');
 
     expect(first).toEqual({ from: '2026-06-01', through: '2026-06-23' });
     expect(second).toEqual({ from: '2026-05-01', through: '2026-05-31' });
   });
 
   it('extends forward without overlapping the initial preview, then by full months', () => {
-    const first = nextTimelineRange('2026-08-07');
-    const second = nextTimelineRange(first.through);
+    const first = nextTimelineRange('2026-08-07', '2026-07-25');
+    const second = nextTimelineRange(first!.through, '2026-07-25');
 
     expect(first).toEqual({ from: '2026-08-08', through: '2026-08-31' });
     expect(second).toEqual({ from: '2026-09-01', through: '2026-09-30' });
+  });
+
+  it('stops previous loading at current month minus two', () => {
+    expect(previousTimelineRange('2026-05-01', '2026-07-19')).toBeUndefined();
+    expect(previousTimelineRange('2026-05-08', '2026-07-19')).toEqual({
+      from: '2026-05-01',
+      through: '2026-05-07',
+    });
+  });
+
+  it('stops next loading at current month plus two', () => {
+    expect(nextTimelineRange('2026-09-30', '2026-07-19')).toBeUndefined();
+    expect(nextTimelineRange('2026-09-23', '2026-07-19')).toEqual({
+      from: '2026-09-24',
+      through: '2026-09-30',
+    });
+  });
+
+  it('keeps boundary months correct across year transitions', () => {
+    expect(timelineBounds('2026-01-15')).toEqual({
+      from: '2025-11-01',
+      through: '2026-03-31',
+    });
+    expect(timelineBounds('2026-12-15')).toEqual({
+      from: '2026-10-01',
+      through: '2027-02-28',
+    });
   });
 });
 

@@ -1,6 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Plus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 
@@ -9,6 +8,10 @@ import { displayError } from '@/api/display-error';
 import { useYuukaApi } from '@/api/use-yuuka-api';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
+import {
+  FloatingCreateAction,
+  useFloatingCreateActionBottomPadding,
+} from '@/components/floating-create-action';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
 import {
@@ -36,6 +39,7 @@ export default function ExpenseLedgersScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const listBottomPadding = useFloatingCreateActionBottomPadding();
   const [state, setState] = useState<ExpenseLedgerState>('OPEN');
   const query = useInfiniteQuery({
     queryKey: ['expense-ledgers', state],
@@ -64,7 +68,7 @@ export default function ExpenseLedgersScreen() {
   return (
     <Screen>
       <FlatList
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: listBottomPadding }]}
         data={ledgers}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
@@ -111,19 +115,12 @@ export default function ExpenseLedgersScreen() {
           ) : null
         }
         ListHeaderComponent={
-          <View style={styles.header}>
-            <View style={styles.titleRow}>
-              <View style={styles.titleBlock}>
-                <AppText variant="title">Expense Lists</AppText>
-                <AppText style={{ color: colors.muted }} variant="caption">
-                  Showing {ledgers.length} of {totalItems} {state.toLowerCase()} expense lists
-                </AppText>
-              </View>
-              <Button
-                icon={Plus}
-                label="New Expense List"
-                onPress={() => router.push('/expense-ledgers/new')}
-              />
+          <View style={styles.header} testID="expense-lists-list-header">
+            <View style={styles.titleBlock} testID="expense-lists-title-block">
+              <AppText variant="title">Expense Lists</AppText>
+              <AppText style={{ color: colors.muted }} variant="caption">
+                Showing {ledgers.length} of {totalItems} {state.toLowerCase()} expense lists
+              </AppText>
             </View>
             <SegmentedControl
               label="Expense List state"
@@ -152,6 +149,11 @@ export default function ExpenseLedgersScreen() {
             onPress={() => router.push(`/expense-ledgers/${item.id}`)}
           />
         )}
+      />
+      <FloatingCreateAction
+        label="New Expense List"
+        onPress={() => router.push('/expense-ledgers/new')}
+        testID="expense-lists-floating-create"
       />
     </Screen>
   );
@@ -208,5 +210,4 @@ const styles = StyleSheet.create({
   ledgerText: { flex: 1, gap: 3 },
   pressed: { opacity: 0.72 },
   titleBlock: { gap: 3 },
-  titleRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
 });

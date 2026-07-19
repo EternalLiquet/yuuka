@@ -6,11 +6,14 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import type { ExpenseLedger } from '@/api/contracts';
+import type { SinkingFund } from '@/api/contracts';
 
-import ExpenseLedgersScreen from '../../app/(tabs)/expense-ledgers';
+import SinkingFundsScreen from '../../app/sinking-funds';
 
-const mockApi = { expenseLedgers: jest.fn() };
+const mockApi = {
+  reorderSinkingFunds: jest.fn(),
+  sinkingFunds: jest.fn(),
+};
 const mockPush = jest.fn();
 const queryClients: QueryClient[] = [];
 let latestListProps: Record<string, unknown> = {};
@@ -23,18 +26,10 @@ jest.mock('react-native/Libraries/Lists/FlatList', () => {
     data?: unknown[];
     keyExtractor: (item: unknown, index: number) => string;
     ListEmptyComponent?: ReactNode;
-    ListFooterComponent?: ReactNode;
     ListHeaderComponent?: ReactNode;
     renderItem: (info: { index: number; item: unknown }) => ReactElement;
   }) {
-    const {
-      data = [],
-      keyExtractor,
-      ListEmptyComponent,
-      ListFooterComponent,
-      ListHeaderComponent,
-      renderItem,
-    } = props;
+    const { data = [], keyExtractor, ListEmptyComponent, ListHeaderComponent, renderItem } = props;
     latestListProps = props as Record<string, unknown>;
     return React.createElement(
       View,
@@ -46,7 +41,6 @@ jest.mock('react-native/Libraries/Lists/FlatList', () => {
           key: keyExtractor(item, index),
         }),
       ),
-      ListFooterComponent,
     );
   }
   return {
@@ -55,9 +49,15 @@ jest.mock('react-native/Libraries/Lists/FlatList', () => {
   };
 });
 
-jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
+jest.mock('expo-router', () => {
+  function Stack() {
+    return null;
+  }
+  Stack.Screen = function Screen() {
+    return null;
+  };
+  return { Stack, useRouter: () => ({ push: mockPush }) };
+});
 
 jest.mock('@/api/use-yuuka-api', () => ({
   useYuukaApi: () => mockApi,
@@ -90,7 +90,7 @@ function wrapper(queryClient: QueryClient) {
   };
 }
 
-describe('Expense List route pagination', () => {
+describe('Planned Savings route', () => {
   afterEach(() => {
     cleanup();
     queryClients.forEach((queryClient) => queryClient.clear());
@@ -102,14 +102,10 @@ describe('Expense List route pagination', () => {
     latestListProps = {};
   });
 
-  it('keeps the title block vertical and creates Expense Lists from a safe-area FAB', async () => {
-    mockApi.expenseLedgers.mockResolvedValue({
-      hasNext: false,
-      items: [ledger(1)],
-      page: 0,
-      size: 50,
-      totalItems: 1,
-      totalPages: 1,
+  it('keeps the title block vertical and creates Planned Savings from a safe-area FAB', async () => {
+    mockApi.sinkingFunds.mockResolvedValue({
+      items: [fund(1)],
+      summary: { activeCount: 1, archivedCount: 0, totalActiveBalanceMinor: 2500 },
     });
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -118,17 +114,17 @@ describe('Expense List route pagination', () => {
       },
     });
     queryClients.push(queryClient);
-    const view = await render(<ExpenseLedgersScreen />, { wrapper: wrapper(queryClient) });
+    const view = await render(<SinkingFundsScreen />, { wrapper: wrapper(queryClient) });
 
-    expect(await view.findByText('Ledger 1')).toBeTruthy();
-    const header = view.getByTestId('expense-lists-list-header');
-    expect(within(header).queryByLabelText('New Expense List')).toBeNull();
-    expect(StyleSheet.flatten(view.getByTestId('expense-lists-title-block').props.style)).toEqual({
-      gap: 3,
-    });
+    expect(await view.findByText('Vacation')).toBeTruthy();
+    const header = view.getByTestId('planned-savings-list-header');
+    expect(within(header).queryByLabelText('New Planned Savings')).toBeNull();
+    expect(StyleSheet.flatten(view.getByTestId('planned-savings-title-block').props.style)).toEqual(
+      { gap: 3 },
+    );
 
-    const create = view.getByTestId('expense-lists-floating-create');
-    expect(create.props.accessibilityLabel).toBe('New Expense List');
+    const create = view.getByTestId('planned-savings-floating-create');
+    expect(create.props.accessibilityLabel).toBe('New Planned Savings');
     expect(create.props.accessibilityRole).toBe('button');
     const createStyle = StyleSheet.flatten(create.props.style) as {
       bottom?: number;
@@ -149,65 +145,26 @@ describe('Expense List route pagination', () => {
     expect(contentStyle.paddingBottom).toBeGreaterThanOrEqual(100);
 
     await act(async () => fireEvent.press(create));
-    expect(mockPush).toHaveBeenCalledWith('/expense-ledgers/new');
-  });
-
-  it('loads and deduplicates later pages until ledger 101 is reachable', async () => {
-    const firstPage = Array.from({ length: 50 }, (_, index) => ledger(index + 1));
-    const secondPage = [
-      ledger(50),
-      ...Array.from({ length: 49 }, (_, index) => ledger(index + 51)),
-    ];
-    const thirdPage = [ledger(100), ledger(101)];
-    mockApi.expenseLedgers.mockImplementation(
-      async (state: string, pageNumber: number, size: number) => ({
-        hasNext: pageNumber < 2,
-        items: pageNumber === 0 ? firstPage : pageNumber === 1 ? secondPage : thirdPage,
-        page: pageNumber,
-        size,
-        totalItems: 101,
-        totalPages: 3,
-      }),
-    );
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        mutations: { gcTime: Infinity, retry: false },
-        queries: { gcTime: Infinity, retry: false },
-      },
-    });
-    queryClients.push(queryClient);
-    const view = await render(<ExpenseLedgersScreen />, { wrapper: wrapper(queryClient) });
-
-    expect(await view.findByText('Showing 50 of 101 open expense lists')).toBeTruthy();
-    await act(async () => fireEvent.press(view.getByText('Load older expense lists')));
-
-    expect(await view.findByText('Showing 99 of 101 open expense lists')).toBeTruthy();
-    await act(async () => fireEvent.press(view.getByText('Load older expense lists')));
-
-    expect(await view.findByText('Ledger 101')).toBeTruthy();
-    expect(view.getByText('Showing 101 of 101 open expense lists')).toBeTruthy();
-    expect(mockApi.expenseLedgers).toHaveBeenNthCalledWith(1, 'OPEN', 0, 50);
-    expect(mockApi.expenseLedgers).toHaveBeenNthCalledWith(2, 'OPEN', 1, 50);
-    expect(mockApi.expenseLedgers).toHaveBeenNthCalledWith(3, 'OPEN', 2, 50);
+    expect(mockPush).toHaveBeenCalledWith('/sinking-funds/new');
   });
 });
 
-function ledger(index: number): ExpenseLedger {
+function fund(index: number): SinkingFund {
   const suffix = String(index).padStart(12, '0');
   return {
+    archivedAt: null,
     createdAt: '2026-07-18T12:00:00Z',
-    finalizedAt: null,
+    currentBalanceMinor: 2500,
     id: `11111111-1111-4111-8111-${suffix}`,
-    itemCount: 1,
-    items: [],
-    latestExpenseDate: '2026-07-18',
-    name: `Ledger ${index}`,
+    name: 'Vacation',
     notes: null,
-    reopenedAt: null,
-    settledAt: null,
-    settlement: null,
-    state: 'OPEN',
-    totalMinor: index,
+    position: index,
+    progressPercent: null,
+    remainingTargetMinor: null,
+    state: 'ACTIVE',
+    targetDate: null,
+    targetMinor: null,
+    transactionCount: 0,
     updatedAt: '2026-07-18T12:00:00Z',
     version: 0,
   };
