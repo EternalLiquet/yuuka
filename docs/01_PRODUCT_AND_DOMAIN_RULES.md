@@ -241,6 +241,9 @@ and may be scoped to Active, History, or both.
 
 ## Expense Ledgers
 
+The mobile UI calls these **Expense Lists**. Expense Ledger remains the internal domain, API, and
+persistence name.
+
 Expense Ledgers support expense-first workflows where the user records purchases before deciding
 how the total should affect budgeting. An Expense Ledger is owner-scoped and moves through:
 

@@ -55,6 +55,18 @@ describe('API error mapping', () => {
     );
   });
 
+  it('uses Expense List terminology for server-supplied domain errors', () => {
+    const error = mapApiError(422, {
+      code: 'BUSINESS_RULE_VIOLATION',
+      message: 'Finalize this Expense Ledger before settling it.',
+      details: {},
+      fieldErrors: {},
+      traceId: 'trace-1',
+    });
+
+    expect(displayError(error, 'USD')).toBe('Finalize this Expense List before settling it.');
+  });
+
   it('does not show stale internal money terminology if details are missing', () => {
     const error = mapApiError(422, {
       code: 'BUSINESS_RULE_VIOLATION',

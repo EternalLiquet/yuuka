@@ -37,5 +37,8 @@ function moneyError(error: ApiError, currencyCode: string) {
 }
 
 function safeMessage(message: string, fallback: string) {
-  return INTERNAL_TERMS.test(message) ? fallback : message;
+  if (INTERNAL_TERMS.test(message)) return fallback;
+  return message
+    .replace(/\bExpense Ledgers\b/g, 'Expense Lists')
+    .replace(/\bExpense Ledger\b/g, 'Expense List');
 }

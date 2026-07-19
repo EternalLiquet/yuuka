@@ -56,7 +56,7 @@ export default function ExpenseLedgersScreen() {
   if (showColdLoader) {
     return (
       <Screen contentContainerStyle={styles.center}>
-        <YuukaLoadingState message="Loading Expense Ledgers..." />
+        <YuukaLoadingState message="Loading Expense Lists..." />
       </Screen>
     );
   }
@@ -73,7 +73,7 @@ export default function ExpenseLedgersScreen() {
               message={displayError(
                 query.error,
                 settings.currencyCode,
-                'Expense Ledgers could not be loaded.',
+                'Expense Lists could not be loaded.',
               )}
               retry={() => query.refetch()}
             />
@@ -83,9 +83,9 @@ export default function ExpenseLedgersScreen() {
               message={
                 state === 'OPEN'
                   ? 'Capture expenses first, then settle the total into a Bill or Payback.'
-                  : 'No Expense Ledgers in this state.'
+                  : 'No Expense Lists in this state.'
               }
-              title="No Expense Ledgers"
+              title="No Expense Lists"
             />
           )
         }
@@ -94,11 +94,15 @@ export default function ExpenseLedgersScreen() {
             <View style={styles.footer}>
               {query.isFetchNextPageError ? (
                 <AppText style={{ color: colors.danger }} variant="error">
-                  Older Expense Ledgers could not be loaded.
+                  Older Expense Lists could not be loaded.
                 </AppText>
               ) : null}
               <Button
-                label={query.isFetchNextPageError ? 'Retry older ledgers' : 'Load older ledgers'}
+                label={
+                  query.isFetchNextPageError
+                    ? 'Retry older expense lists'
+                    : 'Load older expense lists'
+                }
                 loading={query.isFetchingNextPage}
                 onPress={() => void query.fetchNextPage()}
                 variant="secondary"
@@ -110,19 +114,19 @@ export default function ExpenseLedgersScreen() {
           <View style={styles.header}>
             <View style={styles.titleRow}>
               <View style={styles.titleBlock}>
-                <AppText variant="title">Expense Ledgers</AppText>
+                <AppText variant="title">Expense Lists</AppText>
                 <AppText style={{ color: colors.muted }} variant="caption">
-                  Showing {ledgers.length} of {totalItems} {state.toLowerCase()} ledgers
+                  Showing {ledgers.length} of {totalItems} {state.toLowerCase()} expense lists
                 </AppText>
               </View>
               <Button
                 icon={Plus}
-                label="New Ledger"
+                label="New Expense List"
                 onPress={() => router.push('/expense-ledgers/new')}
               />
             </View>
             <SegmentedControl
-              label="Expense Ledger state"
+              label="Expense List state"
               onChange={setState}
               options={STATE_OPTIONS}
               value={state}
@@ -133,7 +137,7 @@ export default function ExpenseLedgersScreen() {
         }
         refreshControl={
           <RefreshControl
-            accessibilityLabel="Refresh Expense Ledgers"
+            accessibilityLabel="Refresh Expense Lists"
             colors={['transparent']}
             onRefresh={() => void query.refetch()}
             progressBackgroundColor="transparent"
