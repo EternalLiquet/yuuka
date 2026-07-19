@@ -35,7 +35,7 @@ export default function NewExpenseLedgerScreen() {
     <ScrollScreen contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <IconButton icon={ArrowLeft} label="Back" onPress={() => router.back()} />
-        <AppText variant="title">New Expense Ledger</AppText>
+        <AppText variant="title">New Expense List</AppText>
       </View>
       <TextField label="Name" onChangeText={setName} value={name} />
       <TextField
@@ -47,13 +47,13 @@ export default function NewExpenseLedgerScreen() {
       />
       {mutation.error ? (
         <AppText style={{ color: colors.danger }} variant="error">
-          {displayError(mutation.error, settings.currencyCode, 'Expense Ledger was not saved.')}
+          {displayError(mutation.error, settings.currencyCode, 'Expense List was not saved.')}
         </AppText>
       ) : null}
       <Button
         disabled={!canSave}
         icon={Save}
-        label="Save Ledger"
+        label="Save Expense List"
         loading={mutation.isPending}
         onPress={() => mutation.mutate()}
       />

@@ -5,12 +5,12 @@
 Persistent bottom tabs:
 
 1. Active
-2. Ledgers
+2. Paybacks
 3. History
 
-The app-menu drawer provides Active, Ledgers, History, Paybacks, Templates, Recurring Bills, and
-Settings. Ledgers are top-level because they are an entry point into expense-first capture rather
-than a child of a single paycheck.
+The app-menu drawer provides Active, Expense Lists, History, Paybacks, Planned Savings, Templates,
+Recurring Bills, and Settings. Expense Lists are top-level because they are an entry point into
+expense-first capture rather than a child of a single paycheck.
 
 A prominent create action is available from Active.
 
@@ -97,7 +97,7 @@ Filters:
 - Posted,
 - Bill,
 - Spending Bucket,
-- Sinking Fund,
+- Planned Savings,
 - Autopay bills,
 - Manual Pay bills.
 
@@ -171,7 +171,8 @@ The duplicate draft loads the authoritative paycheck detail before initializatio
 entries in saved order, excludes generated `LEFTOVER`, clears Payback assignments with an
 informational count, and does not copy statuses, history, bucket purchases, spent values, IDs, or
 versions. Bills preserve Autopay or Manual Pay and shift due dates by the source due-date offset
-from the source paycheck income date to the new income date. Sinking Fund target dates remain exact.
+from the source paycheck income date to the new income date. Planned Savings target dates remain
+exact.
 Failed creation keeps the local draft available for retry, and repeated taps are guarded so one
 successful request creates one paycheck.
 
@@ -195,28 +196,30 @@ Spending Bucket:
 - budget amount,
 - optional initial transactions.
 
-Sinking Fund:
+Planned Savings:
 
 - contribution amount,
-- optional persistent Sinking Fund assignment,
+- optional persistent Planned Savings assignment,
 - optional target,
 - optional target date.
 
-When a persistent Sinking Fund is selected, the editor sends the assignment, clears entry-level
-target fields, and clears any Payback selection. Selecting a Payback clears the persistent Sinking
-Fund selection. Posted contributions and derived balances are read back from the API.
+When persistent Planned Savings is selected, the editor sends the assignment, clears entry-level
+target fields, and clears any Payback selection. Selecting a Payback clears the persistent Planned
+Savings selection. Posted contributions and derived balances are read back from the API.
 
-## Expense Ledgers
+## Expense Lists
 
-The Ledgers tab supports Open, Finalized, and Settled states. List rows show the ledger name,
+The Expense Lists screen supports Open, Finalized, and Settled states. List rows show the list name,
 derived total, item count, latest expense date when available, loading, stale, empty, retry, and
-pull-to-refresh states. Each state has an isolated paged cache. Load older ledgers appends later
-pages with ID deduplication, exposes the loaded and total counts, and keeps every ledger reachable.
+pull-to-refresh states. Each state has an isolated paged cache. Load older expense lists appends
+later pages with ID deduplication, exposes the loaded and total counts, and keeps every list
+reachable.
 
-The detail screen shows the derived total and items. Open ledgers provide compact repeated item
-entry with Save and add another plus Save and close, preserve input after failed saves, and allow
-editing or deleting items. Finalized ledgers are read-only and provide Reopen, Settle as Bill, and
-Settle as Payback actions. Settled ledgers are read-only and show the created target summary link.
+The detail screen shows the derived total and items. Open expense lists provide compact repeated
+item entry with Save and add another plus Save and close, preserve input after failed saves, and
+allow editing or deleting items. Finalized expense lists are read-only and provide Reopen, Settle
+as Bill, and Settle as Payback actions. Settled expense lists are read-only and show the created
+target summary link.
 
 Bill settlement review requires choosing an active paycheck and shows each paycheck's available
 unallocated amount. Payback settlement creates the Payback with the derived total and latest expense
@@ -253,7 +256,7 @@ Active template detail supports:
 
 - edit template name and description,
 - add, edit, delete with confirmation, and reorder entries,
-- Bill, Spending Bucket, and Sinking Fund entry types,
+- Bill, Spending Bucket, and Planned Savings entry types,
 - Bill Autopay or Manual Pay using "I need to pay this manually",
 - duplicate template,
 - archive template.
@@ -364,16 +367,16 @@ Create/edit fields:
 
 Helper text must explain the difference between original amount owed and amount currently left.
 Paycheck entry editing exposes an "Apply to Payback" selector. Repayment applies only when the
-linked entry reaches Posted status. Selecting a Payback clears any persistent Sinking Fund
+linked entry reaches Posted status. Selecting a Payback clears any persistent Planned Savings
 assignment so one entry cannot affect both balances.
 
-## Sinking Funds menu destination
+## Planned Savings menu destination
 
-The Sinking Funds menu destination focuses on money reserved for future purposes:
+The Planned Savings menu destination focuses on money reserved for future purposes:
 
 - summary card: total active balance, active count, archived count,
-- active Sinking Funds first,
-- archived Sinking Funds in a separate section,
+- active Planned Savings first,
+- archived Planned Savings in a separate section,
 - each card shows current balance, optional target, optional target date, transaction count, state,
   and accessible progress when a target amount exists.
 
@@ -387,7 +390,7 @@ Create/edit fields:
 
 Detail supports edit, archive, restore, withdrawal creation, transaction history, and withdrawal
 reversal. The mobile app displays backend-derived balances and progress instead of calculating
-authoritative Sinking Fund totals locally.
+authoritative Planned Savings totals locally.
 
 ### Fully allocated but incomplete
 

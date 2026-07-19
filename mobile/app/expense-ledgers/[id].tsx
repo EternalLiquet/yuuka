@@ -103,21 +103,21 @@ export default function ExpenseLedgerDetailScreen() {
   });
   const finalizeMutation = useMutation({
     mutationFn: () => {
-      if (!ledger) throw new Error('Refresh the Expense Ledger before finalizing.');
+      if (!ledger) throw new Error('Refresh the Expense List before finalizing.');
       return api.finalizeExpenseLedger(id, ledger.version);
     },
     onSuccess: refreshLedgers,
   });
   const reopenMutation = useMutation({
     mutationFn: () => {
-      if (!ledger) throw new Error('Refresh the Expense Ledger before reopening.');
+      if (!ledger) throw new Error('Refresh the Expense List before reopening.');
       return api.reopenExpenseLedger(id, ledger.version);
     },
     onSuccess: refreshLedgers,
   });
   const deleteLedgerMutation = useMutation({
     mutationFn: () => {
-      if (!ledger) throw new Error('Refresh the Expense Ledger before deleting.');
+      if (!ledger) throw new Error('Refresh the Expense List before deleting.');
       return api.deleteExpenseLedger(id, ledger.version);
     },
     onSuccess: async () => {
@@ -127,7 +127,7 @@ export default function ExpenseLedgerDetailScreen() {
   });
   const settleBillMutation = useMutation({
     mutationFn: (paycheckId: string) => {
-      if (!ledger) throw new Error('Refresh the Expense Ledger before settling.');
+      if (!ledger) throw new Error('Refresh the Expense List before settling.');
       return api.settleExpenseLedgerAsBill(id, { ledgerVersion: ledger.version, paycheckId });
     },
     onSuccess: async () => {
@@ -141,7 +141,7 @@ export default function ExpenseLedgerDetailScreen() {
   });
   const settlePaybackMutation = useMutation({
     mutationFn: () => {
-      if (!ledger) throw new Error('Refresh the Expense Ledger before settling.');
+      if (!ledger) throw new Error('Refresh the Expense List before settling.');
       return api.settleExpenseLedgerAsPayback(id, { ledgerVersion: ledger.version });
     },
     onSuccess: async () => {
@@ -172,7 +172,7 @@ export default function ExpenseLedgerDetailScreen() {
           message={displayError(
             ledgerQuery.error,
             settings.currencyCode,
-            'Expense Ledger could not be loaded.',
+            'Expense List could not be loaded.',
           )}
           retry={() => ledgerQuery.refetch()}
         />
@@ -190,7 +190,7 @@ export default function ExpenseLedgerDetailScreen() {
             label="Delete"
             loading={deleteLedgerMutation.isPending}
             onPress={() =>
-              Alert.alert('Delete Expense Ledger?', ledger.name, [
+              Alert.alert('Delete Expense List?', ledger.name, [
                 { text: 'Cancel', style: 'cancel' },
                 {
                   text: 'Delete',
@@ -469,7 +469,7 @@ function MutationError({ errors }: { errors: unknown[] }) {
   if (!error) return null;
   return (
     <AppText style={{ color: colors.danger }} variant="error">
-      {displayError(error, settings.currencyCode, 'Expense Ledger action failed.')}
+      {displayError(error, settings.currencyCode, 'Expense List action failed.')}
     </AppText>
   );
 }

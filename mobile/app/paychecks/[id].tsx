@@ -59,7 +59,7 @@ const typeOptions = [
   { label: 'All types', value: 'ALL' },
   { label: 'Bills', value: 'BILL' },
   { label: 'Buckets', value: 'SPENDING_BUCKET' },
-  { label: 'Funds', value: 'SINKING_FUND' },
+  { label: 'Planned Savings', value: 'SINKING_FUND' },
 ] as const;
 const paymentMethodOptions = [
   { label: 'All payment methods', value: 'ALL' },
@@ -517,7 +517,7 @@ export default function PaycheckDetailScreen() {
             ? displayError(
                 sinkingFundsQuery.error,
                 settings.currencyCode,
-                'Sinking Funds could not be loaded.',
+                'Planned Savings could not be loaded.',
               )
             : null
         }

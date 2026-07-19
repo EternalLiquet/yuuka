@@ -163,6 +163,9 @@ soft-deleted purchases, non-bucket entries, and purchases effective after `asOfD
 A contribution toward a future purpose, such as tires, travel, car maintenance, or an emergency
 reserve.
 
+The mobile UI calls this domain concept **Planned Savings**. Internal domain, API, and persistence
+terminology remains Sinking Fund.
+
 A Sinking Fund may be a persistent owner-scoped fund with an optional target amount, target date,
 notes, owner-defined order, current balance derived from transactions, and Active or Archived
 state. A persistent fund can start with an optional opening balance. Opening balances,
@@ -240,6 +243,9 @@ names plus exact amount matching. Search results are owner-scoped, exclude soft-
 and may be scoped to Active, History, or both.
 
 ## Expense Ledgers
+
+The mobile UI calls these **Expense Lists**. Expense Ledger remains the internal domain, API, and
+persistence name.
 
 Expense Ledgers support expense-first workflows where the user records purchases before deciding
 how the total should affect budgeting. An Expense Ledger is owner-scoped and moves through:

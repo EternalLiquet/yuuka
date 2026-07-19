@@ -18,14 +18,25 @@ describe('AppMenuButton', () => {
     await fireEvent.press(view.getByLabelText('Open app menu'));
 
     expect(view.getByLabelText('Open Active')).toBeTruthy();
+    expect(view.getByLabelText('Open Expense Lists')).toBeTruthy();
     expect(view.getByLabelText('Open History')).toBeTruthy();
     expect(view.getByLabelText('Open Paybacks')).toBeTruthy();
+    expect(view.getByLabelText('Open Planned Savings')).toBeTruthy();
     expect(view.getByLabelText('Open Templates')).toBeTruthy();
     expect(view.getByLabelText('Open Recurring Bills')).toBeTruthy();
     expect(view.getByLabelText('Open Settings')).toBeTruthy();
 
     await fireEvent.press(view.getByLabelText('Open Recurring Bills'));
     expect(mockPush).toHaveBeenCalledWith('/recurring-bills');
+    expect(view.queryByLabelText('Close app menu')).toBeNull();
+  });
+
+  it('opens Expense Lists from the app menu', async () => {
+    const view = await render(<AppMenuButton />);
+    await fireEvent.press(view.getByLabelText('Open app menu'));
+    await fireEvent.press(view.getByLabelText('Open Expense Lists'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/expense-ledgers');
     expect(view.queryByLabelText('Close app menu')).toBeNull();
   });
 

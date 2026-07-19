@@ -85,7 +85,7 @@ function wrapper(queryClient: QueryClient) {
   };
 }
 
-describe('Expense Ledger route pagination', () => {
+describe('Expense List route pagination', () => {
   afterEach(() => {
     cleanup();
     queryClients.forEach((queryClient) => queryClient.clear());
@@ -122,14 +122,14 @@ describe('Expense Ledger route pagination', () => {
     queryClients.push(queryClient);
     const view = await render(<ExpenseLedgersScreen />, { wrapper: wrapper(queryClient) });
 
-    expect(await view.findByText('Showing 50 of 101 open ledgers')).toBeTruthy();
-    await act(async () => fireEvent.press(view.getByText('Load older ledgers')));
+    expect(await view.findByText('Showing 50 of 101 open expense lists')).toBeTruthy();
+    await act(async () => fireEvent.press(view.getByText('Load older expense lists')));
 
-    expect(await view.findByText('Showing 99 of 101 open ledgers')).toBeTruthy();
-    await act(async () => fireEvent.press(view.getByText('Load older ledgers')));
+    expect(await view.findByText('Showing 99 of 101 open expense lists')).toBeTruthy();
+    await act(async () => fireEvent.press(view.getByText('Load older expense lists')));
 
     expect(await view.findByText('Ledger 101')).toBeTruthy();
-    expect(view.getByText('Showing 101 of 101 open ledgers')).toBeTruthy();
+    expect(view.getByText('Showing 101 of 101 open expense lists')).toBeTruthy();
     expect(mockApi.expenseLedgers).toHaveBeenNthCalledWith(1, 'OPEN', 0, 50);
     expect(mockApi.expenseLedgers).toHaveBeenNthCalledWith(2, 'OPEN', 1, 50);
     expect(mockApi.expenseLedgers).toHaveBeenNthCalledWith(3, 'OPEN', 2, 50);

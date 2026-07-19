@@ -56,11 +56,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="expense-ledgers"
+        name="paybacks"
         options={{
-          title: 'Ledgers',
-          tabBarAccessibilityLabel: 'Expense Ledgers tab',
-          tabBarIcon: ({ color }) => <TabIcon icon={ClipboardList} color={color} />,
+          title: 'Paybacks',
+          tabBarAccessibilityLabel: 'Paybacks tab',
+          tabBarIcon: ({ color }) => <TabIcon icon={RotateCcw} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -72,12 +72,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="paybacks"
+        name="expense-ledgers"
         options={{
-          title: 'Paybacks',
+          title: 'Expense Lists',
           href: null,
-          tabBarAccessibilityLabel: 'Paybacks tab',
-          tabBarIcon: ({ color }) => <TabIcon icon={RotateCcw} color={color} />,
+          tabBarAccessibilityLabel: 'Expense Lists tab',
+          tabBarIcon: ({ color }) => <TabIcon icon={ClipboardList} color={color} />,
         }}
       />
       <Tabs.Screen

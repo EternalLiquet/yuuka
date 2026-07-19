@@ -283,7 +283,7 @@ function validScope(value: SearchScope | undefined) {
 function typeLabel(value: EntrySearchResult['entryType']) {
   return {
     BILL: 'Bill',
-    SINKING_FUND: 'Sinking Fund',
+    SINKING_FUND: 'Planned Savings',
     SPENDING_BUCKET: 'Spending Bucket',
   }[value];
 }

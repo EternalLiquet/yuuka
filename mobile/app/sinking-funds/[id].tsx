@@ -67,7 +67,7 @@ export default function SinkingFundDetailScreen() {
       targetDate: string | null;
       targetMinor: number | null;
     }) => {
-      if (!fundQuery.data) throw new Error('Refresh the Sinking Fund before editing.');
+      if (!fundQuery.data) throw new Error('Refresh Planned Savings before editing.');
       return api.updateSinkingFund(id, { ...values, version: fundQuery.data.version });
     },
     onSuccess: async () => {
@@ -77,7 +77,7 @@ export default function SinkingFundDetailScreen() {
   });
   const lifecycleMutation = useMutation({
     mutationFn: (values: { action: 'archive' | 'restore'; confirmPositiveBalance?: boolean }) => {
-      if (!fundQuery.data) throw new Error('Refresh the Sinking Fund first.');
+      if (!fundQuery.data) throw new Error('Refresh Planned Savings first.');
       if (values.action === 'restore') return api.restoreSinkingFund(id, fundQuery.data.version);
       return api.archiveSinkingFund(id, fundQuery.data.version, values.confirmPositiveBalance);
     },
@@ -93,7 +93,7 @@ export default function SinkingFundDetailScreen() {
       notes: string | null;
       reason: string;
     }) => {
-      if (!fundQuery.data) throw new Error('Refresh the Sinking Fund before withdrawing.');
+      if (!fundQuery.data) throw new Error('Refresh Planned Savings before withdrawing.');
       return api.withdrawSinkingFund(id, { ...values, version: fundQuery.data.version });
     },
     onSuccess: async () => {
@@ -140,7 +140,7 @@ export default function SinkingFundDetailScreen() {
   return (
     <Screen>
       <Stack.Screen
-        options={{ headerShown: true, title: fundQuery.data?.name ?? 'Sinking Fund' }}
+        options={{ headerShown: true, title: fundQuery.data?.name ?? 'Planned Savings' }}
       />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
@@ -196,7 +196,7 @@ export default function SinkingFundDetailScreen() {
             {displayError(
               lifecycleMutation.error,
               settings.currencyCode,
-              'Sinking Fund state was not changed.',
+              'Planned Savings state was not changed.',
             )}
           </AppText>
         ) : null}
@@ -437,11 +437,11 @@ function ArchiveConfirmation({
           <AppText variant="title">Archive with balance</AppText>
           <AppText style={{ color: colors.muted }} variant="body">
             {formatMoney(sinkingFund.currentBalanceMinor, settings.currencyCode)} will remain in the
-            archived Sinking Fund history.
+            archived Planned Savings history.
           </AppText>
           {error ? (
             <AppText style={{ color: colors.danger }} variant="error">
-              {displayError(error, settings.currencyCode, 'Sinking Fund state was not changed.')}
+              {displayError(error, settings.currencyCode, 'Planned Savings state was not changed.')}
             </AppText>
           ) : null}
           <View style={styles.formActions}>
@@ -621,7 +621,7 @@ function WithdrawalSheet({
           <View>
             <AppText variant="title">Withdraw</AppText>
             <AppText style={{ color: colors.muted }} variant="caption">
-              Record money leaving this Sinking Fund.
+              Record money leaving Planned Savings.
             </AppText>
           </View>
           <Pressable

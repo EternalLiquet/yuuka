@@ -31,7 +31,7 @@ const isoDateOptional = z
   .refine((value) => !value || /^\d{4}-\d{2}-\d{2}$/.test(value), 'Use YYYY-MM-DD.');
 
 const sinkingFundFormSchema = z.object({
-  name: z.string().trim().min(1, 'Enter a Sinking Fund name.').max(160),
+  name: z.string().trim().min(1, 'Enter a Planned Savings name.').max(160),
   target: moneyOptional,
   targetDate: isoDateOptional,
   openingBalance: moneyOptional,
@@ -86,7 +86,7 @@ export function SinkingFundEditor({
       });
     } catch (error) {
       setError('root', {
-        message: displayError(error, settings.currencyCode, 'The Sinking Fund was not saved.'),
+        message: displayError(error, settings.currencyCode, 'Planned Savings was not saved.'),
       });
     }
   }
@@ -96,14 +96,14 @@ export function SinkingFundEditor({
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View>
           <AppText variant="title">
-            {sinkingFund ? 'Edit Sinking Fund' : 'New Sinking Fund'}
+            {sinkingFund ? 'Edit Planned Savings' : 'New Planned Savings'}
           </AppText>
           <AppText style={{ color: colors.muted }} variant="caption">
             Contributions apply when linked paycheck entries reach Posted.
           </AppText>
         </View>
         <Pressable
-          accessibilityLabel="Close Sinking Fund editor"
+          accessibilityLabel="Close Planned Savings editor"
           onPress={onClose}
           style={styles.close}
         >
@@ -156,7 +156,7 @@ export function SinkingFundEditor({
         ) : null}
         <Button
           icon={Save}
-          label={sinkingFund ? 'Save Sinking Fund' : 'Create Sinking Fund'}
+          label={sinkingFund ? 'Save Planned Savings' : 'Create Planned Savings'}
           loading={isSubmitting}
           onPress={handleSubmit(submit)}
         />
