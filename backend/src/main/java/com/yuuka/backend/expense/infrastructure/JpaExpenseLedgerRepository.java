@@ -3,6 +3,7 @@ package com.yuuka.backend.expense.infrastructure;
 import com.yuuka.backend.expense.domain.ExpenseLedger;
 import com.yuuka.backend.expense.domain.ExpenseLedgerState;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -26,4 +27,9 @@ public interface JpaExpenseLedgerRepository extends JpaRepository<ExpenseLedger,
 
   Page<ExpenseLedger> findAllByOwnerIdAndStateAndDeletedAtIsNull(
       UUID ownerId, ExpenseLedgerState state, Pageable pageable);
+
+  List<ExpenseLedger> findAllByOwnerIdAndStateAndDeletedAtIsNullOrderByFinalizedAtAscIdAsc(
+      UUID ownerId, ExpenseLedgerState state);
+
+  long countByOwnerIdAndStateAndDeletedAtIsNull(UUID ownerId, ExpenseLedgerState state);
 }

@@ -50,6 +50,8 @@ Cover:
 - append-only status history,
 - append-only audit history,
 - atomic template application.
+- dashboard attention eligibility, exact owner-local three-day boundary, deterministic priority and
+  cap, owner isolation, exclusions, Active calculations, and financial-position summaries.
 
 Do not use H2 as a substitute for PostgreSQL integration behavior.
 
@@ -84,6 +86,11 @@ Use React Native Testing Library for:
 - filter/sort controls,
 - retry states,
 - accessibility labels.
+- Home section/navigation behavior, independent query loading/error/stale/retry states,
+  pull-to-refresh partial failures, Active previews, 30/90-day bucket switching, recurring preview,
+  financial rows, narrow layouts, and font-scaling-safe wrapping.
+- exactly five ordered tabs with centered Home, authenticated Home landing, menu reachability,
+  Planned Savings compatibility, detail push/Back semantics, and top-level stack replacement.
 
 ### End-to-end tests
 

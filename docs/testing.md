@@ -14,6 +14,11 @@ Expense Ledger coverage lives in backend integration tests because lifecycle, de
 settlement provenance, exact-max overflow rollback, and concurrent item serialization depend on
 PostgreSQL constraints and transactions.
 
+Dashboard integration coverage uses PostgreSQL for owner-scoped Active visibility, live/deleted
+entry behavior, status-history timestamps, bucket and Expense List totals, stable ordering, and
+financial-position summaries. The exact Processing boundary is asserted in owner-local calendar
+dates rather than elapsed-hour approximations.
+
 JaCoCo enforces 80% overall line coverage and 90% line / 85% branch coverage on critical domain policies and application services. Trivial DTO accessors, JPA persistence accessors, Spring configuration, and generated OpenAPI material may be omitted from targeted package rules; they remain exercised through integration tests and contribute to the overall report unless explicitly excluded in Gradle.
 
 PIT covers allocation arithmetic, bucket arithmetic, Active/History visibility, and status-transition rules. Its mutation threshold is enforced at 85%.
@@ -41,6 +46,11 @@ Jest enforces 85% line/function/statement and 80% branch coverage for money, API
 Mobile Expense Ledger checks cover runtime contracts, OpenAPI endpoint presence, Bill/Payback target
 routing, and mocked multi-page list behavior through ledger 101. Full rapid-entry and settlement
 journeys are candidates for Maestro once the flow is promoted into the critical E2E set.
+
+Home component coverage exercises all five sections, existing-route navigation, independent
+summary/bucket/recurring query states, cached stale content, retry, partial-failure pull-to-refresh,
+focus and app-active freshness, overlapping refresh coalescing, 30/90-day switching, compact
+positions, accessibility, and wrapping on a 320-point viewport.
 
 The mobile OpenAPI test reads `docs/openapi.json`; the backend test regenerates that document from
 Springdoc and requires byte-for-byte structural equality. The version contract must keep

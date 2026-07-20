@@ -2861,6 +2861,24 @@
           }
         }
       }
+    },
+    "/api/v1/dashboard/summary" : {
+      "get" : {
+        "tags" : [ "dashboard-controller" ],
+        "operationId" : "summary",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DashboardSummaryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -5554,6 +5572,167 @@
           },
           "hasNext" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "DashboardActiveSummaryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "paycheckCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalUnallocatedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "notPaidEntryCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "processingEntryCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "previews" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DashboardPaycheckPreviewResponse"
+            }
+          }
+        }
+      },
+      "DashboardAttentionItemResponse" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "MANUAL_BILL_NOT_PAID", "UNALLOCATED_PAYCHECK", "PROCESSING_ENTRY", "OVER_BUDGET_BUCKET", "FINALIZED_EXPENSE_LEDGER" ]
+          },
+          "paycheckId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entryId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "expenseLedgerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "attentionSinceDate" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }
+      },
+      "DashboardExpenseListSummaryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "openCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "finalizedCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "DashboardPaybackSummaryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "totalRemainingMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "activeCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "DashboardPaycheckPreviewResponse" : {
+        "type" : "object",
+        "properties" : {
+          "paycheckId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "incomeDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "unallocatedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "notPaidCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "processingCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "DashboardPlannedSavingsSummaryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "totalActiveReservedBalanceMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "activeCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "DashboardSummaryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "asOfDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "needsAttention" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DashboardAttentionItemResponse"
+            }
+          },
+          "active" : {
+            "$ref" : "#/components/schemas/DashboardActiveSummaryResponse"
+          },
+          "paybacks" : {
+            "$ref" : "#/components/schemas/DashboardPaybackSummaryResponse"
+          },
+          "plannedSavings" : {
+            "$ref" : "#/components/schemas/DashboardPlannedSavingsSummaryResponse"
+          },
+          "expenseLists" : {
+            "$ref" : "#/components/schemas/DashboardExpenseListSummaryResponse"
           }
         }
       }

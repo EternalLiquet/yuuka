@@ -151,12 +151,32 @@ A bucket tracks:
 - individual spending adjustments,
 - optional over-budget state.
 
-The rolling Spending Bucket card is a current 30- or 90-day snapshot across qualifying Active,
+The Home rolling Spending Bucket report is a current 30- or 90-day snapshot across qualifying Active,
 Closed, and Archived paychecks. The default mobile view is 30 days. It includes owner-scoped
 paychecks with income dates from `asOfDate - 29 days` through `asOfDate` for 30 days, or
 `asOfDate - 89 days` through `asOfDate` for 90 days. It includes live Spending Bucket budgets even
 when they have no purchases, and excludes future-dated paychecks, soft-deleted entries,
 soft-deleted purchases, non-bucket entries, and purchases effective after `asOfDate`.
+
+## Home financial dashboard
+
+Home is a read-only financial orientation surface. It summarizes and links to existing records; it
+does not own editable financial state, management forms, or entry-status mutations.
+
+Needs Attention returns no more than five owner-scoped items. Eligible items are unallocated Active
+paychecks, Not Paid Manual Pay Bills in Active paychecks, Processing entries that have remained in
+that state for at least three owner-local calendar days, over-budget Spending Buckets in Active
+paychecks, and Finalized unsettled Expense Lists. Deleted records and records outside the relevant
+Active/finalized lifecycle are excluded. Past-due Manual Pay Bills come first, followed by
+unallocated paychecks, long-running Processing entries, over-budget buckets, and Finalized Expense
+Lists. Other Not Paid Manual Pay Bills remain eligible after those prioritized groups. Amount/date
+ordering and UUID tie-breakers make the result deterministic.
+
+The Active summary keeps allocation separate from completion: it reports visible Active paycheck
+count, total unallocated money, live Not Paid and Processing counts, and at most two previews. The
+previews prioritize unallocated paychecks, then higher non-Posted counts, then newer income dates.
+Payback, Planned Savings, and Expense List positions reuse their authoritative derived totals and
+state rules; dashboard totals are never persisted.
 
 ### Sinking Fund
 

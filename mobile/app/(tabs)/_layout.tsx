@@ -1,8 +1,10 @@
 import { Redirect, Tabs } from 'expo-router';
 import {
   ClipboardList,
+  Home,
   History,
   LayoutTemplate,
+  PiggyBank,
   RotateCcw,
   Settings,
   WalletCards,
@@ -61,6 +63,22 @@ export default function TabLayout() {
           title: 'Paybacks',
           tabBarAccessibilityLabel: 'Paybacks tab',
           tabBarIcon: ({ color }) => <TabIcon icon={RotateCcw} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: 'Home',
+          tabBarAccessibilityLabel: 'Home tab',
+          tabBarIcon: ({ color }) => <TabIcon icon={Home} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="planned-savings"
+        options={{
+          title: 'Planned Savings',
+          tabBarAccessibilityLabel: 'Planned Savings tab',
+          tabBarIcon: ({ color }) => <TabIcon icon={PiggyBank} color={color} />,
         }}
       />
       <Tabs.Screen

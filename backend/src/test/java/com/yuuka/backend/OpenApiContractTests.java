@@ -25,6 +25,7 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/auth/logout",
           "/api/v1/me",
           "/api/v1/me/settings",
+          "/api/v1/dashboard/summary",
           "/api/v1/recurring-bills",
           "/api/v1/recurring-bills/timeline",
           "/api/v1/recurring-bills/{definitionId}",

@@ -80,6 +80,14 @@ The first user may be provisioned through a bootstrap command, setup script, or 
 
 Store mobile tokens in Expo SecureStore, never plain AsyncStorage.
 
+## Dashboard read model
+
+`GET /api/v1/dashboard/summary` is a read-only application orchestration over existing owner-scoped
+Paycheck visibility/metrics, immutable status history, bucket totals, Payback summaries, Planned
+Savings balances, and Expense List state/totals. It introduces no writable aggregate, cached total,
+or database table. Rolling Spending Bucket performance and recurring-Bill occurrences remain on
+their focused endpoints so the three Home query groups can fail, retry, and refresh independently.
+
 ## Suggested domain tables
 
 ### users
