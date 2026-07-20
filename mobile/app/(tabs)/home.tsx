@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight, Plus, RefreshCw } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import type {
@@ -37,6 +37,9 @@ export default function HomeScreen() {
   const { colors } = useAppTheme();
   const [rollingPeriod, setRollingPeriod] = useState<RollingBucketPeriod>('30');
   const [refreshing, setRefreshing] = useState(false);
+  const hasFocusedOnce = useRef(false);
+  const appState = useRef(AppState.currentState);
+  const refreshInFlight = useRef<Promise<void> | null>(null);
   const summaryQuery = useQuery({
     queryKey: ['dashboard', 'summary'],
     queryFn: api.dashboardSummary,
@@ -68,31 +71,51 @@ export default function HomeScreen() {
     },
   });
 
+  const { refetch: refetchSummary } = summaryQuery;
   const { refetch: refetchBucket } = bucketQuery;
+  const { refetch: refetchRecurring } = recurringQuery;
+  const refetchAll = useCallback(() => {
+    if (refreshInFlight.current) return refreshInFlight.current;
+
+    const refresh = Promise.allSettled([
+      refetchSummary(),
+      refetchBucket(),
+      refetchRecurring(),
+    ]).then(() => undefined);
+    refreshInFlight.current = refresh;
+    void refresh.finally(() => {
+      if (refreshInFlight.current === refresh) refreshInFlight.current = null;
+    });
+    return refresh;
+  }, [refetchBucket, refetchRecurring, refetchSummary]);
+
   useFocusEffect(
     useCallback(() => {
-      void refetchBucket();
-    }, [refetchBucket]),
+      if (!hasFocusedOnce.current) {
+        hasFocusedOnce.current = true;
+        return;
+      }
+      void refetchAll();
+    }, [refetchAll]),
   );
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void refetchBucket();
+      const returnedToActive =
+        appState.current !== null && appState.current !== 'active' && state === 'active';
+      appState.current = state;
+      if (returnedToActive) void refetchAll();
     });
     return () => subscription.remove();
-  }, [refetchBucket]);
+  }, [refetchAll]);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.allSettled([
-        summaryQuery.refetch(),
-        bucketQuery.refetch(),
-        recurringQuery.refetch(),
-      ]);
+      await refetchAll();
     } finally {
       setRefreshing(false);
     }
-  }, [bucketQuery, recurringQuery, summaryQuery]);
+  }, [refetchAll]);
 
   return (
     <Screen>

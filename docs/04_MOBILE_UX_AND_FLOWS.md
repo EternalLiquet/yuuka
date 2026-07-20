@@ -36,8 +36,9 @@ available beside the header. Home contains navigation and summaries only.
 
 The dashboard summary, rolling Spending Bucket report, and recurring timeline preview are separate
 TanStack Query groups. Each has its own cold-loading, cached-stale, error, and retry behavior.
-Pull-to-refresh refetches all three with partial-failure tolerance. Cached content stays visible
-during background refresh and when a refresh fails.
+Pull-to-refresh, returning focus, and an app background-to-active transition refetch all three with
+partial-failure tolerance. Concurrent triggers share one in-flight refresh. Cached content stays
+visible during background refresh and when a refresh fails.
 
 Needs Attention rows push the relevant existing paycheck/entry or Expense List detail. Entry rows
 use the existing highlighted-entry parameter. The Active section shows four compact metrics and no

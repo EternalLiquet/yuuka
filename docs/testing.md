@@ -49,7 +49,8 @@ journeys are candidates for Maestro once the flow is promoted into the critical 
 
 Home component coverage exercises all five sections, existing-route navigation, independent
 summary/bucket/recurring query states, cached stale content, retry, partial-failure pull-to-refresh,
-30/90-day switching, compact positions, accessibility, and wrapping on a 320-point viewport.
+focus and app-active freshness, overlapping refresh coalescing, 30/90-day switching, compact
+positions, accessibility, and wrapping on a 320-point viewport.
 
 The mobile OpenAPI test reads `docs/openapi.json`; the backend test regenerates that document from
 Springdoc and requires byte-for-byte structural equality. The version contract must keep

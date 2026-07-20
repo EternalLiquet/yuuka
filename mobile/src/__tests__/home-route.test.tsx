@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
 import { AppState, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,6 +10,8 @@ import type { DashboardSummary, RollingSpendingBucketPerformance } from '@/api/c
 import HomeScreen from '../../app/(tabs)/home';
 
 const mockPush = jest.fn();
+let mockFocusCallback: (() => void) | null = null;
+let mockAppStateListener: ((state: string) => void) | null = null;
 const queryClients: QueryClient[] = [];
 const mockApi = {
   dashboardSummary: jest.fn(),
@@ -19,8 +21,12 @@ const mockApi = {
 };
 
 jest.mock('expo-router', () => {
+  const React = require('react');
   return {
-    useFocusEffect: () => undefined,
+    useFocusEffect: (callback: () => void) => {
+      mockFocusCallback = callback;
+      React.useEffect(() => callback(), [callback]);
+    },
     useRouter: () => ({ push: mockPush }),
   };
 });
@@ -132,6 +138,31 @@ const recurring = {
   through: '2026-07-27',
 };
 
+const refreshedSummary: DashboardSummary = {
+  ...summary,
+  active: {
+    ...summary.active,
+    notPaidEntryCount: 7,
+    paycheckCount: 4,
+    processingEntryCount: 6,
+    totalUnallocatedMinor: 32100,
+  },
+  needsAttention: [{ ...summary.needsAttention[0], name: 'Updated rent' }],
+};
+
+const refreshedRecurring = {
+  ...recurring,
+  items: [
+    {
+      ...recurring.items[0],
+      name: 'Insurance',
+      occurrenceDate: '2026-07-23',
+      paymentMethod: 'MANUAL' as const,
+      typicalAmountMinor: 7100,
+    },
+  ],
+};
+
 function wrapper(client: QueryClient, width = 390) {
   return function Wrapper({ children }: PropsWithChildren) {
     return (
@@ -170,8 +201,13 @@ describe('Home dashboard', () => {
 
   beforeEach(() => {
     mockPush.mockReset();
+    mockFocusCallback = null;
+    mockAppStateListener = null;
     Object.values(mockApi).forEach((mock) => mock.mockReset());
-    jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+      mockAppStateListener = listener as (state: string) => void;
+      return { remove: jest.fn() };
+    });
     mockApi.dashboardSummary.mockResolvedValue(summary);
     mockApi.rollingSpendingBucketPerformance.mockResolvedValue(rolling);
     mockApi.me.mockResolvedValue({
@@ -236,7 +272,85 @@ describe('Home dashboard', () => {
       expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenLastCalledWith(90),
     );
     expect(view.getByText('Spending Buckets · Last 90 days')).toBeTruthy();
-    expect(view.getByText('Net over by $5.00')).toBeTruthy();
+    expect(await view.findByText('Net over by $5.00')).toBeTruthy();
+  });
+
+  it('refetches all groups on return focus and replaces stale summary and recurring data', async () => {
+    const { view } = await renderHome();
+    await waitFor(() => expect(view.getByText('Internet')).toBeTruthy());
+    const summaryCalls = mockApi.dashboardSummary.mock.calls.length;
+    const bucketCalls = mockApi.rollingSpendingBucketPerformance.mock.calls.length;
+    const recurringCalls = mockApi.recurringBillTimeline.mock.calls.length;
+    mockApi.dashboardSummary.mockResolvedValue(refreshedSummary);
+    mockApi.recurringBillTimeline.mockResolvedValue(refreshedRecurring);
+
+    await act(async () => {
+      mockFocusCallback?.();
+    });
+
+    await waitFor(() => expect(view.getByText('Updated rent')).toBeTruthy());
+    expect(view.queryByText('Electricity')).toBeNull();
+    expect(view.getByText('Insurance')).toBeTruthy();
+    expect(view.queryByText('Internet')).toBeNull();
+    const metrics = within(view.getByTestId('home-active-metrics'));
+    expect(metrics.getByText('4')).toBeTruthy();
+    expect(metrics.getByText('$321.00')).toBeTruthy();
+    expect(metrics.getByText('7')).toBeTruthy();
+    expect(metrics.getByText('6')).toBeTruthy();
+    expect(mockApi.dashboardSummary).toHaveBeenCalledTimes(summaryCalls + 1);
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledTimes(bucketCalls + 1);
+    expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(recurringCalls + 1);
+  });
+
+  it('keeps cached summary visible when one focus refetch fails and updates successful groups', async () => {
+    const updatedRolling = {
+      ...rolling,
+      summary: { budgetedMinor: 20000, netMinor: -500, spentMinor: 20500 },
+    };
+    const { view } = await renderHome();
+    await waitFor(() => expect(view.getByText('Internet')).toBeTruthy());
+    mockApi.dashboardSummary.mockRejectedValueOnce(new Error('summary offline'));
+    mockApi.rollingSpendingBucketPerformance.mockResolvedValue(updatedRolling);
+    mockApi.recurringBillTimeline.mockResolvedValue(refreshedRecurring);
+
+    await act(async () => {
+      mockFocusCallback?.();
+    });
+
+    expect(await view.findByText('Net over by $5.00')).toBeTruthy();
+    expect(view.getByText('Insurance')).toBeTruthy();
+    expect(view.getByText('Friday paycheck')).toBeTruthy();
+    expect(view.getByText('Electricity')).toBeTruthy();
+    expect(view.getAllByText('Showing saved data. Reconnect to refresh.').length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it('refetches all groups only when the app transitions back to active', async () => {
+    const { view } = await renderHome();
+    await waitFor(() => expect(view.getByText('Internet')).toBeTruthy());
+    const summaryCalls = mockApi.dashboardSummary.mock.calls.length;
+    const bucketCalls = mockApi.rollingSpendingBucketPerformance.mock.calls.length;
+    const recurringCalls = mockApi.recurringBillTimeline.mock.calls.length;
+    mockApi.dashboardSummary.mockResolvedValue(refreshedSummary);
+    mockApi.recurringBillTimeline.mockResolvedValue(refreshedRecurring);
+
+    await act(async () => {
+      mockAppStateListener?.('background');
+    });
+    expect(mockApi.dashboardSummary).toHaveBeenCalledTimes(summaryCalls);
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledTimes(bucketCalls);
+    expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(recurringCalls);
+
+    await act(async () => {
+      mockAppStateListener?.('active');
+    });
+
+    await waitFor(() => expect(view.getByText('Updated rent')).toBeTruthy());
+    expect(view.getByText('Insurance')).toBeTruthy();
+    expect(mockApi.dashboardSummary).toHaveBeenCalledTimes(summaryCalls + 1);
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledTimes(bucketCalls + 1);
+    expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(recurringCalls + 1);
   });
 
   it('loads and retries query groups independently', async () => {
@@ -275,6 +389,39 @@ describe('Home dashboard', () => {
         0,
       ),
     );
+  });
+
+  it('coalesces overlapping focus and app-active refresh triggers', async () => {
+    let resolveSummary: (value: DashboardSummary) => void = () => undefined;
+    const pendingSummary = new Promise<DashboardSummary>((resolve) => {
+      resolveSummary = resolve;
+    });
+    const { view } = await renderHome();
+    await waitFor(() => expect(view.getByText('Internet')).toBeTruthy());
+    const summaryCalls = mockApi.dashboardSummary.mock.calls.length;
+    const bucketCalls = mockApi.rollingSpendingBucketPerformance.mock.calls.length;
+    const recurringCalls = mockApi.recurringBillTimeline.mock.calls.length;
+    mockApi.dashboardSummary.mockReturnValueOnce(pendingSummary);
+
+    await act(async () => {
+      mockFocusCallback?.();
+    });
+    await waitFor(() => expect(mockApi.dashboardSummary).toHaveBeenCalledTimes(summaryCalls + 1));
+
+    await act(async () => {
+      mockAppStateListener?.('background');
+      mockAppStateListener?.('active');
+    });
+
+    expect(mockApi.dashboardSummary).toHaveBeenCalledTimes(summaryCalls + 1);
+    expect(mockApi.rollingSpendingBucketPerformance).toHaveBeenCalledTimes(bucketCalls + 1);
+    expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(recurringCalls + 1);
+
+    await act(async () => {
+      resolveSummary(refreshedSummary);
+      await pendingSummary;
+    });
+    await waitFor(() => expect(view.getByText('Updated rent')).toBeTruthy());
   });
 
   it('pull-to-refresh refetches all query groups and tolerates a partial failure', async () => {
