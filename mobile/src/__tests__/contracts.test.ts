@@ -1,6 +1,7 @@
 import {
   auditEventSchema,
   bucketTransactionSchema,
+  dashboardSummarySchema,
   entrySchema,
   entrySearchResultSchema,
   entryPaymentMethodSchema,
@@ -144,6 +145,50 @@ describe('API response contracts', () => {
         version: 0,
       }),
     ).toMatchObject({ entryCount: 1 });
+  });
+
+  it('parses the typed dashboard summary without route strings', () => {
+    const dashboard = dashboardSummarySchema.parse({
+      active: {
+        notPaidEntryCount: 1,
+        paycheckCount: 1,
+        previews: [
+          {
+            amountMinor: 10000,
+            incomeDate: '2026-07-20',
+            name: 'Paycheck',
+            notPaidCount: 1,
+            paycheckId: entry.paycheckId,
+            processingCount: 0,
+            unallocatedMinor: 5000,
+          },
+        ],
+        processingEntryCount: 0,
+        totalUnallocatedMinor: 5000,
+      },
+      asOfDate: '2026-07-20',
+      expenseLists: { finalizedCount: 0, openCount: 1 },
+      needsAttention: [
+        {
+          amountMinor: 5000,
+          attentionSinceDate: null,
+          dueDate: null,
+          entryId: null,
+          expenseLedgerId: null,
+          kind: 'UNALLOCATED_PAYCHECK',
+          name: 'Paycheck',
+          paycheckId: entry.paycheckId,
+        },
+      ],
+      paybacks: { activeCount: 0, totalRemainingMinor: 0 },
+      plannedSavings: { activeCount: 1, totalActiveReservedBalanceMinor: 2500 },
+    });
+
+    expect(dashboard.needsAttention[0]).toMatchObject({
+      kind: 'UNALLOCATED_PAYCHECK',
+      paycheckId: entry.paycheckId,
+    });
+    expect(dashboard.needsAttention[0]).not.toHaveProperty('route');
   });
 
   it('parses secondary API resources and pages', () => {

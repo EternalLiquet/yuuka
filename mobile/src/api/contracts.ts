@@ -100,6 +100,63 @@ export type RollingSpendingBucketPerformance = z.infer<
   typeof rollingSpendingBucketPerformanceSchema
 >;
 
+export const dashboardAttentionKindSchema = z.enum([
+  'MANUAL_BILL_NOT_PAID',
+  'UNALLOCATED_PAYCHECK',
+  'PROCESSING_ENTRY',
+  'OVER_BUDGET_BUCKET',
+  'FINALIZED_EXPENSE_LEDGER',
+]);
+export type DashboardAttentionKind = z.infer<typeof dashboardAttentionKindSchema>;
+
+export const dashboardAttentionItemSchema = z.object({
+  kind: dashboardAttentionKindSchema,
+  paycheckId: uuid.nullable(),
+  entryId: uuid.nullable(),
+  expenseLedgerId: uuid.nullable(),
+  name: z.string(),
+  amountMinor: minor.nonnegative(),
+  dueDate: date.nullable(),
+  attentionSinceDate: date.nullable(),
+});
+export type DashboardAttentionItem = z.infer<typeof dashboardAttentionItemSchema>;
+
+export const dashboardPaycheckPreviewSchema = z.object({
+  paycheckId: uuid,
+  name: z.string(),
+  incomeDate: date,
+  amountMinor: minor.nonnegative(),
+  unallocatedMinor: minor.nonnegative(),
+  notPaidCount: z.number().int().nonnegative(),
+  processingCount: z.number().int().nonnegative(),
+});
+export type DashboardPaycheckPreview = z.infer<typeof dashboardPaycheckPreviewSchema>;
+
+export const dashboardSummarySchema = z.object({
+  asOfDate: date,
+  needsAttention: z.array(dashboardAttentionItemSchema).max(5),
+  active: z.object({
+    paycheckCount: z.number().int().nonnegative(),
+    totalUnallocatedMinor: minor.nonnegative(),
+    notPaidEntryCount: z.number().int().nonnegative(),
+    processingEntryCount: z.number().int().nonnegative(),
+    previews: z.array(dashboardPaycheckPreviewSchema).max(2),
+  }),
+  paybacks: z.object({
+    totalRemainingMinor: minor.nonnegative(),
+    activeCount: z.number().int().nonnegative(),
+  }),
+  plannedSavings: z.object({
+    totalActiveReservedBalanceMinor: minor.nonnegative(),
+    activeCount: z.number().int().nonnegative(),
+  }),
+  expenseLists: z.object({
+    openCount: z.number().int().nonnegative(),
+    finalizedCount: z.number().int().nonnegative(),
+  }),
+});
+export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
+
 export const paybackStateSchema = z.enum(['ACTIVE', 'PAID_OFF']);
 export type PaybackState = z.infer<typeof paybackStateSchema>;
 

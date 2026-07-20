@@ -25,9 +25,13 @@ public class OwnerLocalDateService {
 
   @Transactional(readOnly = true)
   public LocalDate currentDate(UUID ownerId) {
+    return LocalDate.ofInstant(clock.instant(), zoneId(ownerId));
+  }
+
+  @Transactional(readOnly = true)
+  public ZoneId zoneId(UUID ownerId) {
     UserAccount owner = userAccounts.findById(ownerId).orElseThrow(ResourceNotFoundException::new);
-    ZoneId zone = zone(owner.getTimezone());
-    return LocalDate.ofInstant(clock.instant(), zone);
+    return zone(owner.getTimezone());
   }
 
   private ZoneId zone(String timezone) {

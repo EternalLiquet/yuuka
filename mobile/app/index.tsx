@@ -10,5 +10,5 @@ export default function IndexScreen() {
     return <Screen />;
   }
 
-  return <Redirect href={session ? '/(tabs)/active' : '/(auth)/sign-in'} />;
+  return <Redirect href={session ? '/(tabs)/home' : '/(auth)/sign-in'} />;
 }

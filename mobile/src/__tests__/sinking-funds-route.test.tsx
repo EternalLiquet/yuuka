@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { SinkingFund } from '@/api/contracts';
 
-import SinkingFundsScreen from '../../app/sinking-funds';
+import SinkingFundsScreen from '../../app/(tabs)/planned-savings';
 
 const mockApi = {
   reorderSinkingFunds: jest.fn(),

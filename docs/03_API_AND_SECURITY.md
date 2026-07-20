@@ -106,6 +106,22 @@ Status-change request:
 - `GET /spending-buckets/performance/rolling?days=30|90` returns a current 30- or 90-day snapshot across qualifying Active, Closed, and Archived paychecks; `days` defaults to `30`, unsupported values are rejected, and `summary` is absent only when there are zero qualifying live Spending Bucket entries.
 - `GET /spending-buckets/performance/rolling-90-days` remains available as a compatibility endpoint delegating to the 90-day calculation.
 
+### Home dashboard
+
+- `GET /dashboard/summary` returns owner-local `asOfDate`, up to five typed `needsAttention`
+  items, the Active summary and up to two paycheck previews, plus compact Payback, Planned Savings,
+  and Expense List summaries.
+- Attention items use the enum kinds `MANUAL_BILL_NOT_PAID`, `UNALLOCATED_PAYCHECK`,
+  `PROCESSING_ENTRY`, `OVER_BUDGET_BUCKET`, and `FINALIZED_EXPENSE_LEDGER`. They carry typed
+  `paycheckId`, `entryId`, and `expenseLedgerId` fields as applicable and never return mobile route
+  strings.
+- Past-due Manual Pay Bills sort first; unallocated, three-owner-local-day Processing, over-budget,
+  and Finalized Expense List items follow. Non-past-due Manual Pay Bills sort after those explicit
+  priorities. Relevant dates/amounts and UUIDs provide deterministic ordering, and results are
+  capped at five.
+- The endpoint is authenticated, owner-scoped, read-only, and calculates from current live data.
+  It does not persist dashboard totals.
+
 ### Paybacks
 
 - `GET /paybacks` returns active and paid-off Paybacks plus a summary total.

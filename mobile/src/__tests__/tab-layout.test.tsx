@@ -48,18 +48,23 @@ jest.mock('@/theme/use-app-theme', () => ({
 describe('bottom tab layout', () => {
   beforeEach(() => mockTabScreens.splice(0));
 
-  it('shows Active, Paybacks, and History while keeping Expense Lists off the bottom bar', async () => {
+  it('shows exactly five tabs in order with Home physically centered', async () => {
     const view = await render(<TabLayout />);
 
-    expect(
-      mockTabScreens.filter((screen) => screen.options.href !== null).map((screen) => screen.name),
-    ).toEqual(['active', 'paybacks', 'history']);
+    const visible = mockTabScreens
+      .filter((screen) => screen.options.href !== null)
+      .map((screen) => screen.name);
+    expect(visible).toEqual(['active', 'paybacks', 'home', 'planned-savings', 'history']);
+    expect(visible).toHaveLength(5);
+    expect(visible[Math.floor(visible.length / 2)]).toBe('home');
     expect(
       mockTabScreens.find((screen) => screen.name === 'expense-ledgers')?.options,
     ).toMatchObject({
       href: null,
       title: 'Expense Lists',
     });
+    expect(mockTabScreens.find((screen) => screen.name === 'templates')?.options.href).toBeNull();
+    expect(mockTabScreens.find((screen) => screen.name === 'settings')?.options.href).toBeNull();
 
     await view.unmount();
   });

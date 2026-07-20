@@ -7,6 +7,7 @@ import { expectNoContent, parseApiResponse } from './api-client';
 import {
   auditEventSchema,
   bucketTransactionSchema,
+  dashboardSummarySchema,
   entrySchema,
   expenseLedgerItemSchema,
   expenseLedgerSchema,
@@ -158,6 +159,7 @@ export function useYuukaApi() {
           paycheckSchema,
         ),
       activePaychecks: () => get('/paychecks/active?size=100', pageSchema(paycheckSchema)),
+      dashboardSummary: () => get('/dashboard/summary', dashboardSummarySchema),
       rollingSpendingBucketPerformance: (days: 30 | 90 = 30) =>
         get(
           `/spending-buckets/performance/rolling?days=${days}`,

@@ -12,6 +12,7 @@ describe('committed backend contract', () => {
     ['/api/v1/paychecks', 'post'],
     ['/api/v1/paychecks/active', 'get'],
     ['/api/v1/paychecks/history', 'get'],
+    ['/api/v1/dashboard/summary', 'get'],
     ['/api/v1/spending-buckets/performance/rolling', 'get'],
     ['/api/v1/spending-buckets/performance/rolling-90-days', 'get'],
     ['/api/v1/search/entries', 'get'],

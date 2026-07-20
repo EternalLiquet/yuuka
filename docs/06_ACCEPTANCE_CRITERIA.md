@@ -21,6 +21,18 @@ V1 is complete only when:
 
 ## Functional acceptance
 
+### Home financial dashboard
+
+After authentication, Home is the centered third tab in the exact five-tab order Active, Paybacks,
+Home, Planned Savings, and History. The app menu still reaches every top-level destination.
+
+Home renders Needs Attention, Active Paychecks, Spending Buckets, Upcoming Recurring Bills, and
+Financial Positions in that order. Attention is owner-scoped, deterministic, limited to five, and
+includes only the documented actionable conditions. An entry that entered Processing exactly three
+owner-local calendar days ago is eligible; a two-day entry is not. Home-launched details push and
+Android Back returns to cached Home content. All three Home query groups retry independently, and a
+partial pull-to-refresh failure does not hide successful cached groups.
+
 ### New paycheck from scratch
 
 Creating a paycheck named Free Paycheck for $1,977.57 dated July 17, 2026 produces:

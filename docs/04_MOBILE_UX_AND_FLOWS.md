@@ -6,11 +6,16 @@ Persistent bottom tabs:
 
 1. Active
 2. Paybacks
-3. History
+3. Home
+4. Planned Savings
+5. History
 
-The app-menu drawer provides Active, Expense Lists, History, Paybacks, Planned Savings, Templates,
-Recurring Bills, and Settings. Expense Lists are top-level because they are an entry point into
-expense-first capture rather than a child of a single paycheck.
+Home is physically centered and opens after authentication. The app-menu drawer provides Home,
+Active, Expense Lists, History, Paybacks, Planned Savings, Templates, Recurring Bills, and Settings.
+Top-level menu navigation replaces the current top-level route to avoid duplicate stack buildup;
+record details still push so Android Back returns to the originating screen with cached content.
+Expense Lists are top-level because they are an entry point into expense-first capture rather than
+a child of a single paycheck.
 
 A prominent create action is available from Active.
 
@@ -21,7 +26,25 @@ A prominent create action is available from Active.
 - Sign out
 - Public registration not required
 
-After authentication, open Active.
+After authentication, open Home.
+
+## Home tab
+
+Home is a compact scrollable dashboard with these sections in order: Needs Attention, Active
+Paychecks, Spending Buckets, Upcoming Recurring Bills, and Financial Positions. New Paycheck is
+available beside the header. Home contains navigation and summaries only.
+
+The dashboard summary, rolling Spending Bucket report, and recurring timeline preview are separate
+TanStack Query groups. Each has its own cold-loading, cached-stale, error, and retry behavior.
+Pull-to-refresh refetches all three with partial-failure tolerance. Cached content stays visible
+during background refresh and when a refresh fails.
+
+Needs Attention rows push the relevant existing paycheck/entry or Expense List detail. Entry rows
+use the existing highlighted-entry parameter. The Active section shows four compact metrics and no
+more than two lightweight paycheck previews, with View Active and New Paycheck navigation. The
+30/90-day report lives on Home rather than Active. Upcoming Recurring Bills shows the next three
+timeline occurrences from owner-local today through the configured suggestion window. Financial
+Positions contains compact Payback, Planned Savings, and Expense List navigation rows.
 
 ## Active tab
 
@@ -378,9 +401,11 @@ Paycheck entry editing exposes an "Apply to Payback" selector. Repayment applies
 linked entry reaches Posted status. Selecting a Payback clears any persistent Planned Savings
 assignment so one entry cannot affect both balances.
 
-## Planned Savings menu destination
+## Planned Savings tab
 
-The Planned Savings menu destination focuses on money reserved for future purposes:
+The Planned Savings tab focuses on money reserved for future purposes. The compatibility route
+`/sinking-funds` redirects to this tab, while existing `/sinking-funds/{id}` detail deep links remain
+valid:
 
 - summary card: total active balance, active count, archived count,
 - active Planned Savings first,

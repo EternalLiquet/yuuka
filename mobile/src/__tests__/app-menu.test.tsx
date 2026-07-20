@@ -2,8 +2,8 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 import { AppMenuButton } from '@/components/app-menu';
 
-const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+const mockReplace = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('@/theme/use-app-theme', () => ({
   useAppTheme: () => ({
     colors: { accent: '#ff8', border: '#333', surface: '#111', text: '#fff' },
@@ -11,12 +11,13 @@ jest.mock('@/theme/use-app-theme', () => ({
 }));
 
 describe('AppMenuButton', () => {
-  beforeEach(() => mockPush.mockClear());
+  beforeEach(() => mockReplace.mockClear());
 
   it('opens, exposes every top-level destination, navigates, and closes', async () => {
     const view = await render(<AppMenuButton />);
     await fireEvent.press(view.getByLabelText('Open app menu'));
 
+    expect(view.getByLabelText('Open Home')).toBeTruthy();
     expect(view.getByLabelText('Open Active')).toBeTruthy();
     expect(view.getByLabelText('Open Expense Lists')).toBeTruthy();
     expect(view.getByLabelText('Open History')).toBeTruthy();
@@ -27,7 +28,7 @@ describe('AppMenuButton', () => {
     expect(view.getByLabelText('Open Settings')).toBeTruthy();
 
     await fireEvent.press(view.getByLabelText('Open Recurring Bills'));
-    expect(mockPush).toHaveBeenCalledWith('/recurring-bills');
+    expect(mockReplace).toHaveBeenCalledWith('/recurring-bills');
     expect(view.queryByLabelText('Close app menu')).toBeNull();
   });
 
@@ -36,7 +37,7 @@ describe('AppMenuButton', () => {
     await fireEvent.press(view.getByLabelText('Open app menu'));
     await fireEvent.press(view.getByLabelText('Open Expense Lists'));
 
-    expect(mockPush).toHaveBeenCalledWith('/(tabs)/expense-ledgers');
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/expense-ledgers');
     expect(view.queryByLabelText('Close app menu')).toBeNull();
   });
 
@@ -44,6 +45,14 @@ describe('AppMenuButton', () => {
     const view = await render(<AppMenuButton />);
     await fireEvent.press(view.getByLabelText('Open app menu'));
     await fireEvent.press(view.getByLabelText('Close app menu'));
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('replaces top-level destinations instead of building duplicate menu stacks', async () => {
+    const view = await render(<AppMenuButton />);
+    await fireEvent.press(view.getByLabelText('Open app menu'));
+    await fireEvent.press(view.getByLabelText('Open Home'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/home');
   });
 });

@@ -21,6 +21,10 @@ Yuuka is a paycheck-first budgeting app for bills, spending buckets, and sinking
 
 ## What is implemented
 
+- Home financial dashboard with independently refreshed attention, Active, Spending Bucket,
+  recurring-Bill, Payback, Planned Savings, and Expense List summaries
+- Five persistent bottom tabs in the order Active, Paybacks, Home, Planned Savings, and History,
+  with all top-level destinations retained in the app menu
 - Active paycheck and paycheck-detail workflows with exact-cent allocation metrics
 - Scratch paycheck creation, basic bill/spending-bucket/sinking-fund entries, filtering, sorting, and persistent custom order
 - Global entry search by name or exact amount across Active and History paychecks
