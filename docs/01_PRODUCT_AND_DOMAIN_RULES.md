@@ -165,12 +165,12 @@ does not own editable financial state, management forms, or entry-status mutatio
 
 Needs Attention returns no more than five owner-scoped items. Eligible items are unallocated Active
 paychecks, Not Paid Manual Pay Bills in Active paychecks, Processing entries that have remained in
-that state for at least three owner-local calendar days, over-budget Spending Buckets in Active
-paychecks, and Finalized unsettled Expense Lists. Deleted records and records outside the relevant
-Active/finalized lifecycle are excluded. Past-due Manual Pay Bills come first, followed by
-unallocated paychecks, long-running Processing entries, over-budget buckets, and Finalized Expense
-Lists. Other Not Paid Manual Pay Bills remain eligible after those prioritized groups. Amount/date
-ordering and UUID tie-breakers make the result deterministic.
+that state for at least three owner-local calendar days, over-budget non-Posted Spending Buckets in
+Active paychecks, and Finalized unsettled Expense Lists. Deleted records and records outside the
+relevant Active/finalized lifecycle are excluded. Past-due Manual Pay Bills come first, followed by
+unallocated paychecks, long-running Processing entries, over-budget non-Posted buckets, and
+Finalized Expense Lists. Other Not Paid Manual Pay Bills remain eligible after those prioritized
+groups. Amount/date ordering and UUID tie-breakers make the result deterministic.
 
 The Active summary keeps allocation separate from completion: it reports visible Active paycheck
 count, total unallocated money, live Not Paid and Processing counts, and at most two previews. The

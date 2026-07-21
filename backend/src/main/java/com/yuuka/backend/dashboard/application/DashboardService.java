@@ -234,7 +234,7 @@ public class DashboardService {
         BucketMetrics bucket =
             bucketCalculator.calculate(
                 entry.getAmountMinor(), List.of(spentByBucket.getOrDefault(entry.getId(), 0L)));
-        if (bucket.overBudget()) {
+        if (bucket.overBudget() && entry.getStatus() != EntryStatus.POSTED) {
           long overage = Math.abs(bucket.remainingMinor());
           candidates.add(
               new AttentionCandidate(

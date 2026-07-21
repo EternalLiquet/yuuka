@@ -115,10 +115,10 @@ Status-change request:
   `PROCESSING_ENTRY`, `OVER_BUDGET_BUCKET`, and `FINALIZED_EXPENSE_LEDGER`. They carry typed
   `paycheckId`, `entryId`, and `expenseLedgerId` fields as applicable and never return mobile route
   strings.
-- Past-due Manual Pay Bills sort first; unallocated, three-owner-local-day Processing, over-budget,
-  and Finalized Expense List items follow. Non-past-due Manual Pay Bills sort after those explicit
-  priorities. Relevant dates/amounts and UUIDs provide deterministic ordering, and results are
-  capped at five.
+- Past-due Manual Pay Bills sort first; unallocated, three-owner-local-day Processing, over-budget
+  non-Posted, and Finalized Expense List items follow. Non-past-due Manual Pay Bills sort after
+  those explicit priorities. Relevant dates/amounts and UUIDs provide deterministic ordering, and
+  results are capped at five.
 - The endpoint is authenticated, owner-scoped, read-only, and calculates from current live data.
   It does not persist dashboard totals.
 
