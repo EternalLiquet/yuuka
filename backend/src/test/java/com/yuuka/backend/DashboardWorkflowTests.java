@@ -166,6 +166,73 @@ class DashboardWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void overBudgetBucketAttentionTracksStatusWithoutChangingBucketReporting() throws Exception {
+    Owner owner = register("dashboard-bucket-status@yuuka.local", "America/Indianapolis");
+    UUID paycheckId = insertPaycheck(owner.id(), "Bucket status", 2000, "2026-07-18", "ACTIVE");
+    UUID bucketId =
+        insertEntry(
+            owner.id(),
+            paycheckId,
+            "SPENDING_BUCKET",
+            "Groceries",
+            1000,
+            "NOT_PAID",
+            0,
+            null,
+            null,
+            false);
+    insertEntry(
+        owner.id(),
+        paycheckId,
+        "BILL",
+        "Keeps paycheck active",
+        1000,
+        "NOT_PAID",
+        1,
+        "AUTOPAY",
+        null,
+        false);
+    insertBucketTransaction(owner.id(), bucketId, 1500, false);
+
+    assertThat(attentionItem(summary(owner.token()), bucketId).path("kind").asText())
+        .isEqualTo("OVER_BUDGET_BUCKET");
+
+    JsonNode processing =
+        changeStatus(owner.token(), bucketId, "PROCESSING", "2026-07-19T12:00:00Z", 0);
+    assertThat(attentionItem(summary(owner.token()), bucketId).path("kind").asText())
+        .isEqualTo("OVER_BUDGET_BUCKET");
+
+    JsonNode posted =
+        changeStatus(
+            owner.token(),
+            bucketId,
+            "POSTED",
+            "2026-07-19T13:00:00Z",
+            processing.path("version").asLong());
+    assertThat(summary(owner.token()).path("needsAttention").findValuesAsText("entryId"))
+        .doesNotContain(bucketId.toString());
+
+    JsonNode postedBucket = entry(paycheck(owner.token(), paycheckId), bucketId);
+    assertThat(postedBucket.path("spentMinor").asLong()).isEqualTo(1500);
+    assertThat(postedBucket.path("remainingMinor").asLong()).isEqualTo(-500);
+    assertThat(postedBucket.path("overBudget").asBoolean()).isTrue();
+
+    JsonNode rolling = rollingPerformance(owner.token());
+    assertThat(rolling.path("summary").path("budgetedMinor").asLong()).isEqualTo(1000);
+    assertThat(rolling.path("summary").path("spentMinor").asLong()).isEqualTo(1500);
+    assertThat(rolling.path("summary").path("netMinor").asLong()).isEqualTo(-500);
+
+    changeStatus(
+        owner.token(),
+        bucketId,
+        "PROCESSING",
+        "2026-07-19T14:00:00Z",
+        posted.path("version").asLong());
+    assertThat(attentionItem(summary(owner.token()), bucketId).path("kind").asText())
+        .isEqualTo("OVER_BUDGET_BUCKET");
+  }
+
+  @Test
   void usesOwnerLocalCalendarDatesForProcessingAttention() throws Exception {
     Owner indianapolis = register("dashboard-zone-east@yuuka.local", "America/Indianapolis");
     Owner losAngeles = register("dashboard-zone-west@yuuka.local", "America/Los_Angeles");
@@ -423,6 +490,68 @@ class DashboardWorkflowTests extends AbstractIntegrationTest {
             .andReturn()
             .getResponse()
             .getContentAsString());
+  }
+
+  private JsonNode paycheck(String token, UUID paycheckId) throws Exception {
+    return objectMapper.readTree(
+        mockMvc
+            .perform(
+                get("/api/v1/paychecks/{id}", paycheckId).header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private JsonNode changeStatus(
+      String token, UUID entryId, String toStatus, String effectiveAt, long version)
+      throws Exception {
+    return objectMapper.readTree(
+        mockMvc
+            .perform(
+                post("/api/v1/entries/{id}/status", entryId)
+                    .header("Authorization", bearer(token))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"toStatus":"%s","effectiveAt":"%s","version":%d}
+                        """
+                            .formatted(toStatus, effectiveAt, version)))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private JsonNode rollingPerformance(String token) throws Exception {
+    return objectMapper.readTree(
+        mockMvc
+            .perform(
+                get("/api/v1/spending-buckets/performance/rolling")
+                    .param("asOfDate", "2026-07-19")
+                    .header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private JsonNode entry(JsonNode paycheck, UUID entryId) {
+    for (JsonNode entry : paycheck.path("entries")) {
+      if (entryId.toString().equals(entry.path("id").asText())) {
+        return entry;
+      }
+    }
+    throw new AssertionError("Expected paycheck entry " + entryId);
+  }
+
+  private JsonNode attentionItem(JsonNode summary, UUID entryId) {
+    for (JsonNode item : summary.path("needsAttention")) {
+      if (entryId.toString().equals(item.path("entryId").asText())) {
+        return item;
+      }
+    }
+    throw new AssertionError("Expected attention item for entry " + entryId);
   }
 
   private Owner register(String email, String timezone) throws Exception {
