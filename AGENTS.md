@@ -249,11 +249,20 @@ Spent, remaining, and over-budget values are derived.
 
 Do not persist or directly edit derived bucket totals unless a reviewed performance requirement explicitly justifies it.
 
-### Sinking Funds
+### Planned Savings
 
-A Sinking Fund entry represents the current paycheck contribution.
+The user-facing term is **Planned Savings**. Existing `SINKING_FUND`, `sinkingFundId`,
+`/sinking-funds`, and persistence identifiers remain internal compatibility names.
 
-Do not silently turn Sinking Funds into persistent account balances without an explicit feature decision and data model.
+A Planned Savings paycheck entry represents the current paycheck contribution and may optionally
+link to one Active persistent Planned Savings aggregate. The entry reserves only its own amount in
+paycheck allocation. Linking alone does not change the persistent balance.
+
+Moving a linked entry to Posted applies exactly one contribution. Moving backward from Posted,
+deleting the entry, unlinking it, or changing its type reverses the active contribution while
+retaining transaction history. Returning to Posted creates a new active contribution. Derived
+balances must remain owner-scoped, transaction-backed, version-guarded, and calculated by the
+backend.
 
 ### Statuses
 
@@ -360,17 +369,20 @@ Do not introduce:
 
 unless explicitly requested.
 
-### Expense Ledgers
+### Expense Lists
 
-Expense Ledgers are owner-scoped expense-first aggregates with `OPEN → FINALIZED → SETTLED`
-lifecycle. Open ledgers and live items are editable. Finalized ledgers are read-only but may be
-reopened until settlement. Settled ledgers are permanently read-only historical records.
+The user-facing term is **Expense List**. Existing Expense Ledger domain, API, and persistence
+identifiers remain internal compatibility names.
+
+Expense Lists are owner-scoped expense-first aggregates with `OPEN → FINALIZED → SETTLED`
+lifecycle. Open lists and live items are editable. Finalized lists are read-only but may be
+reopened until settlement. Settled lists are permanently read-only historical records.
 
 Ledger totals are always derived from live positive Expense Items using checked money arithmetic;
 do not persist or accept an authoritative cached total. Settlement must recalculate the total
 server-side under the settlement transaction.
 
-A Finalized ledger may settle exactly once as either one ordinary Bill in an eligible paycheck or
+A Finalized list may settle exactly once as either one ordinary Bill in an eligible paycheck or
 one ordinary Payback. Persist immutable settlement provenance and nullable source-ledger provenance
 on the created target. Provenance is informational only: later ledger edits, target edits, and
 target deletion must not synchronize, reopen, or cascade across the boundary.

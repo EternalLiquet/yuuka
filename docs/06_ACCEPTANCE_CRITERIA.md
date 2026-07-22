@@ -74,10 +74,10 @@ A $50.00 Work Food bucket with $12.35 and $9.10 spending has $28.55 remaining.
 Editing those purchases updates spent and remaining totals. A $51.00 purchase against the same
 $50.00 bucket shows $51.00 spent and $1.00 over budget.
 
-### Expense Ledgers
+### Expense Lists
 
-An Open Expense Ledger with $25.00 and $30.00 live items derives a $55.00 total. Deleting one item
-removes it from the derived total. The ledger cannot finalize while empty, becomes read-only after
+An Open Expense List with $25.00 and $30.00 live items derives a $55.00 total. Deleting one item
+removes it from the derived total. The list cannot finalize while empty, becomes read-only after
 finalization, can reopen before settlement, and cannot reopen after settlement.
 
 Settling as Bill creates one normal Not Paid Bill in a selected active paycheck for the exact

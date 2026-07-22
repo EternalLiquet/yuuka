@@ -80,7 +80,7 @@ Use React Native Testing Library for:
 - create paycheck form,
 - bucket transaction form,
 - Payback list, editor, detail, and repayment assignment behavior,
-- Sinking Fund list, editor, detail, contribution assignment, withdrawal, and transaction behavior,
+- Planned Savings list, editor, detail, contribution assignment, withdrawal, and transaction behavior,
 - template list, create/edit/detail, entry CRUD, archive/restore/duplicate, and create-from-template
   draft behavior,
 - filter/sort controls,
@@ -98,27 +98,15 @@ Use Maestro or an equivalent Android-capable tool.
 
 The current critical Android flows automate:
 
-1. Sign in.
-2. Create paycheck from scratch.
-3. Add bill.
-4. Change Not Paid to Processing.
-5. Change Processing to Posted.
-6. Edit effective date.
-7. Add bucket transaction.
-8. Reorder entries.
-9. Close paycheck.
-10. View History.
-11. Reopen paycheck.
-12. Create a Payback.
-13. Assign a paycheck entry to a Payback.
-14. Delete a Payback and verify live entry reassignment cleanup.
-15. Create a Sinking Fund.
-16. Assign a paycheck entry to a Sinking Fund and verify Posted contribution behavior.
-17. Record and reverse a Sinking Fund withdrawal.
-18. Create a template with Bill and Spending Bucket entries.
-19. Preserve Manual Pay metadata on template application.
-20. Edit and reorder the local create-from-template draft.
-21. Create the paycheck from the edited draft and verify source-template independence.
+1. Scratch paycheck creation, Bill and Spending Bucket entry editing, status history, bucket
+   purchases, entry reordering, automatic close, History, and reopen.
+2. Payback creation, paycheck-entry assignment, Payback deletion cleanup, and reassignment.
+3. Template creation, Manual Pay preservation, editable create-from-template draft behavior,
+   ordering, and source-template independence.
+4. Recurring Bill definition creation and editable import into a scratch paycheck draft.
+
+Planned Savings has mobile component and backend integration coverage but is not currently one of
+the four committed Maestro flows.
 
 Full audit-browsing E2E coverage should be added when full audit browsing leaves later-scope mobile
 status.

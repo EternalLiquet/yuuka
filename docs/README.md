@@ -3,9 +3,9 @@
 The numbered files are the authoritative Yuuka product and engineering specification.
 
 Current implemented domains include authentication, Paychecks, entries, Templates, Recurring Bills,
-Spending Bucket transactions/performance, Paybacks, global entry search, audit history, and Expense
-Ledgers. The mobile current state includes the Home financial dashboard and the five-tab navigation
-for Active, Paybacks, Home, Planned Savings, and History.
+Spending Bucket transactions/performance, Paybacks, Planned Savings, global entry search, audit
+history, and Expense Lists. The mobile current state includes the Home financial dashboard and the
+five-tab navigation for Active, Paybacks, Home, Planned Savings, and History.
 
 Operational guides:
 

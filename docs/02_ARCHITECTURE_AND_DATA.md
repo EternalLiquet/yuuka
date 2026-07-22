@@ -88,16 +88,21 @@ Savings balances, and Expense List state/totals. It introduces no writable aggre
 or database table. Rolling Spending Bucket performance and recurring-Bill occurrences remain on
 their focused endpoints so the three Home query groups can fail, retry, and refresh independently.
 
-## Suggested domain tables
+## Core domain tables and compatibility identifiers
 
-### users
+The names below are the implemented persistence identifiers. Some intentionally retain legacy
+internal wording while the mobile product uses Planned Savings and Expense Lists.
+
+### user_accounts
 
 - id UUID
 - email
 - password_hash
 - display_name
+- role
 - currency_code
 - timezone
+- recurring_bill_suggestion_days
 - enabled
 - created_at
 - updated_at
@@ -186,6 +191,26 @@ Append-only:
 Amounts are positive purchase records. Corrections are made by editing or deleting the original
 transaction; refund-style negative transactions are not part of the current contract.
 
+### paybacks and payback_repayments
+
+Paybacks store owner-scoped metadata, baseline amounts, state, custom order, soft-delete state, and
+an optimistic-lock version. Active repayment rows link one Posted paycheck entry to one Payback.
+Reversal timestamps preserve repayment history, and a partial unique index permits at most one
+active repayment per entry.
+
+### recurring_bill_definitions
+
+Recurring Bill definitions store owner-scoped monthly planning metadata. Occurrences are derived
+at read time rather than persisted. Optional definition and occurrence provenance on imported Bill
+entries is informational and does not synchronize later edits.
+
+### sinking_funds and sinking_fund_transactions
+
+These are the compatibility persistence names for Planned Savings. The aggregate stores metadata,
+state, custom order, target fields, and optimistic version; its balance is derived from unreversed
+opening-balance, contribution, and withdrawal transactions. Posted linked entries create active
+contributions, and reversal timestamps preserve transaction history.
+
 ### expense_ledgers
 
 - id UUID
@@ -235,10 +260,11 @@ Append-only settlement provenance:
 - settled_at
 - created_at
 
-The database enforces one settlement row per Expense Ledger. For Bill settlement, `target_id` is the
-created entry and `target_paycheck_id` is its containing paycheck. For Payback settlement,
-`target_id` is the Payback and `target_paycheck_id` is null. Neither target field has a target-side
-foreign key, so later target deletion cannot rewrite or delete immutable settlement provenance.
+The database enforces one settlement row per internal expense-list aggregate. For Bill settlement,
+`target_id` is the created entry and `target_paycheck_id` is its containing paycheck. For Payback
+settlement, `target_id` is the Payback and `target_paycheck_id` is null. Neither target field has a
+target-side foreign key, so later target deletion cannot rewrite or delete immutable settlement
+provenance.
 
 ### templates
 
@@ -298,9 +324,14 @@ Append-only:
 ## Critical atomic operations
 
 - create paycheck from template,
+- create paycheck from an edited draft,
+- import recurring Bills into an existing paycheck,
 - status transition plus status-event insert,
+- status transition plus Payback repayment or Planned Savings contribution application/reversal,
 - entry reorder,
 - bucket transaction plus audit event,
+- Payback deletion cleanup,
+- Expense List item writes, lifecycle transitions, and settlement,
 - close/reopen paycheck,
 - refresh-token rotation.
 
@@ -334,3 +365,13 @@ For Payback:
 Payback baseline amounts are mutable through optimistic-lock guarded updates, but opening remaining
 amount cannot be reduced below already active repayments. Repayment application and reversal are
 critical atomic operations tied to paycheck-entry status changes.
+
+For Planned Savings:
+
+- current balance = unreversed opening balances and contributions minus unreversed withdrawals,
+- target progress = current balance divided by target amount for presentation only.
+
+For Expense Lists:
+
+- total = sum of live positive items,
+- item count and latest expense date are derived from live items.

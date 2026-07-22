@@ -14,7 +14,7 @@ The user must be able to:
 4. Create a paycheck from a reusable template.
 5. Duplicate an existing paycheck into a reviewed editable draft.
 6. Enter the exact paycheck amount manually each time.
-7. Add bills, spending buckets, and sinking funds.
+7. Add Bills, Spending Buckets, and Planned Savings.
 8. Track every entry as Not Paid, Processing, or Posted.
 9. Edit the effective date of a status change.
 10. Preserve the real recorded timestamp separately.
@@ -22,7 +22,7 @@ The user must be able to:
 12. Filter and sort entries.
 13. View historical paychecks and progress.
 14. View an append-only audit history.
-15. Capture expense-first ledgers and settle finalized totals into a Bill or Payback.
+15. Capture Expense Lists and settle finalized totals into a Bill or Payback.
 
 ## Paychecks and income events
 
@@ -97,15 +97,15 @@ created. Duplicate names are allowed and Yuuka does not prepend `Copy of`.
 
 The entry draft copies live source entries in saved custom order, excluding generated `LEFTOVER`
 entries. It copies entry type, name, amount, notes, Bill payment method/account/payee/due-date
-relationship, and unlinked Sinking Fund target fields. It does not copy entry IDs, versions,
+relationship, and unlinked Planned Savings target fields. It does not copy entry IDs, versions,
 statuses, status history, timestamps, audit history, Spending Bucket purchases or spent totals,
-Payback assignments, Sinking Fund assignments, Payback repayment history, Sinking Fund
+Payback assignments, Planned Savings assignments, Payback repayment history, Planned Savings
 transactions, or soft-deleted entries. Every saved duplicate entry starts as Not Paid, and the new
 paycheck starts Active.
 
 Bill due dates are shifted by preserving the source due-date offset from the source paycheck income
-date and applying it to the new income date. Unlinked Sinking Fund target dates stay exact.
-Payback and persistent Sinking Fund assignments are cleared by omission and the mobile draft
+date and applying it to the new income date. Unlinked Planned Savings target dates stay exact.
+Payback and persistent Planned Savings assignments are cleared by omission and the mobile draft
 reports how many were not copied.
 
 ## Recurring Bill definitions
@@ -178,38 +178,40 @@ previews prioritize unallocated paychecks, then higher non-Posted counts, then n
 Payback, Planned Savings, and Expense List positions reuse their authoritative derived totals and
 state rules; dashboard totals are never persisted.
 
-### Sinking Fund
+### Planned Savings
 
 A contribution toward a future purpose, such as tires, travel, car maintenance, or an emergency
 reserve.
 
-The mobile UI calls this domain concept **Planned Savings**. Internal domain, API, and persistence
-terminology remains Sinking Fund.
+Existing `SINKING_FUND`, `sinkingFundId`, `/sinking-funds`, and persistence identifiers remain
+internal compatibility names.
 
-A Sinking Fund may be a persistent owner-scoped fund with an optional target amount, target date,
-notes, owner-defined order, current balance derived from transactions, and Active or Archived
-state. A persistent fund can start with an optional opening balance. Opening balances,
-contributions, withdrawals, and reversals are transaction history, not persisted derived totals.
+A Planned Savings record may be a persistent owner-scoped aggregate with an optional target
+amount, target date, notes, owner-defined order, current balance derived from transactions, and
+Active or Archived state. A persistent record can start with an optional opening balance. Opening
+balances, contributions, withdrawals, and reversals are transaction history, not persisted derived
+totals.
 
-A paycheck entry of type `SINKING_FUND` may link to one Active persistent Sinking Fund. The entry
-still reserves only that paycheck's contribution in allocation. Linking does not change the fund
-balance until the entry reaches Posted. Moving a linked entry out of Posted reverses the active
-contribution; returning it to Posted creates a new active contribution while preserving reversed
-history. Editing a Posted linked entry's amount or assignment reverses the old contribution and
-applies the new one transactionally. When a Posted entry stays linked to the same persistent fund,
-Yuuka validates the final replacement balance, `current - old contribution + new contribution`, so
-valid net replacements are allowed even if a full standalone reversal would temporarily overdraw the
-fund. Deleting a Posted linked entry reverses its active contribution.
+A paycheck entry of type `SINKING_FUND` may link to one Active persistent Planned Savings record.
+The entry still reserves only that paycheck's contribution in allocation. Linking does not change
+the Planned Savings balance until the entry reaches Posted. Moving a linked entry out of Posted
+reverses the active contribution; returning it to Posted creates a new active contribution while
+preserving reversed history. Editing a Posted linked entry's amount or assignment reverses the old
+contribution and applies the new one transactionally. When a Posted entry stays linked to the same
+persistent record, Yuuka validates the final replacement balance,
+`current - old contribution + new contribution`, so valid net replacements are allowed even if a
+full standalone reversal would temporarily overdraw the Planned Savings balance. Deleting a Posted
+linked entry reverses its active contribution.
 
-Unlinked Sinking Fund entries retain entry-level target amount and target date for lightweight
-per-paycheck planning. Linked entries use the persistent fund's target fields and return null
+Unlinked Planned Savings entries retain entry-level target amount and target date for lightweight
+per-paycheck planning. Linked entries use the persistent record's target fields and return null
 entry-level target fields in the API.
 
-Withdrawals reduce a persistent fund's derived balance, require the latest fund version, and cannot
+Withdrawals reduce a persistent record's derived balance, require its latest version, and cannot
 exceed the current balance. Reversing a withdrawal restores that balance contribution while
-preserving the withdrawal row as reversed history. Archiving a fund blocks pending linked entries,
-requires explicit confirmation when the fund still has a positive balance, and does not erase
-history. Archived funds can be restored, and reversed history remains auditable.
+preserving the withdrawal row as reversed history. Archiving Planned Savings blocks pending linked
+entries, requires explicit confirmation when the record still has a positive balance, and does not
+erase history. Archived records can be restored, and reversed history remains auditable.
 
 ## Entry statuses
 
@@ -262,42 +264,42 @@ Global entry search supports case-insensitive partial text matching against entr
 names plus exact amount matching. Search results are owner-scoped, exclude soft-deleted entries,
 and may be scoped to Active, History, or both.
 
-## Expense Ledgers
+## Expense Lists
 
-The mobile UI calls these **Expense Lists**. Expense Ledger remains the internal domain, API, and
-persistence name.
+Existing Expense Ledger domain, API, and persistence identifiers remain internal compatibility
+names.
 
-Expense Ledgers support expense-first workflows where the user records purchases before deciding
-how the total should affect budgeting. An Expense Ledger is owner-scoped and moves through:
+Expense Lists support expense-first workflows where the user records purchases before deciding
+how the total should affect budgeting. An Expense List is owner-scoped and moves through:
 
 ```text
 OPEN -> FINALIZED -> SETTLED
 ```
 
-- `OPEN` ledgers and items are editable.
-- `FINALIZED` ledgers are read-only, eligible for settlement, and may be reopened until settled.
-- `SETTLED` ledgers are permanently read-only historical records.
+- `OPEN` lists and items are editable.
+- `FINALIZED` lists are read-only, eligible for settlement, and may be reopened until settled.
+- `SETTLED` lists are permanently read-only historical records.
 
-An Open ledger must have at least one live positive item before finalization. Ledger totals are
+An Open list must have at least one live positive item before finalization. List totals are
 always derived from live items; Yuuka does not store or edit an authoritative cached total.
 
 Expense items support a positive amount, a name or merchant, an expense date that cannot be in the
 future, and optional notes. Categories, receipts, OCR, tax fields, payment accounts, tags, and
 spreadsheet UI are outside the current feature.
 
-Item creates and updates validate the final prospective ledger total while holding the ledger write
+Item creates and updates validate the final prospective list total while holding the list write
 lock. Exactly the signed 64-bit maximum is valid; a larger total is rejected atomically with
-`MONEY_AMOUNT_OVERFLOW` before an item, ledger version change, or audit event is persisted.
+`MONEY_AMOUNT_OVERFLOW` before an item, list version change, or audit event is persisted.
 
-A Finalized ledger may settle exactly once as either:
+A Finalized list may settle exactly once as either:
 
 - one ordinary Bill entry in an active paycheck that accepts the derived total, or
 - one ordinary Payback with original and opening remaining amounts equal to the derived total.
 
 Settlement recalculates the total server-side in the settlement transaction. The resulting Bill or
-Payback stores nullable Expense Ledger provenance for navigation only. Later target edits do not
-modify the ledger, later ledger reads do not synchronize the target, and target deletion does not
-reopen or delete the ledger.
+Payback stores nullable Expense List provenance for navigation only. Later target edits do not
+modify the list, later list reads do not synchronize the target, and target deletion does not
+reopen or delete the list.
 
 Settlement provenance stores the created Bill entry ID separately from its containing paycheck ID.
 Payback settlement stores the Payback ID and no paycheck ID, so one target UUID never has two
@@ -338,8 +340,8 @@ A Payback tracks money the owner borrowed from themself and intends to repay thr
 entries. It is separate from allocation: assigning a paycheck entry to a Payback does not change
 the Payback balance until that entry reaches Posted status.
 
-A single entry cannot be assigned to both a Payback and a persistent Sinking Fund. The user must
-choose which balance the Posted entry will affect.
+A single entry cannot be assigned to both a Payback and a persistent Planned Savings record. The
+user must choose which balance the Posted entry will affect.
 
 Payback terminology:
 

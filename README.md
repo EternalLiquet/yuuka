@@ -17,7 +17,7 @@
   <img src="docs/assets/yuuka.gif" alt="Yuuka at a desk" width="360">
 </p>
 
-Yuuka is a paycheck-first budgeting app for bills, spending buckets, and sinking funds. It is a self-hosted, single-owner system with an Expo React Native client and a Spring Boot/PostgreSQL API.
+Yuuka is a paycheck-first budgeting app for Bills, Spending Buckets, and Planned Savings. It is a self-hosted, single-owner system with an Expo React Native client and a Spring Boot/PostgreSQL API.
 
 ## What is implemented
 
@@ -26,19 +26,19 @@ Yuuka is a paycheck-first budgeting app for bills, spending buckets, and sinking
 - Five persistent bottom tabs in the order Active, Paybacks, Home, Planned Savings, and History,
   with all top-level destinations retained in the app menu
 - Active paycheck and paycheck-detail workflows with exact-cent allocation metrics
-- Scratch paycheck creation, basic bill/spending-bucket/sinking-fund entries, filtering, sorting, and persistent custom order
+- Scratch paycheck creation, Bill/Spending Bucket/Planned Savings entries, filtering, sorting, and persistent custom order
 - Global entry search by name or exact amount across Active and History paychecks
 - Not Paid, Processing, and Posted transitions with immutable status history
 - Close, reopen, archive, owner isolation, optimistic locking, and backend audit recording
 - Paybacks with mobile list/detail/create/edit/delete/reorder flows, repayment history, and paycheck-entry repayment assignment
-- Persistent Sinking Funds with mobile list/detail/create/edit/reorder/archive/restore flows,
+- Planned Savings with mobile list/detail/create/edit/reorder/archive/restore flows,
   derived balances, withdrawal history, and paycheck-entry contribution assignment
 - Spending-bucket purchase ledgers with derived spent, remaining, and over-budget display
 - Bill entries can be marked Autopay or Manual Pay and filtered in paycheck detail
 - Template list/detail/create/edit flows with ordered entries, duplicate/archive/restore lifecycle,
   and create-paycheck-from-template using an editable local draft
 - Duplicate-paycheck flow that reviews paycheck details, edits copied draft entries, shifts Bill
-  due dates, clears Paybacks and Sinking Fund assignments, and excludes LEFTOVER before creating an
+  due dates, clears Payback and Planned Savings assignments, and excludes LEFTOVER before creating an
   independent paycheck
 - Owner-scoped recurring Bill definitions with a clamped monthly timeline, editable import
   suggestions, and snapshot imports into scratch, template, duplicate, and existing paychecks

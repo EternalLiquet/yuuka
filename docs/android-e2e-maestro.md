@@ -364,7 +364,11 @@ The app's detail routes hide the bottom tab bar. After saving inside a paycheck 
 - tapOn: "Paybacks tab"
 ```
 
-The bottom tabs expose `Active tab` and `History tab`. Paybacks, Templates, Recurring Bills, and Settings are reached with `Open app menu` followed by their `Open <destination>` accessibility label. A raw `tapOn: "Active"` can match an `Active` status badge inside a payback card and open the wrong detail screen.
+The bottom tabs expose `Active tab`, `Paybacks tab`, `Home tab`, `Planned Savings tab`, and
+`History tab`. Expense Lists, Templates, Recurring Bills, and Settings are reached with
+`Open app menu` followed by their `Open <destination>` accessibility label. A raw
+`tapOn: "Active"` can match an `Active` status badge inside a payback card and open the wrong detail
+screen.
 
 When the last required entry is moved to `Posted`, the paycheck may immediately satisfy the lifecycle rules for a closed/history paycheck. In that state the detail action is `Reopen paycheck`, not `Close paycheck`. Assert the closed-state action before checking history or navigating back:
 

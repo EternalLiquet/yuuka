@@ -10,7 +10,7 @@ cd backend
 
 `check` runs formatting, unit tests, PostgreSQL Testcontainers integration tests, the exact OpenAPI snapshot comparison, and JaCoCo verification. Integration tests use PostgreSQL 16, not H2.
 
-Expense Ledger coverage lives in backend integration tests because lifecycle, derived totals,
+Expense List coverage lives in backend integration tests because lifecycle, derived totals,
 settlement provenance, exact-max overflow rollback, and concurrent item serialization depend on
 PostgreSQL constraints and transactions.
 
@@ -43,7 +43,7 @@ npx expo export --platform android --output-dir dist/android
 
 Jest enforces 85% line/function/statement and 80% branch coverage for money, API contracts/parsing, session expiry, settings storage, validation, and list behavior. Expo Router page wiring is validated through React Native Testing Library and Maestro rather than counted as isolated unit logic. The resulting targeted threshold exceeds the required 85/80 core-logic and 75 overall minima for the code under the unit coverage gate.
 
-Mobile Expense Ledger checks cover runtime contracts, OpenAPI endpoint presence, Bill/Payback target
+Mobile Expense List checks cover runtime contracts, OpenAPI endpoint presence, Bill/Payback target
 routing, and mocked multi-page list behavior through ledger 101. Full rapid-entry and settlement
 journeys are candidates for Maestro once the flow is promoted into the critical E2E set.
 

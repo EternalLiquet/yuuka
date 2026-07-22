@@ -1,5 +1,9 @@
 # Project Yuuka Implementation Plan
 
+> Historical implementation baseline. This file records the original vertical-slice plan and is
+> not the current feature inventory or roadmap. Use `README.md` and the authoritative files under
+> `docs/` for implemented behavior and current terminology.
+
 This plan implements the authoritative specifications in `docs/00_PROJECT_VISION.md` through
 `docs/07_CODEX_EXECUTION_PROMPT.md`. Yuuka is paycheck-first. Money is represented only as integer
 minor units, status and audit history are append-only, and every persisted record is owner-scoped.
@@ -49,7 +53,7 @@ Tests first: exact-cent examples, zero allocation, active-list rules, ownership,
 
 Behaviors:
 
-- Add, edit, soft-delete, filter, sort, and reorder Bill, Spending Bucket, and Sinking Fund entries.
+- Add, edit, soft-delete, filter, sort, and reorder Bill, Spending Bucket, and Planned Savings entries.
 - Over-allocation is blocked before commit.
 - Status changes may move in either direction and append a transition with separate effective and
   recorded timestamps.

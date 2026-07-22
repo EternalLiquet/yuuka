@@ -76,7 +76,8 @@ statuses, bucket purchases, Payback assignments, or copied history.
 - `POST /paychecks/{paycheckId}/entries`
 - `paybackId` may be supplied on entry create/update to assign that entry to an Active Payback.
 - `sinkingFundId` may be supplied on `SINKING_FUND` entry create/update to assign that entry to an
-  Active persistent Sinking Fund.
+  Active persistent Planned Savings record. The field and enum value are compatibility identifiers,
+  not user-facing labels.
 - `paybackId` and `sinkingFundId` are mutually exclusive. Requests that supply both return
   `422 ENTRY_MULTIPLE_BALANCE_ASSIGNMENTS`.
 - Bill entry create/update requests and responses include optional `paymentMethod` values of `AUTOPAY` or `MANUAL`; non-Bill entries must not carry a payment method.
@@ -136,31 +137,37 @@ Payback business-rule errors use structured money details for mobile formatting.
 overpayment uses `PAYBACK_REPAYMENT_OVERPAID` with `details.amountMinor` and `details.currencyCode`
 instead of embedding raw storage values in the message.
 
-### Sinking Funds
+### Planned Savings
 
-- `GET /sinking-funds?includeArchived=false` returns owner-scoped Sinking Funds plus a summary of
+Planned Savings retains the existing `/sinking-funds`, `sinkingFundId`, and
+`SINKING_FUND` API identifiers for compatibility.
+
+- `GET /sinking-funds?includeArchived=false` returns owner-scoped Planned Savings plus a summary of
   active balances.
-- `POST /sinking-funds` creates a persistent Sinking Fund with optional target fields, notes, and
+- `POST /sinking-funds` creates persistent Planned Savings with optional target fields, notes, and
   optional opening balance transaction.
 - `GET /sinking-funds/{id}`
 - `PATCH /sinking-funds/{id}`
-- `POST /sinking-funds/reorder` persists the owner-defined order for Active Sinking Funds.
-- `POST /sinking-funds/{id}/archive` archives a fund after version validation, blocks pending live
-  linked entries, and requires positive-balance confirmation when applicable.
-- `POST /sinking-funds/{id}/restore` restores an archived fund.
+- `POST /sinking-funds/reorder` persists the owner-defined order for Active Planned Savings.
+- `POST /sinking-funds/{id}/archive` archives Planned Savings after version validation, blocks
+  pending live linked entries, and requires positive-balance confirmation when applicable.
+- `POST /sinking-funds/{id}/restore` restores archived Planned Savings.
 - `GET /sinking-funds/{id}/transactions` returns paged transaction history ordered by effective
   date, creation time, and ID descending.
 - `POST /sinking-funds/{id}/withdrawals` creates a withdrawal transaction after version and balance
   validation.
 - `POST /sinking-fund-transactions/{id}/reverse` reverses a withdrawal without deleting history.
 
-Persistent Sinking Fund balances and progress are derived from transaction history. Controllers and
-mobile clients must not persist or duplicate the authoritative balance calculation.
-Posted same-fund contribution replacements are validated against the final prospective balance while
-holding the fund lock; cross-fund moves, unlinking, and entry-type changes must pass the full old
-contribution reversal rule.
+Persistent Planned Savings balances and progress are derived from transaction history. Controllers
+and mobile clients must not persist or duplicate the authoritative balance calculation. Posted
+same-record contribution replacements are validated against the final prospective balance while
+holding the record lock; cross-record moves, unlinking, and entry-type changes must pass the full
+old contribution reversal rule.
 
-### Expense Ledgers
+### Expense Lists
+
+Expense Lists retain the existing `/expense-ledgers` API path and Expense Ledger internal domain
+identifiers for compatibility.
 
 - `GET /expense-ledgers?state=OPEN|FINALIZED|SETTLED&page=0&size=50` returns deterministic pages;
   page defaults to 0 and size defaults to 50 with a maximum of 100.
