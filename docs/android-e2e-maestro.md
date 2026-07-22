@@ -330,15 +330,28 @@ Do not rely on a full-screen modal title as the only readiness assertion when it
     timeout: 10000
 ```
 
-When a flow creates nested detail screens and then switches tabs, first navigate back to a stable list landmark. Generic labels such as `Active` can also appear as status text in paychecks or paybacks, so use the tab-specific accessibility labels instead of the raw tab title:
+When a flow creates nested detail screens and then switches tabs, first navigate back to a stable list landmark. App-menu destinations replace the current route, so do not press Back again from that list: a second Back can exit the app. Generic labels such as `Active` can also appear as status text in paychecks or paybacks, so use the tab-specific accessibility labels instead of the raw tab title:
 
 ```yaml
 - back
+- extendedWaitUntil:
+    visible: "New Payback"
+    timeout: 10000
+- tapOn: "Active tab"
+```
+
+Top-level destinations without a visible bottom tab bar should return through the app menu:
+
+```yaml
 - back
+- extendedWaitUntil:
+    visible: "New recurring Bill"
+    timeout: 10000
+- tapOn: "Open app menu"
+- tapOn: "Open Active"
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
-- tapOn: "Paybacks tab"
 ```
 
 The app's detail routes hide the bottom tab bar. After saving inside a paycheck or payback detail screen, use the visible app `Back` control when present, then wait for the tab-screen landmark before tapping another tab:
