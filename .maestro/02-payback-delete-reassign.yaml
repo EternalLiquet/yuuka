@@ -51,7 +51,10 @@ name: Payback delete unassigns entry
     visible: "E2E Delete Target"
     timeout: 10000
 - back
-- back
+- extendedWaitUntil:
+    visible: "New Payback"
+    timeout: 10000
+- tapOn: "Active tab"
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000

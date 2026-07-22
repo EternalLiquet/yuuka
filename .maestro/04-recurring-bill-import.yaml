@@ -31,7 +31,11 @@ name: Recurring Bill import into scratch draft
     visible: "Edit recurring Bill"
     timeout: 10000
 - back
-- back
+- extendedWaitUntil:
+    visible: "New recurring Bill"
+    timeout: 10000
+- tapOn: "Open app menu"
+- tapOn: "Open Active"
 - extendedWaitUntil:
     visible: "New paycheck"
     timeout: 10000
