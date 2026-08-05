@@ -2,7 +2,15 @@ import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight, Plus, RefreshCw } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  AppState,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 import type {
   DashboardAttentionItem,
@@ -22,6 +30,12 @@ import {
   RollingBucketPeriod,
   RollingSpendingBucketPerformanceSection,
 } from '@/features/home/rolling-spending-bucket-performance';
+import {
+  recurringCoverageAction,
+  recurringCoverageLabel,
+  statusLabel,
+} from '@/features/recurring-bills/coverage';
+import { QuickAssignRecurringBillSheet } from '@/features/recurring-bills/quick-assign-recurring-bill-sheet';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
@@ -37,6 +51,12 @@ export default function HomeScreen() {
   const { colors } = useAppTheme();
   const [rollingPeriod, setRollingPeriod] = useState<RollingBucketPeriod>('30');
   const [refreshing, setRefreshing] = useState(false);
+  const [assigningOccurrence, setAssigningOccurrence] = useState<RecurringBillOccurrence | null>(
+    null,
+  );
+  const [reviewingOccurrence, setReviewingOccurrence] = useState<RecurringBillOccurrence | null>(
+    null,
+  );
   const hasFocusedOnce = useRef(false);
   const appState = useRef(AppState.currentState);
   const refreshInFlight = useRef<Promise<void> | null>(null);
@@ -65,8 +85,7 @@ export default function HomeScreen() {
               left.occurrenceDate.localeCompare(right.occurrenceDate) ||
               left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }) ||
               left.definitionId.localeCompare(right.definitionId),
-          )
-          .slice(0, 3),
+          ),
       };
     },
   });
@@ -192,13 +211,33 @@ export default function HomeScreen() {
           <RecurringQueryState query={recurringQuery} />
           {recurringQuery.data ? (
             recurringQuery.data.items.length ? (
-              <View style={styles.rows}>
-                {recurringQuery.data.items.map((item) => (
-                  <RecurringBillRow
-                    item={item}
-                    key={`${item.definitionId}-${item.occurrenceDate}`}
-                  />
-                ))}
+              <View style={styles.group}>
+                <AppText style={{ color: colors.muted }} variant="caption">
+                  {recurringQuery.data.items.length} due in the next{' '}
+                  {daysInRange(recurringQuery.data.from, recurringQuery.data.through)} days
+                  {'\n'}
+                  {recurringQuery.data.items.filter((item) => item.imports.length === 0).length} not
+                  added to a paycheck
+                </AppText>
+                {recurringQuery.data.items.every((item) => item.imports.length > 0) ? (
+                  <AppText style={{ color: colors.muted }} variant="caption">
+                    All upcoming recurring Bills are added to paychecks.
+                  </AppText>
+                ) : null}
+                <View style={styles.rows}>
+                  {recurringQuery.data.items.slice(0, 3).map((item) => (
+                    <RecurringBillRow
+                      item={item}
+                      key={`${item.definitionId}-${item.occurrenceDate}`}
+                      onPress={() => {
+                        if (item.imports.length === 0) setAssigningOccurrence(item);
+                        else if (item.imports.length === 1)
+                          openRecurringImport(router, item.imports[0]);
+                        else setReviewingOccurrence(item);
+                      }}
+                    />
+                  ))}
+                </View>
               </View>
             ) : (
               <AppText style={{ color: colors.muted }} variant="caption">
@@ -219,6 +258,31 @@ export default function HomeScreen() {
           ) : null}
         </Section>
       </ScrollView>
+      <RecurringImportsReviewSheet
+        item={reviewingOccurrence}
+        onClose={() => setReviewingOccurrence(null)}
+        onOpen={(paycheckId, importedEntryId) => {
+          setReviewingOccurrence(null);
+          openHighlightedPaycheck(router, paycheckId, importedEntryId);
+        }}
+      />
+      <QuickAssignRecurringBillSheet
+        key={
+          assigningOccurrence
+            ? `${assigningOccurrence.definitionId}:${assigningOccurrence.occurrenceDate}`
+            : 'closed'
+        }
+        occurrence={assigningOccurrence}
+        onClose={() => setAssigningOccurrence(null)}
+        onCreatePaycheck={() => {
+          setAssigningOccurrence(null);
+          router.push('/paychecks/new');
+        }}
+        onCreated={(paycheckId, importedEntryId) => {
+          setAssigningOccurrence(null);
+          openHighlightedPaycheck(router, paycheckId, importedEntryId);
+        }}
+      />
     </Screen>
   );
 }
@@ -431,13 +495,22 @@ function PaycheckPreviewRow({
   );
 }
 
-function RecurringBillRow({ item }: { item: RecurringBillOccurrence }) {
+function RecurringBillRow({
+  item,
+  onPress,
+}: {
+  item: RecurringBillOccurrence;
+  onPress: () => void;
+}) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   return (
-    <View
-      accessibilityLabel={`${item.name}, due ${formatDate(item.occurrenceDate)}`}
-      style={styles.row}
+    <Pressable
+      accessibilityHint={recurringCoverageAction(item)}
+      accessibilityLabel={`${item.name}, ${formatMoney(item.typicalAmountMinor, settings.currencyCode)}, due ${formatDate(item.occurrenceDate)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}, ${recurringCoverageLabel(item)}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
       <View style={styles.rowText}>
         <AppText numberOfLines={2} variant="label">
@@ -447,11 +520,83 @@ function RecurringBillRow({ item }: { item: RecurringBillOccurrence }) {
           {formatDate(item.occurrenceDate)} ·{' '}
           {item.paymentMethod === 'MANUAL' ? 'Manual Pay' : 'Autopay'}
         </AppText>
+        <AppText style={{ color: colors.muted }} variant="caption">
+          {recurringCoverageLabel(item)}
+        </AppText>
       </View>
       <AppText style={styles.amount} variant="caption">
         {formatMoney(item.typicalAmountMinor, settings.currencyCode)}
       </AppText>
-    </View>
+      <ChevronRight color={colors.muted} size={18} />
+    </Pressable>
+  );
+}
+
+function RecurringImportsReviewSheet({
+  item,
+  onClose,
+  onOpen,
+}: {
+  item: RecurringBillOccurrence | null;
+  onClose: () => void;
+  onOpen: (paycheckId: string, entryId: string) => void;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} transparent visible={Boolean(item)}>
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.reviewDialog, { backgroundColor: colors.surface }]}>
+          <AppText variant="title">Review imports</AppText>
+          <AppText style={{ color: colors.muted }} variant="caption">
+            {item?.name} was added to {item?.imports.length ?? 0} paychecks.
+          </AppText>
+          {item?.imports.map((imported) => (
+            <Pressable
+              accessibilityHint="Opens the imported entry in its paycheck"
+              accessibilityLabel={`Open ${item.name} in ${imported.paycheckName}, ${statusLabel(imported.status)}`}
+              accessibilityRole="button"
+              key={imported.entryId}
+              onPress={() => onOpen(imported.paycheckId, imported.entryId)}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            >
+              <View style={styles.rowText}>
+                <AppText variant="label">{imported.paycheckName}</AppText>
+                <AppText style={{ color: colors.muted }} variant="caption">
+                  {statusLabel(imported.status)}
+                </AppText>
+              </View>
+              <ChevronRight color={colors.muted} size={18} />
+            </Pressable>
+          ))}
+          <Button label="Close" onPress={onClose} variant="secondary" />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function openRecurringImport(
+  router: ReturnType<typeof useRouter>,
+  imported: RecurringBillOccurrence['imports'][number],
+) {
+  openHighlightedPaycheck(router, imported.paycheckId, imported.entryId);
+}
+
+function openHighlightedPaycheck(
+  router: ReturnType<typeof useRouter>,
+  paycheckId: string,
+  importedEntryId: string,
+) {
+  router.push({
+    pathname: '/paychecks/[id]',
+    params: { highlightEntryId: importedEntryId, id: paycheckId },
+  });
+}
+
+function daysInRange(from: string, through: string) {
+  return Math.round(
+    (new Date(`${through}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) /
+      86_400_000,
   );
 }
 
@@ -588,11 +733,18 @@ const styles = StyleSheet.create({
   },
   inlineState: { alignItems: 'flex-start', gap: 9 },
   metric: { flexBasis: '45%', flexGrow: 1, gap: 3, minWidth: 0 },
+  modalBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   pressed: { opacity: 0.72 },
   row: { alignItems: 'center', flexDirection: 'row', gap: 10, minHeight: 52, paddingVertical: 7 },
   rows: { gap: 2 },
   rowText: { flex: 1, gap: 2, minWidth: 0 },
+  reviewDialog: { borderRadius: 10, gap: 12, maxHeight: '80%', padding: 18 },
   section: { borderTopWidth: 1, gap: 12, paddingVertical: 17 },
   sectionAction: { alignItems: 'center', flexDirection: 'row', minHeight: 44, paddingLeft: 8 },
   sectionHeader: {

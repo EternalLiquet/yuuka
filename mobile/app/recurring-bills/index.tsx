@@ -34,6 +34,10 @@ import {
   previousTimelineRange,
   timelineContainsDate,
 } from '@/features/recurring-bills/timeline';
+import {
+  recurringCoverageAction,
+  recurringCoverageLabel,
+} from '@/features/recurring-bills/coverage';
 import type {
   TimelineDay,
   TimelineInfiniteData,
@@ -349,6 +353,12 @@ export default function RecurringBillsTimelineScreen() {
             <TimelineDayRow
               day={item}
               onEdit={(definitionId) => router.push(`/recurring-bills/${definitionId}/edit`)}
+              onOpenImport={(paycheckId, entryId) =>
+                router.push({
+                  pathname: '/paychecks/[id]',
+                  params: { highlightEntryId: entryId, id: paycheckId },
+                })
+              }
               today={today}
             />
           )}
@@ -476,10 +486,12 @@ function EdgeFeedback({
 function TimelineDayRow({
   day,
   onEdit,
+  onOpenImport,
   today,
 }: {
   day: TimelineDay;
   onEdit: (definitionId: string) => void;
+  onOpenImport: (paycheckId: string, entryId: string) => void;
   today: string;
 }) {
   const { colors } = useAppTheme();
@@ -505,6 +517,7 @@ function TimelineDayRow({
             item={item}
             key={item.definitionId}
             onEdit={() => onEdit(item.definitionId)}
+            onOpenImport={onOpenImport}
           />
         ))
       )}
@@ -512,7 +525,15 @@ function TimelineDayRow({
   );
 }
 
-function OccurrenceCard({ item, onEdit }: { item: RecurringBillOccurrence; onEdit: () => void }) {
+function OccurrenceCard({
+  item,
+  onEdit,
+  onOpenImport,
+}: {
+  item: RecurringBillOccurrence;
+  onEdit: () => void;
+  onOpenImport: (paycheckId: string, entryId: string) => void;
+}) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const posted =
@@ -520,14 +541,22 @@ function OccurrenceCard({ item, onEdit }: { item: RecurringBillOccurrence; onEdi
   return (
     <Pressable
       accessibilityActions={[{ label: 'Edit recurring Bill', name: 'activate' }]}
-      accessibilityHint="Long press to edit the recurring Bill definition"
-      accessibilityLabel={`${item.name}, ${formatMoney(item.typicalAmountMinor, settings.currencyCode)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}`}
+      accessibilityHint={
+        item.imports.length === 1
+          ? recurringCoverageAction(item)
+          : 'Long press to edit the recurring Bill definition'
+      }
+      accessibilityLabel={`${item.name}, ${formatMoney(item.typicalAmountMinor, settings.currencyCode)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}, ${recurringCoverageLabel(item)}`}
       accessibilityRole="button"
       delayLongPress={500}
       onAccessibilityAction={({ nativeEvent }) => {
         if (nativeEvent.actionName === 'activate') onEdit();
       }}
       onLongPress={onEdit}
+      onPress={() => {
+        if (item.imports.length === 1)
+          onOpenImport(item.imports[0].paycheckId, item.imports[0].entryId);
+      }}
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: colors.surface, borderColor: colors.border },
@@ -543,9 +572,8 @@ function OccurrenceCard({ item, onEdit }: { item: RecurringBillOccurrence; onEdi
       </View>
       <AppText style={{ color: colors.muted }} variant="caption">
         {item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}
-        {item.importCount
-          ? ` · Imported ${item.importCount} time${item.importCount === 1 ? '' : 's'}`
-          : ''}
+        {' · '}
+        {recurringCoverageLabel(item)}
       </AppText>
       {item.imports.map((entry) => (
         <AppText key={entry.entryId} style={{ color: colors.muted }} variant="caption">

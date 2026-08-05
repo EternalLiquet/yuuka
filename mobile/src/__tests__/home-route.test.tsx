@@ -14,7 +14,9 @@ let mockFocusCallback: (() => void) | null = null;
 let mockAppStateListener: ((state: string) => void) | null = null;
 const queryClients: QueryClient[] = [];
 const mockApi = {
+  activePaychecks: jest.fn(),
   dashboardSummary: jest.fn(),
+  importRecurringBills: jest.fn(),
   me: jest.fn(),
   recurringBillTimeline: jest.fn(),
   rollingSpendingBucketPerformance: jest.fn(),
@@ -215,6 +217,14 @@ describe('Home dashboard', () => {
       timezone: 'America/Indianapolis',
     });
     mockApi.recurringBillTimeline.mockResolvedValue(recurring);
+    mockApi.activePaychecks.mockResolvedValue({
+      items: [],
+      page: 0,
+      size: 100,
+      totalItems: 0,
+      totalPages: 0,
+      hasNext: false,
+    });
   });
 
   it('renders the five Home sections, compact previews, recurring Bills, and financial rows', async () => {
@@ -228,6 +238,9 @@ describe('Home dashboard', () => {
     expect(view.getByLabelText('Financial Positions section')).toBeTruthy();
     expect(view.getByText('Spending Buckets · Last 30 days')).toBeTruthy();
     expect(view.getByText('Internet')).toBeTruthy();
+    expect(view.getByText(/1 due in the next 7 days/)).toBeTruthy();
+    expect(view.getByText(/1 not added to a paycheck/)).toBeTruthy();
+    expect(view.getByText('Not added to a paycheck')).toBeTruthy();
     expect(view.getByText('$300.00 · 2 active')).toBeTruthy();
     expect(view.getByText('$225.00 · 3 active')).toBeTruthy();
     expect(view.getByText('2 Open · 1 Finalized · ready to settle')).toBeTruthy();
@@ -235,6 +248,80 @@ describe('Home dashboard', () => {
 
     await fireEvent.press(view.getByLabelText('New paycheck'));
     expect(mockPush).toHaveBeenCalledWith('/paychecks/new');
+  });
+
+  it('counts the full window, caps rows at three, and opens assigned imports', async () => {
+    const imports = [
+      { entryId, paycheckId, paycheckName: 'Rent 1/2', status: 'NOT_PAID' as const },
+    ];
+    mockApi.recurringBillTimeline.mockResolvedValue({
+      ...recurring,
+      items: [
+        { ...recurring.items[0], imports, importCount: 1, name: 'Rent' },
+        {
+          ...recurring.items[0],
+          definitionId: '11111111-1111-4111-8111-111111111105',
+          name: 'Utilities',
+          occurrenceDate: '2026-07-23',
+        },
+        {
+          ...recurring.items[0],
+          definitionId: '11111111-1111-4111-8111-111111111106',
+          name: 'Water',
+          occurrenceDate: '2026-07-24',
+        },
+        {
+          ...recurring.items[0],
+          definitionId: '11111111-1111-4111-8111-111111111107',
+          name: 'Phone',
+          occurrenceDate: '2026-07-25',
+        },
+      ],
+    });
+    const { view } = await renderHome();
+    expect(await view.findByText(/4 due in the next 7 days/)).toBeTruthy();
+    expect(view.getByText(/3 not added to a paycheck/)).toBeTruthy();
+    expect(view.queryByText('Phone')).toBeNull();
+    expect(view.getByText('Added to Rent 1/2 · Not Paid')).toBeTruthy();
+
+    await fireEvent.press(view.getByLabelText(/Rent.*Added to Rent 1\/2.*Not Paid/));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/paychecks/[id]',
+      params: { highlightEntryId: entryId, id: paycheckId },
+    });
+  });
+
+  it('reviews multiple imports and opens the selected highlighted entry', async () => {
+    const secondEntryId = '11111111-1111-4111-8111-111111111108';
+    const secondPaycheckId = '11111111-1111-4111-8111-111111111109';
+    mockApi.recurringBillTimeline.mockResolvedValue({
+      ...recurring,
+      items: [
+        {
+          ...recurring.items[0],
+          importCount: 2,
+          imports: [
+            { entryId, paycheckId, paycheckName: 'Rent 1/2', status: 'PROCESSING' as const },
+            {
+              entryId: secondEntryId,
+              paycheckId: secondPaycheckId,
+              paycheckName: 'Rent 2/2',
+              status: 'POSTED' as const,
+            },
+          ],
+        },
+      ],
+    });
+    const { view } = await renderHome();
+    await fireEvent.press(await view.findByLabelText(/Internet.*Added to 2 paychecks/));
+    expect(view.getByText('Review imports')).toBeTruthy();
+    expect(view.getAllByText('Processing').length).toBeGreaterThan(0);
+    expect(view.getByText('Posted')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Open Internet in Rent 2/2, Posted'));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/paychecks/[id]',
+      params: { highlightEntryId: secondEntryId, id: secondPaycheckId },
+    });
   });
 
   it('pushes existing detail and top-level routes so Back can return to cached Home content', async () => {
