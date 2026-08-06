@@ -317,6 +317,9 @@ choose an Active paycheck and review the occurrence fields and amount. Paycheck 
 Active ordering and show current and resulting unallocated money; choices that cannot fit remain
 visible, disabled, and announce the currency-formatted shortfall. Empty and no-fitting-paycheck
 states offer Create Paycheck without carrying the occurrence into the new draft.
+An uncertain quick-import result must be reconciled against authoritative paycheck details before
+retry; optimistic-lock refreshes preserve the in-progress selection and amount while retrying with
+the latest paycheck and recurring Bill definition versions.
 Suggested results use the owner setting around the paycheck income date; All shows the relevant
 occurrence date near that income date. Nothing is preselected. Selecting uses the typical amount,
 and editing that selection offers This paycheck only or Update typical amount. Draft imports remain

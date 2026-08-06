@@ -43,9 +43,10 @@ export default function HomeScreen() {
   const { colors } = useAppTheme();
   const [rollingPeriod, setRollingPeriod] = useState<RollingBucketPeriod>('30');
   const [refreshing, setRefreshing] = useState(false);
-  const [assigningOccurrence, setAssigningOccurrence] = useState<RecurringBillOccurrence | null>(
-    null,
-  );
+  const [assigningOccurrenceIdentity, setAssigningOccurrenceIdentity] = useState<{
+    definitionId: string;
+    occurrenceDate: string;
+  } | null>(null);
   const [reviewingOccurrence, setReviewingOccurrence] = useState<RecurringBillOccurrence | null>(
     null,
   );
@@ -81,6 +82,13 @@ export default function HomeScreen() {
       };
     },
   });
+  const assigningOccurrence = assigningOccurrenceIdentity
+    ? (recurringQuery.data?.items.find(
+        (item) =>
+          item.definitionId === assigningOccurrenceIdentity.definitionId &&
+          item.occurrenceDate === assigningOccurrenceIdentity.occurrenceDate,
+      ) ?? null)
+    : null;
 
   const { refetch: refetchSummary } = summaryQuery;
   const { refetch: refetchBucket } = bucketQuery;
@@ -222,7 +230,11 @@ export default function HomeScreen() {
                       item={item}
                       key={`${item.definitionId}-${item.occurrenceDate}`}
                       onPress={() => {
-                        if (item.imports.length === 0) setAssigningOccurrence(item);
+                        if (item.imports.length === 0)
+                          setAssigningOccurrenceIdentity({
+                            definitionId: item.definitionId,
+                            occurrenceDate: item.occurrenceDate,
+                          });
                         else if (item.imports.length === 1)
                           openRecurringImport(router, item.imports[0]);
                         else setReviewingOccurrence(item);
@@ -260,18 +272,18 @@ export default function HomeScreen() {
       />
       <QuickAssignRecurringBillSheet
         key={
-          assigningOccurrence
-            ? `${assigningOccurrence.definitionId}:${assigningOccurrence.occurrenceDate}`
+          assigningOccurrenceIdentity
+            ? `${assigningOccurrenceIdentity.definitionId}:${assigningOccurrenceIdentity.occurrenceDate}`
             : 'closed'
         }
         occurrence={assigningOccurrence}
-        onClose={() => setAssigningOccurrence(null)}
+        onClose={() => setAssigningOccurrenceIdentity(null)}
         onCreatePaycheck={() => {
-          setAssigningOccurrence(null);
+          setAssigningOccurrenceIdentity(null);
           router.push('/paychecks/new');
         }}
         onCreated={(paycheckId, importedEntryId) => {
-          setAssigningOccurrence(null);
+          setAssigningOccurrenceIdentity(null);
           openHighlightedPaycheck(router, paycheckId, importedEntryId);
         }}
       />

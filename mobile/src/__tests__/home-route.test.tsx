@@ -18,6 +18,7 @@ const mockApi = {
   dashboardSummary: jest.fn(),
   importRecurringBills: jest.fn(),
   me: jest.fn(),
+  paycheck: jest.fn(),
   recurringBillTimeline: jest.fn(),
   rollingSpendingBucketPerformance: jest.fn(),
 };
@@ -225,6 +226,7 @@ describe('Home dashboard', () => {
       totalPages: 0,
       hasNext: false,
     });
+    mockApi.paycheck.mockResolvedValue({});
   });
 
   it('renders the five Home sections, compact previews, recurring Bills, and financial rows', async () => {
@@ -538,5 +540,115 @@ describe('Home dashboard', () => {
     });
     expect(view.getByText('$225.00 · 3 active').props.numberOfLines).toBeUndefined();
     expect(view.getByTestId('home-financial-positions')).toBeTruthy();
+  });
+
+  it('preserves an in-progress assignment and retries with the refreshed definition version', async () => {
+    const selectedPaycheck = {
+      allocatedMinor: 0,
+      allocationPercent: 0,
+      amountMinor: 50000,
+      archivedAt: null,
+      closedAt: null,
+      completionPercent: 0,
+      createdAt: '2026-07-01T00:00:00Z',
+      entries: [],
+      id: paycheckId,
+      incomeDate: '2026-07-18',
+      name: 'Friday paycheck',
+      notPaidCount: 0,
+      notPaidMinor: 0,
+      notes: null,
+      postedCount: 0,
+      postedMinor: 0,
+      processingCount: 0,
+      processingMinor: 0,
+      reopenedAt: null,
+      requiresAttention: true,
+      source: null,
+      spendingBucketPerformance: null,
+      state: 'ACTIVE' as const,
+      templateSourceId: null,
+      unallocatedMinor: 50000,
+      updatedAt: '2026-07-01T00:00:00Z',
+      version: 6,
+    };
+    const version4 = { ...recurring, items: [{ ...recurring.items[0], definitionVersion: 4 }] };
+    const version5 = { ...recurring, items: [{ ...recurring.items[0], definitionVersion: 5 }] };
+    mockApi.recurringBillTimeline.mockResolvedValueOnce(version4).mockResolvedValue(version5);
+    mockApi.activePaychecks.mockResolvedValue({
+      hasNext: false,
+      items: [selectedPaycheck],
+      page: 0,
+      size: 100,
+      totalItems: 1,
+      totalPages: 1,
+    });
+    mockApi.paycheck.mockResolvedValue({ ...selectedPaycheck, version: 7 });
+    mockApi.importRecurringBills
+      .mockRejectedValueOnce(new Error('Paycheck changed. Refresh and try again.'))
+      .mockResolvedValueOnce({
+        ...selectedPaycheck,
+        entries: [
+          {
+            accountName: null,
+            amountMinor: 7000,
+            createdAt: '2026-07-21T00:00:00Z',
+            dueDate: '2026-07-22',
+            entryType: 'BILL' as const,
+            id: entryId,
+            name: 'Internet',
+            notes: null,
+            overBudget: null,
+            paybackId: null,
+            paycheckId,
+            payee: null,
+            paymentMethod: 'AUTOPAY' as const,
+            position: 0,
+            remainingMinor: null,
+            sinkingFundId: null,
+            sourceExpenseLedgerId: null,
+            sourceRecurringBillDefinitionId: definitionId,
+            sourceRecurringOccurrenceDate: '2026-07-22',
+            spentMinor: null,
+            status: 'NOT_PAID' as const,
+            targetDate: null,
+            targetMinor: null,
+            updatedAt: '2026-07-21T00:00:00Z',
+            version: 0,
+          },
+        ],
+      });
+    const { view } = await renderHome();
+    await fireEvent.press(await view.findByLabelText(/Internet.*Not added to a paycheck/));
+    await fireEvent.press(await view.findByLabelText('Edit amount'));
+    await fireEvent.changeText(view.getByLabelText('Amount for this paycheck'), '70.00');
+    await fireEvent.press(view.getByLabelText('Update typical amount'));
+    await fireEvent.press(
+      view.getByLabelText(/Friday paycheck, income date.*currently unallocated/),
+    );
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+
+    await waitFor(() => expect(mockApi.recurringBillTimeline).toHaveBeenCalledTimes(2));
+    expect(view.getByText('$70.00')).toBeTruthy();
+    expect(
+      view.getByLabelText(/Friday paycheck, income date.*currently unallocated/).props
+        .accessibilityState.checked,
+    ).toBe(true);
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+
+    await waitFor(() => expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(2));
+    expect(mockApi.importRecurringBills.mock.calls[1]).toEqual([
+      paycheckId,
+      7,
+      [
+        {
+          amountMinor: 7000,
+          definitionId,
+          definitionVersion: 5,
+          occurrenceDate: '2026-07-22',
+          updateTypicalAmount: true,
+        },
+      ],
+    ]);
   });
 });

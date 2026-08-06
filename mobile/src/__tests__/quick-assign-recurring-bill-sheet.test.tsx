@@ -6,7 +6,11 @@ import type { PropsWithChildren } from 'react';
 import type { Paycheck, RecurringBillOccurrence } from '@/api/contracts';
 import { QuickAssignRecurringBillSheet } from '@/features/recurring-bills/quick-assign-recurring-bill-sheet';
 
-const mockApi = { activePaychecks: jest.fn(), importRecurringBills: jest.fn() };
+const mockApi = {
+  activePaychecks: jest.fn(),
+  importRecurringBills: jest.fn(),
+  paycheck: jest.fn(),
+};
 jest.mock('@/api/use-yuuka-api', () => ({ useYuukaApi: () => mockApi }));
 jest.mock('@/settings/settings-provider', () => ({
   useSettings: () => ({ settings: { currencyCode: 'USD', theme: 'dark' } }),
@@ -163,6 +167,7 @@ describe('quick recurring Bill assignment', () => {
       totalItems: 3,
       totalPages: 1,
     });
+    mockApi.paycheck.mockResolvedValue(first);
   });
 
   it('shows no-paycheck creation state', async () => {
@@ -195,7 +200,7 @@ describe('quick recurring Bill assignment', () => {
     mockApi.importRecurringBills.mockResolvedValue(importResult(createdEntryId));
     const { onCreated, view } = await setup();
     await fireEvent.press(await view.findByLabelText(/First paycheck/));
-    await fireEvent.press(view.getByLabelText('Confirm import'));
+    fireEvent.press(view.getByLabelText('Confirm import'));
     await waitFor(() =>
       expect(mockApi.importRecurringBills).toHaveBeenCalledWith(first.id, 3, [
         {
@@ -226,66 +231,139 @@ describe('quick recurring Bill assignment', () => {
     expect(mockApi.importRecurringBills).not.toHaveBeenCalled();
   });
 
-  it('blocks dismissal and competing actions during one in-flight import', async () => {
-    const pending = deferred<ReturnType<typeof importResult>>();
-    const createdEntryId = '33333333-3333-4333-8333-333333333334';
-    mockApi.importRecurringBills.mockReturnValue(pending.promise);
-    const { onClose, onCreatePaycheck, onCreated, view } = await setup();
-    await fireEvent.press(await view.findByLabelText(/First paycheck/));
-    fireEvent.press(view.getByLabelText('Confirm import'));
-    await waitFor(() => expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1));
+  function registerInteractionRegressionTests() {
+    it('blocks dismissal and competing actions during one in-flight import', async () => {
+      const pending = deferred<ReturnType<typeof importResult>>();
+      const createdEntryId = '33333333-3333-4333-8333-333333333334';
+      mockApi.importRecurringBills.mockReturnValue(pending.promise);
+      const { onClose, onCreatePaycheck, onCreated, view } = await setup();
+      await fireEvent.press(await view.findByLabelText(/First paycheck/));
+      fireEvent.press(view.getByLabelText('Confirm import'));
+      await waitFor(() => expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1));
 
-    const close = view.getByLabelText('Close quick assignment');
-    expect(close.props.accessibilityState.disabled).toBe(true);
-    fireEvent.press(close);
-    const assignmentModal = view.getByTestId('quick-assignment-modal');
-    assignmentModal.props.onRequestClose();
-    fireEvent.press(view.getByLabelText(/Second paycheck/));
-    fireEvent.press(view.getByLabelText('Edit amount'));
-    fireEvent.press(view.getByLabelText('Create paycheck instead'));
-    fireEvent.press(view.getByLabelText('Confirm import'));
+      const close = view.getByLabelText('Close quick assignment');
+      expect(close.props.accessibilityState.disabled).toBe(true);
+      fireEvent.press(close);
+      const assignmentModal = view.getByTestId('quick-assignment-modal');
+      assignmentModal.props.onRequestClose();
+      fireEvent.press(view.getByLabelText(/Second paycheck/));
+      fireEvent.press(view.getByLabelText('Edit amount'));
+      fireEvent.press(view.getByLabelText('Create paycheck instead'));
+      fireEvent.press(view.getByLabelText('Confirm import'));
 
-    expect(onClose).not.toHaveBeenCalled();
-    expect(onCreatePaycheck).not.toHaveBeenCalled();
-    expect(view.getByLabelText(/First paycheck/).props.accessibilityState.checked).toBe(true);
-    expect(view.getByLabelText(/Second paycheck/).props.accessibilityState.checked).toBe(false);
-    expect(view.queryByLabelText('Amount for this paycheck')).toBeNull();
-    expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(onCreatePaycheck).not.toHaveBeenCalled();
+      expect(view.getByLabelText(/First paycheck/).props.accessibilityState.checked).toBe(true);
+      expect(view.getByLabelText(/Second paycheck/).props.accessibilityState.checked).toBe(false);
+      expect(view.queryByLabelText('Amount for this paycheck')).toBeNull();
+      expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
 
-    await act(async () => {
       pending.resolve(importResult(createdEntryId));
-      await pending.promise;
+      await waitFor(() => expect(onCreated).toHaveBeenCalledWith(first.id, createdEntryId));
+      expect(onCreated).toHaveBeenCalledTimes(1);
+      expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
     });
+
+    it('prevents duplicate submission and preserves selection and override after failure', async () => {
+      let rejectImport: (error: Error) => void = () => undefined;
+      mockApi.importRecurringBills.mockReturnValue(
+        new Promise((_resolve, reject) => {
+          rejectImport = reject;
+        }),
+      );
+      const { view } = await setup();
+      await fireEvent.press(await view.findByLabelText('Edit amount'));
+      await fireEvent.changeText(view.getByLabelText('Amount for this paycheck'), '130.00');
+      await fireEvent.press(view.getByLabelText('Update typical amount'));
+      await fireEvent.press(view.getByLabelText(/First paycheck/));
+      fireEvent.press(view.getByLabelText('Confirm import'));
+      fireEvent.press(view.getByLabelText('Confirm import'));
+      expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        rejectImport(new Error('Paycheck changed. Refresh and try again.'));
+      });
+      expect(await view.findByText('Paycheck changed. Refresh and try again.')).toBeTruthy();
+      await waitFor(() =>
+        expect(view.getByLabelText('Confirm import').props.accessibilityState.busy).toBe(false),
+      );
+      expect(view.getByLabelText(/First paycheck/).props.accessibilityState.checked).toBe(true);
+      expect(view.getByText('$130.00')).toBeTruthy();
+    });
+  }
+
+  it('reconciles a lost import response without allowing a second POST', async () => {
+    const createdEntryId = '33333333-3333-4333-8333-333333333335';
+    mockApi.importRecurringBills.mockRejectedValue(new Error('response lost'));
+    mockApi.paycheck.mockResolvedValue(importResult(createdEntryId));
+    const { onCreated, view } = await setup();
+
+    await fireEvent.press(await view.findByLabelText(/First paycheck/));
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(first.id, createdEntryId));
     expect(onCreated).toHaveBeenCalledTimes(1);
     expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(view.getByLabelText('Confirm import').props.accessibilityState.busy).toBe(false),
+    );
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+    expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
   });
 
-  it('prevents duplicate submission and preserves selection and override after failure', async () => {
-    let rejectImport: (error: Error) => void = () => undefined;
-    mockApi.importRecurringBills.mockReturnValue(
-      new Promise((_resolve, reject) => {
-        rejectImport = reject;
-      }),
-    );
-    const { view } = await setup();
+  it('blocks retry while the result is unknown and later confirms the created entry', async () => {
+    const createdEntryId = '33333333-3333-4333-8333-333333333336';
+    mockApi.importRecurringBills.mockRejectedValue(new Error('response lost'));
+    mockApi.paycheck.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({
+      ...importResult(createdEntryId),
+      entries: [{ ...importResult(createdEntryId).entries[0], amountMinor: 13000 }],
+    });
+    const { onCreated, view } = await setup();
     await fireEvent.press(await view.findByLabelText('Edit amount'));
     await fireEvent.changeText(view.getByLabelText('Amount for this paycheck'), '130.00');
     await fireEvent.press(view.getByLabelText('Update typical amount'));
     await fireEvent.press(view.getByLabelText(/First paycheck/));
-    fireEvent.press(view.getByLabelText('Confirm import'));
-    fireEvent.press(view.getByLabelText('Confirm import'));
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+
+    expect(await view.findByText(/could not confirm whether this Bill was added/)).toBeTruthy();
+    expect(view.getByText('$130.00')).toBeTruthy();
+    expect(view.getByLabelText(/First paycheck/).props.accessibilityState.checked).toBe(true);
+    expect(view.getByLabelText('Confirm import').props.accessibilityState.disabled).toBe(true);
+    expect(view.getByLabelText('Check result')).toBeTruthy();
+
+    await fireEvent.press(view.getByLabelText('Check result'));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(first.id, createdEntryId));
     expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      rejectImport(new Error('Paycheck changed. Refresh and try again.'));
-    });
-    expect(await view.findByText('Paycheck changed. Refresh and try again.')).toBeTruthy();
     await waitFor(() =>
       expect(view.getByLabelText('Confirm import').props.accessibilityState.busy).toBe(false),
     );
-    expect(view.getByLabelText(/First paycheck/).props.accessibilityState.checked).toBe(true);
-    expect(view.getByText('$130.00')).toBeTruthy();
   });
+
+  it('uses the latest paycheck version when an unknown result is confirmed as absent', async () => {
+    const latest = { ...first, version: 8 };
+    mockApi.importRecurringBills
+      .mockRejectedValueOnce(new Error('response lost'))
+      .mockResolvedValueOnce(importResult('33333333-3333-4333-8333-333333333337'));
+    mockApi.paycheck.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(latest);
+    const { onCreated, view } = await setup();
+    await fireEvent.press(await view.findByLabelText(/First paycheck/));
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+    await view.findByLabelText('Check result');
+
+    await fireEvent.press(view.getByLabelText('Check result'));
+    await waitFor(() =>
+      expect(view.getByLabelText('Confirm import').props.accessibilityState.disabled).toBe(false),
+    );
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+
+    await waitFor(() => expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(2));
+    expect(mockApi.importRecurringBills.mock.calls[1][1]).toBe(8);
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(view.getByLabelText('Confirm import').props.accessibilityState.busy).toBe(false),
+    );
+  });
+
+  registerInteractionRegressionTests();
 });
 
 function deferred<T>() {
