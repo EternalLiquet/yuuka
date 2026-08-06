@@ -140,6 +140,24 @@ async function setup() {
   const onReviewImports = jest.fn();
   const onViewTimeline = jest.fn();
   const refreshOccurrence = jest.fn().mockResolvedValue(occurrence);
+  const props = {
+    assignmentIdentity: {
+      definitionId: occurrence.definitionId,
+      occurrenceDate: occurrence.occurrenceDate,
+    },
+    occurrence,
+    occurrenceResolved: true,
+    onClose,
+    onCreatePaycheck,
+    onCreated,
+    onOpenImport,
+    onReviewImports,
+    onViewTimeline,
+    refreshOccurrence,
+  };
+  const rendered = await render(<QuickAssignRecurringBillSheet {...props} />, {
+    wrapper: Wrapper,
+  });
   return {
     client,
     onClose,
@@ -149,23 +167,9 @@ async function setup() {
     onReviewImports,
     onViewTimeline,
     refreshOccurrence,
-    view: await render(
-      <QuickAssignRecurringBillSheet
-        assignmentIdentity={{
-          definitionId: occurrence.definitionId,
-          occurrenceDate: occurrence.occurrenceDate,
-        }}
-        occurrence={occurrence}
-        onClose={onClose}
-        onCreatePaycheck={onCreatePaycheck}
-        onCreated={onCreated}
-        onOpenImport={onOpenImport}
-        onReviewImports={onReviewImports}
-        onViewTimeline={onViewTimeline}
-        refreshOccurrence={refreshOccurrence}
-      />,
-      { wrapper: Wrapper },
-    ),
+    rerenderOccurrence: (nextOccurrence: RecurringBillOccurrence | null) =>
+      rendered.rerender(<QuickAssignRecurringBillSheet {...props} occurrence={nextOccurrence} />),
+    view: rendered,
   };
 }
 
@@ -245,6 +249,78 @@ describe('quick recurring Bill assignment', () => {
     ).toBeTruthy();
     expect(view.getByLabelText('Amount for this paycheck')).toBeTruthy();
     expect(mockApi.importRecurringBills).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      action: 'Open existing import',
+      imports: [
+        {
+          entryId: '33333333-3333-4333-8333-333333333351',
+          paycheckId: first.id,
+          paycheckName: first.name,
+          status: 'NOT_PAID' as const,
+        },
+      ],
+    },
+    {
+      action: 'Review existing imports',
+      imports: [
+        {
+          entryId: '33333333-3333-4333-8333-333333333352',
+          paycheckId: first.id,
+          paycheckName: first.name,
+          status: 'NOT_PAID' as const,
+        },
+        {
+          entryId: '33333333-3333-4333-8333-333333333353',
+          paycheckId: second.id,
+          paycheckName: second.name,
+          status: 'POSTED' as const,
+        },
+      ],
+    },
+  ])(
+    'reacts to a live prop update with $action without losing form state',
+    async ({ action, imports }) => {
+      const { onOpenImport, onReviewImports, rerenderOccurrence, view } = await setup();
+      await fireEvent.press(await view.findByLabelText('Edit amount'));
+      await fireEvent.changeText(view.getByLabelText('Amount for this paycheck'), '130.00');
+      await fireEvent.press(view.getByLabelText('Update typical amount'));
+      await fireEvent.press(view.getByLabelText(/First paycheck/));
+
+      await rerenderOccurrence({
+        ...occurrence,
+        definitionVersion: 5,
+        importCount: imports.length,
+        imports,
+      });
+
+      expect(view.getByText('$130.00')).toBeTruthy();
+      expect(view.getByLabelText(/First paycheck/).props.accessibilityState.checked).toBe(true);
+      expect(view.getByLabelText('Confirm import').props.accessibilityState.disabled).toBe(true);
+      await fireEvent.press(view.getByLabelText('Confirm import'));
+      expect(mockApi.importRecurringBills).not.toHaveBeenCalled();
+      await fireEvent.press(view.getByLabelText(action));
+      if (imports.length === 1)
+        expect(onOpenImport).toHaveBeenCalledWith(first.id, imports[0].entryId);
+      else expect(onReviewImports).toHaveBeenCalledWith(expect.objectContaining({ imports }));
+    },
+  );
+
+  it('keeps a live missing occurrence visible but never submit-eligible', async () => {
+    const { onViewTimeline, rerenderOccurrence, view } = await setup();
+    await fireEvent.press(await view.findByLabelText(/First paycheck/));
+
+    await rerenderOccurrence(null);
+
+    expect(view.getByTestId('quick-assignment-modal').props.visible).toBe(true);
+    expect(view.getByText(/changed or is no longer available/)).toBeTruthy();
+    expect(view.getByLabelText('Confirm import').props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+    expect(mockApi.importRecurringBills).not.toHaveBeenCalled();
+    await fireEvent.press(view.getByLabelText('View Timeline'));
+    expect(onViewTimeline).toHaveBeenCalledTimes(1);
   });
 
   function registerInteractionRegressionTests() {
@@ -378,6 +454,38 @@ describe('quick recurring Bill assignment', () => {
     expect(onCreated).toHaveBeenCalledTimes(1);
     expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
     await fireEvent.press(view.getByLabelText('Confirm import'));
+    expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an unknown attempt authoritative when a live prop update shows an import', async () => {
+    const createdEntryId = '33333333-3333-4333-8333-333333333354';
+    const committed = importResult(createdEntryId);
+    mockApi.importRecurringBills.mockRejectedValue(new Error('response lost'));
+    mockApi.paycheck.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(committed);
+    const { onCreated, rerenderOccurrence, view } = await setup();
+    await fireEvent.press(await view.findByLabelText(/First paycheck/));
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+    await view.findByLabelText('Check result');
+
+    await rerenderOccurrence({
+      ...occurrence,
+      importCount: 1,
+      imports: [
+        {
+          entryId: createdEntryId,
+          paycheckId: first.id,
+          paycheckName: first.name,
+          status: 'NOT_PAID',
+        },
+      ],
+    });
+
+    expect(view.getByLabelText('Confirm import').props.accessibilityState.disabled).toBe(true);
+    expect(view.getByLabelText('Check result')).toBeTruthy();
+    expect(view.queryByLabelText('Open existing import')).toBeNull();
+    expect(onCreated).not.toHaveBeenCalled();
+    await fireEvent.press(view.getByLabelText('Check result'));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(first.id, createdEntryId));
     expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
   });
 

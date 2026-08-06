@@ -25,6 +25,7 @@ type ImportAttempt = {
 export function QuickAssignRecurringBillSheet({
   assignmentIdentity,
   occurrence,
+  occurrenceResolved,
   onClose,
   onCreatePaycheck,
   onCreated,
@@ -35,6 +36,7 @@ export function QuickAssignRecurringBillSheet({
 }: {
   assignmentIdentity: { definitionId: string; occurrenceDate: string } | null;
   occurrence: RecurringBillOccurrence | null;
+  occurrenceResolved: boolean;
   onClose: () => void;
   onCreatePaycheck: () => void;
   onCreated: (paycheckId: string, entryId: string) => void;
@@ -88,9 +90,27 @@ export function QuickAssignRecurringBillSheet({
   const interactionsLocked = progress !== 'idle' || outcomeUnknown;
   const displayOccurrence =
     occurrence &&
-    (!lastOccurrence || occurrence.definitionVersion >= lastOccurrence.definitionVersion)
+    (!lastOccurrence ||
+      occurrence.definitionVersion > lastOccurrence.definitionVersion ||
+      (occurrence.definitionVersion === lastOccurrence.definitionVersion &&
+        occurrence.imports.length >= lastOccurrence.imports.length))
       ? occurrence
       : lastOccurrence;
+  const liveOccurrenceUnavailable =
+    !outcomeUnknown && (occurrenceUnavailable || (occurrenceResolved && !occurrence));
+  const liveAssignedOccurrence = !outcomeUnknown
+    ? (recoveryOccurrence ??
+      (occurrenceResolved && occurrence && occurrence.imports.length > 0 ? occurrence : null))
+    : null;
+  const eligibleOccurrence =
+    occurrenceResolved && !occurrence ? null : liveAssignedOccurrence ? null : displayOccurrence;
+  const liveOccurrenceMessage = liveOccurrenceUnavailable
+    ? 'This recurring Bill occurrence changed or is no longer available.'
+    : liveAssignedOccurrence
+      ? liveAssignedOccurrence.imports.length === 1
+        ? 'This recurring Bill occurrence was already added to a paycheck.'
+        : 'This recurring Bill occurrence already has imports to review.'
+      : '';
 
   function beginAmountEdit() {
     if (interactionsLocked) return;
@@ -189,14 +209,14 @@ export function QuickAssignRecurringBillSheet({
 
   async function confirm() {
     if (
-      !displayOccurrence ||
+      !eligibleOccurrence ||
       !selected ||
       !canFit ||
       submission.current ||
       outcomeUnknown ||
       completed ||
-      recoveryOccurrence ||
-      occurrenceUnavailable
+      liveAssignedOccurrence ||
+      liveOccurrenceUnavailable
     )
       return;
     submission.current = true;
@@ -204,8 +224,8 @@ export function QuickAssignRecurringBillSheet({
     setError('');
     const attempt: ImportAttempt = {
       amountMinor,
-      definitionId: displayOccurrence.definitionId,
-      occurrenceDate: displayOccurrence.occurrenceDate,
+      definitionId: eligibleOccurrence.definitionId,
+      occurrenceDate: eligibleOccurrence.occurrenceDate,
       paycheckId: selected.id,
       priorEntryIds: new Set(selected.entries.map((entry) => entry.id)),
     };
@@ -216,9 +236,9 @@ export function QuickAssignRecurringBillSheet({
         result = await api.importRecurringBills(selected.id, selected.version, [
           {
             amountMinor,
-            definitionId: displayOccurrence.definitionId,
-            definitionVersion: displayOccurrence.definitionVersion,
-            occurrenceDate: displayOccurrence.occurrenceDate,
+            definitionId: eligibleOccurrence.definitionId,
+            definitionVersion: eligibleOccurrence.definitionVersion,
+            occurrenceDate: eligibleOccurrence.occurrenceDate,
             updateTypicalAmount,
           },
         ]);
@@ -371,7 +391,11 @@ export function QuickAssignRecurringBillSheet({
                 />
               </View>
             ) : null}
-            {error ? (
+            {liveOccurrenceMessage ? (
+              <AppText style={{ color: colors.danger }} variant="error">
+                {liveOccurrenceMessage}
+              </AppText>
+            ) : error ? (
               <AppText style={{ color: colors.danger }} variant="error">
                 {error}
               </AppText>
@@ -384,24 +408,24 @@ export function QuickAssignRecurringBillSheet({
                 variant="secondary"
               />
             ) : null}
-            {recoveryOccurrence?.imports.length === 1 ? (
+            {liveAssignedOccurrence?.imports.length === 1 ? (
               <Button
                 label="Open existing import"
                 onPress={() => {
-                  const imported = recoveryOccurrence.imports[0];
+                  const imported = liveAssignedOccurrence.imports[0];
                   onOpenImport(imported.paycheckId, imported.entryId);
                 }}
                 variant="secondary"
               />
             ) : null}
-            {recoveryOccurrence && recoveryOccurrence.imports.length > 1 ? (
+            {liveAssignedOccurrence && liveAssignedOccurrence.imports.length > 1 ? (
               <Button
                 label="Review existing imports"
-                onPress={() => onReviewImports(recoveryOccurrence)}
+                onPress={() => onReviewImports(liveAssignedOccurrence)}
                 variant="secondary"
               />
             ) : null}
-            {occurrenceUnavailable ? (
+            {liveOccurrenceUnavailable ? (
               <Button label="View Timeline" onPress={onViewTimeline} variant="secondary" />
             ) : null}
             <Button
@@ -410,8 +434,9 @@ export function QuickAssignRecurringBillSheet({
                 !canFit ||
                 outcomeUnknown ||
                 completed ||
-                Boolean(recoveryOccurrence) ||
-                occurrenceUnavailable
+                !eligibleOccurrence ||
+                Boolean(liveAssignedOccurrence) ||
+                liveOccurrenceUnavailable
               }
               icon={Check}
               label="Confirm import"

@@ -651,4 +651,88 @@ describe('Home dashboard', () => {
       ],
     ]);
   });
+
+  it('keeps assignment state while a normal Home refetch marks the occurrence assigned', async () => {
+    const selectedPaycheck = {
+      allocatedMinor: 0,
+      allocationPercent: 0,
+      amountMinor: 50000,
+      archivedAt: null,
+      closedAt: null,
+      completionPercent: 0,
+      createdAt: '2026-07-01T00:00:00Z',
+      entries: [],
+      id: paycheckId,
+      incomeDate: '2026-07-18',
+      name: 'Friday paycheck',
+      notPaidCount: 0,
+      notPaidMinor: 0,
+      notes: null,
+      postedCount: 0,
+      postedMinor: 0,
+      processingCount: 0,
+      processingMinor: 0,
+      reopenedAt: null,
+      requiresAttention: true,
+      source: null,
+      spendingBucketPerformance: null,
+      state: 'ACTIVE' as const,
+      templateSourceId: null,
+      unallocatedMinor: 50000,
+      updatedAt: '2026-07-01T00:00:00Z',
+      version: 6,
+    };
+    mockApi.activePaychecks.mockResolvedValue({
+      hasNext: false,
+      items: [selectedPaycheck],
+      page: 0,
+      size: 100,
+      totalItems: 1,
+      totalPages: 1,
+    });
+    const { view } = await renderHome();
+    await fireEvent.press(await view.findByLabelText(/Internet.*Not added to a paycheck/));
+    await fireEvent.press(await view.findByLabelText('Edit amount'));
+    await fireEvent.changeText(view.getByLabelText('Amount for this paycheck'), '70.00');
+    await fireEvent.press(view.getByLabelText('Update typical amount'));
+    await fireEvent.press(
+      view.getByLabelText(/Friday paycheck, income date.*currently unallocated/),
+    );
+    mockApi.recurringBillTimeline.mockResolvedValue({
+      ...recurring,
+      items: [
+        {
+          ...recurring.items[0],
+          importCount: 1,
+          imports: [
+            {
+              entryId,
+              paycheckId,
+              paycheckName: 'Friday paycheck',
+              status: 'NOT_PAID' as const,
+            },
+          ],
+        },
+      ],
+    });
+
+    await act(async () => {
+      mockFocusCallback?.();
+    });
+
+    expect(await view.findByLabelText('Open existing import')).toBeTruthy();
+    expect(view.getByText('$70.00')).toBeTruthy();
+    expect(
+      view.getByLabelText(/Friday paycheck, income date.*currently unallocated/).props
+        .accessibilityState.checked,
+    ).toBe(true);
+    expect(view.getByLabelText('Confirm import').props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+    expect(mockApi.importRecurringBills).not.toHaveBeenCalled();
+    await fireEvent.press(view.getByLabelText('Open existing import'));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/paychecks/[id]',
+      params: { highlightEntryId: entryId, id: paycheckId },
+    });
+  });
 });

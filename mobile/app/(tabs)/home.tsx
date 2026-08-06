@@ -278,6 +278,7 @@ export default function HomeScreen() {
             : 'closed'
         }
         occurrence={assigningOccurrence}
+        occurrenceResolved={Boolean(recurringQuery.data)}
         onClose={() => setAssigningOccurrenceIdentity(null)}
         onCreatePaycheck={() => {
           setAssigningOccurrenceIdentity(null);
