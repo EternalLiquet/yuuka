@@ -271,6 +271,7 @@ export default function HomeScreen() {
         }}
       />
       <QuickAssignRecurringBillSheet
+        assignmentIdentity={assigningOccurrenceIdentity}
         key={
           assigningOccurrenceIdentity
             ? `${assigningOccurrenceIdentity.definitionId}:${assigningOccurrenceIdentity.occurrenceDate}`
@@ -285,6 +286,29 @@ export default function HomeScreen() {
         onCreated={(paycheckId, importedEntryId) => {
           setAssigningOccurrenceIdentity(null);
           openHighlightedPaycheck(router, paycheckId, importedEntryId);
+        }}
+        onOpenImport={(paycheckId, importedEntryId) => {
+          setAssigningOccurrenceIdentity(null);
+          openHighlightedPaycheck(router, paycheckId, importedEntryId);
+        }}
+        onReviewImports={(item) => {
+          setAssigningOccurrenceIdentity(null);
+          setReviewingOccurrence(item);
+        }}
+        onViewTimeline={() => {
+          setAssigningOccurrenceIdentity(null);
+          router.push('/recurring-bills');
+        }}
+        refreshOccurrence={async () => {
+          const result = await refetchRecurring();
+          if (result.error) throw result.error;
+          return (
+            result.data?.items.find(
+              (item) =>
+                item.definitionId === assigningOccurrenceIdentity?.definitionId &&
+                item.occurrenceDate === assigningOccurrenceIdentity.occurrenceDate,
+            ) ?? null
+          );
         }}
       />
     </Screen>

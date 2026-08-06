@@ -14,16 +14,34 @@ import { formatMoney, minorToInput, parseMoneyToMinor } from '@/domain/money';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
+type ImportAttempt = {
+  amountMinor: number;
+  definitionId: string;
+  occurrenceDate: string;
+  paycheckId: string;
+  priorEntryIds: Set<string>;
+};
+
 export function QuickAssignRecurringBillSheet({
+  assignmentIdentity,
   occurrence,
   onClose,
   onCreatePaycheck,
   onCreated,
+  onOpenImport,
+  onReviewImports,
+  onViewTimeline,
+  refreshOccurrence,
 }: {
+  assignmentIdentity: { definitionId: string; occurrenceDate: string } | null;
   occurrence: RecurringBillOccurrence | null;
   onClose: () => void;
   onCreatePaycheck: () => void;
   onCreated: (paycheckId: string, entryId: string) => void;
+  onOpenImport: (paycheckId: string, entryId: string) => void;
+  onReviewImports: (occurrence: RecurringBillOccurrence) => void;
+  onViewTimeline: () => void;
+  refreshOccurrence: () => Promise<RecurringBillOccurrence | null>;
 }) {
   const api = useYuukaApi();
   const queryClient = useQueryClient();
@@ -36,24 +54,43 @@ export function QuickAssignRecurringBillSheet({
   const [updateTypicalAmount, setUpdateTypicalAmount] = useState(false);
   const [amountError, setAmountError] = useState('');
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState<'idle' | 'importing' | 'checking'>('idle');
   const [completed, setCompleted] = useState(false);
   const [outcomeUnknown, setOutcomeUnknown] = useState(false);
   const [authoritativePaycheck, setAuthoritativePaycheck] = useState<Paycheck | null>(null);
+  const [lastOccurrence, setLastOccurrence] = useState(occurrence);
+  const [recoveryOccurrence, setRecoveryOccurrence] = useState<RecurringBillOccurrence | null>(
+    null,
+  );
+  const [occurrenceUnavailable, setOccurrenceUnavailable] = useState(false);
   const originalImportError = useRef<unknown>(null);
   const submission = useRef(false);
+  const unresolvedAttempt = useRef<ImportAttempt | null>(null);
   const paychecks = useQuery({
     queryKey: ['paychecks', 'active'],
     queryFn: api.activePaychecks,
-    enabled: Boolean(occurrence),
+    enabled: Boolean(assignmentIdentity),
   });
-
-  const selected = useMemo(() => {
-    if (authoritativePaycheck?.id === selectedId) return authoritativePaycheck;
-    return paychecks.data?.items.find((item) => item.id === selectedId) ?? null;
-  }, [authoritativePaycheck, paychecks.data?.items, selectedId]);
-  const canFit = Boolean(selected && selected.unallocatedMinor >= amountMinor);
-  const interactionsLocked = saving || outcomeUnknown;
+  const effectivePaychecks = useMemo(() => {
+    const items = paychecks.data?.items ?? [];
+    if (!authoritativePaycheck) return items;
+    const replaced = items.map((item) =>
+      item.id === authoritativePaycheck.id ? authoritativePaycheck : item,
+    );
+    return replaced.some((item) => item.id === authoritativePaycheck.id)
+      ? replaced
+      : [...replaced, authoritativePaycheck];
+  }, [authoritativePaycheck, paychecks.data?.items]);
+  const selected = effectivePaychecks.find((item) => item.id === selectedId) ?? null;
+  const canFit = Boolean(
+    selected && selected.state === 'ACTIVE' && selected.unallocatedMinor >= amountMinor,
+  );
+  const interactionsLocked = progress !== 'idle' || outcomeUnknown;
+  const displayOccurrence =
+    occurrence &&
+    (!lastOccurrence || occurrence.definitionVersion >= lastOccurrence.definitionVersion)
+      ? occurrence
+      : lastOccurrence;
 
   function beginAmountEdit() {
     if (interactionsLocked) return;
@@ -73,20 +110,20 @@ export function QuickAssignRecurringBillSheet({
     }
   }
 
-  function findImportedEntry(paycheck: Paycheck, priorEntryIds: Set<string>) {
-    if (!occurrence) return undefined;
+  function findImportedEntry(paycheck: Paycheck, attempt: ImportAttempt) {
     return paycheck.entries.find(
       (entry) =>
-        !priorEntryIds.has(entry.id) &&
-        entry.sourceRecurringBillDefinitionId === occurrence.definitionId &&
-        entry.sourceRecurringOccurrenceDate === occurrence.occurrenceDate &&
-        entry.amountMinor === amountMinor,
+        !attempt.priorEntryIds.has(entry.id) &&
+        entry.sourceRecurringBillDefinitionId === attempt.definitionId &&
+        entry.sourceRecurringOccurrenceDate === attempt.occurrenceDate &&
+        entry.amountMinor === attempt.amountMinor,
     );
   }
 
   async function finishSuccess(paycheckId: string, entryId: string) {
     if (completed) return;
     setCompleted(true);
+    unresolvedAttempt.current = null;
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'upcoming-recurring-bills'] }),
       queryClient.invalidateQueries({ queryKey: ['recurring-bills', 'timeline'] }),
@@ -99,17 +136,35 @@ export function QuickAssignRecurringBillSheet({
     onCreated(paycheckId, entryId);
   }
 
-  async function reconcile(priorEntryIds: Set<string>) {
-    if (!selected) return false;
-    const refreshed = await api.paycheck(selected.id);
+  async function recoverNoMatch(refreshed: Paycheck) {
     setAuthoritativePaycheck(refreshed);
-    const created = findImportedEntry(refreshed, priorEntryIds);
-    if (created) {
-      setOutcomeUnknown(false);
-      await finishSuccess(refreshed.id, created.id);
-      return true;
-    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['recurring-bills', 'timeline'] }),
+      queryClient.invalidateQueries({ queryKey: ['recurring-bills', 'import-options'] }),
+      queryClient.invalidateQueries({ queryKey: ['recurring-bills', 'definitions'] }),
+    ]);
+    const refreshedOccurrence = await refreshOccurrence();
+    unresolvedAttempt.current = null;
     setOutcomeUnknown(false);
+    if (!refreshedOccurrence) {
+      setOccurrenceUnavailable(true);
+      setRecoveryOccurrence(null);
+      setError('This recurring Bill occurrence changed or is no longer available.');
+      return;
+    }
+    setLastOccurrence(refreshedOccurrence);
+    if (refreshedOccurrence.imports.length > 0) {
+      setRecoveryOccurrence(refreshedOccurrence);
+      setOccurrenceUnavailable(false);
+      setError(
+        refreshedOccurrence.imports.length === 1
+          ? 'This recurring Bill occurrence was already added to a paycheck.'
+          : 'This recurring Bill occurrence already has imports to review.',
+      );
+      return;
+    }
+    setRecoveryOccurrence(null);
+    setOccurrenceUnavailable(false);
     setError(
       displayError(
         originalImportError.current,
@@ -117,32 +172,60 @@ export function QuickAssignRecurringBillSheet({
         'The recurring Bill was not added.',
       ),
     );
+  }
+
+  async function reconcile(attempt: ImportAttempt) {
+    const refreshed = await api.paycheck(attempt.paycheckId);
+    setAuthoritativePaycheck(refreshed);
+    const created = findImportedEntry(refreshed, attempt);
+    if (created) {
+      setOutcomeUnknown(false);
+      await finishSuccess(refreshed.id, created.id);
+      return true;
+    }
+    await recoverNoMatch(refreshed);
     return false;
   }
 
   async function confirm() {
-    if (!occurrence || !selected || !canFit || submission.current || outcomeUnknown || completed)
+    if (
+      !displayOccurrence ||
+      !selected ||
+      !canFit ||
+      submission.current ||
+      outcomeUnknown ||
+      completed ||
+      recoveryOccurrence ||
+      occurrenceUnavailable
+    )
       return;
     submission.current = true;
-    setSaving(true);
+    setProgress('importing');
     setError('');
-    const priorEntryIds = new Set(selected.entries.map((entry) => entry.id));
+    const attempt: ImportAttempt = {
+      amountMinor,
+      definitionId: displayOccurrence.definitionId,
+      occurrenceDate: displayOccurrence.occurrenceDate,
+      paycheckId: selected.id,
+      priorEntryIds: new Set(selected.entries.map((entry) => entry.id)),
+    };
+    unresolvedAttempt.current = attempt;
     try {
       let result: Paycheck | null = null;
       try {
         result = await api.importRecurringBills(selected.id, selected.version, [
           {
             amountMinor,
-            definitionId: occurrence.definitionId,
-            definitionVersion: occurrence.definitionVersion,
-            occurrenceDate: occurrence.occurrenceDate,
+            definitionId: displayOccurrence.definitionId,
+            definitionVersion: displayOccurrence.definitionVersion,
+            occurrenceDate: displayOccurrence.occurrenceDate,
             updateTypicalAmount,
           },
         ]);
       } catch (importError) {
         originalImportError.current = importError;
       }
-      const created = result ? findImportedEntry(result, priorEntryIds) : undefined;
+      const created = result ? findImportedEntry(result, attempt) : undefined;
       if (created) {
         await finishSuccess(selected.id, created.id);
         return;
@@ -152,14 +235,7 @@ export function QuickAssignRecurringBillSheet({
           'The imported Bill could not be identified. Refresh and try again.',
         );
       try {
-        const reconciled = await reconcile(priorEntryIds);
-        if (!reconciled)
-          await Promise.allSettled([
-            queryClient.invalidateQueries({
-              queryKey: ['dashboard', 'upcoming-recurring-bills'],
-            }),
-            queryClient.invalidateQueries({ queryKey: ['recurring-bills'] }),
-          ]);
+        await reconcile(attempt);
       } catch {
         setOutcomeUnknown(true);
         setError(
@@ -168,17 +244,17 @@ export function QuickAssignRecurringBillSheet({
       }
     } finally {
       submission.current = false;
-      setSaving(false);
+      setProgress('idle');
     }
   }
 
   async function checkResult() {
-    if (!selected || submission.current) return;
+    const attempt = unresolvedAttempt.current;
+    if (!attempt || submission.current) return;
     submission.current = true;
-    setSaving(true);
-    const priorEntryIds = new Set(selected.entries.map((entry) => entry.id));
+    setProgress('checking');
     try {
-      await reconcile(priorEntryIds);
+      await reconcile(attempt);
     } catch {
       setOutcomeUnknown(true);
       setError(
@@ -186,7 +262,7 @@ export function QuickAssignRecurringBillSheet({
       );
     } finally {
       submission.current = false;
-      setSaving(false);
+      setProgress('idle');
     }
   }
 
@@ -198,7 +274,7 @@ export function QuickAssignRecurringBillSheet({
           if (!interactionsLocked) onClose();
         }}
         testID="quick-assignment-modal"
-        visible={Boolean(occurrence)}
+        visible={Boolean(assignmentIdentity)}
       >
         <View style={[styles.screen, { backgroundColor: colors.background }]}>
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -220,9 +296,9 @@ export function QuickAssignRecurringBillSheet({
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            {occurrence ? (
+            {displayOccurrence ? (
               <OccurrenceReview
-                item={occurrence}
+                item={displayOccurrence}
                 amountMinor={amountMinor}
                 disabled={interactionsLocked}
                 onEditAmount={beginAmountEdit}
@@ -243,7 +319,7 @@ export function QuickAssignRecurringBillSheet({
               />
             ) : null}
             {paychecks.isError && paychecks.data ? <StaleBanner /> : null}
-            {paychecks.data?.items.length === 0 ? (
+            {effectivePaychecks.length === 0 ? (
               <View style={styles.empty}>
                 <AppText>No Active paychecks are available.</AppText>
                 <Button
@@ -254,7 +330,7 @@ export function QuickAssignRecurringBillSheet({
                 />
               </View>
             ) : null}
-            {paychecks.data?.items.map((paycheck) => (
+            {effectivePaychecks.map((paycheck) => (
               <PaycheckChoice
                 key={paycheck.id}
                 amountMinor={amountMinor}
@@ -267,8 +343,10 @@ export function QuickAssignRecurringBillSheet({
                 selected={selectedId === paycheck.id}
               />
             ))}
-            {paychecks.data?.items.length &&
-            paychecks.data.items.some((item) => item.unallocatedMinor >= amountMinor) ? (
+            {effectivePaychecks.length &&
+            effectivePaychecks.some(
+              (item) => item.state === 'ACTIVE' && item.unallocatedMinor >= amountMinor,
+            ) ? (
               <Button
                 disabled={interactionsLocked}
                 label="Create paycheck instead"
@@ -276,8 +354,10 @@ export function QuickAssignRecurringBillSheet({
                 variant="ghost"
               />
             ) : null}
-            {paychecks.data?.items.length &&
-            !paychecks.data.items.some((item) => item.unallocatedMinor >= amountMinor) ? (
+            {effectivePaychecks.length &&
+            !effectivePaychecks.some(
+              (item) => item.state === 'ACTIVE' && item.unallocatedMinor >= amountMinor,
+            ) ? (
               <View style={styles.empty}>
                 <AppText style={{ color: colors.danger }} variant="caption">
                   No Active paycheck has enough unallocated money. Create a paycheck or adjust the
@@ -298,17 +378,44 @@ export function QuickAssignRecurringBillSheet({
             ) : null}
             {outcomeUnknown ? (
               <Button
-                disabled={saving}
                 label="Check result"
                 onPress={() => void checkResult()}
+                loading={progress === 'checking'}
                 variant="secondary"
               />
             ) : null}
+            {recoveryOccurrence?.imports.length === 1 ? (
+              <Button
+                label="Open existing import"
+                onPress={() => {
+                  const imported = recoveryOccurrence.imports[0];
+                  onOpenImport(imported.paycheckId, imported.entryId);
+                }}
+                variant="secondary"
+              />
+            ) : null}
+            {recoveryOccurrence && recoveryOccurrence.imports.length > 1 ? (
+              <Button
+                label="Review existing imports"
+                onPress={() => onReviewImports(recoveryOccurrence)}
+                variant="secondary"
+              />
+            ) : null}
+            {occurrenceUnavailable ? (
+              <Button label="View Timeline" onPress={onViewTimeline} variant="secondary" />
+            ) : null}
             <Button
-              disabled={!selected || !canFit || outcomeUnknown || completed}
+              disabled={
+                !selected ||
+                !canFit ||
+                outcomeUnknown ||
+                completed ||
+                Boolean(recoveryOccurrence) ||
+                occurrenceUnavailable
+              }
               icon={Check}
               label="Confirm import"
-              loading={saving}
+              loading={progress === 'importing'}
               onPress={confirm}
             />
           </ScrollView>
@@ -322,10 +429,10 @@ export function QuickAssignRecurringBillSheet({
       >
         <View style={styles.backdrop}>
           <View style={[styles.dialog, { backgroundColor: colors.surface }]}>
-            <AppText variant="title">{occurrence?.name}</AppText>
+            <AppText variant="title">{displayOccurrence?.name}</AppText>
             <AppText style={{ color: colors.muted }} variant="caption">
               Typical amount:{' '}
-              {formatMoney(occurrence?.typicalAmountMinor ?? 0, settings.currencyCode)}
+              {formatMoney(displayOccurrence?.typicalAmountMinor ?? 0, settings.currencyCode)}
             </AppText>
             <TextField
               keyboardType="decimal-pad"
@@ -409,12 +516,18 @@ function PaycheckChoice({
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const shortfall = Math.max(0, amountMinor - paycheck.unallocatedMinor);
-  const disabled = shortfall > 0 || interactionsDisabled;
+  const inactive = paycheck.state !== 'ACTIVE';
+  const disabled = shortfall > 0 || inactive || interactionsDisabled;
   const insufficient = shortfall > 0;
   const resulting = paycheck.unallocatedMinor - amountMinor;
+  const availability = inactive
+    ? `${paycheck.state === 'CLOSED' ? 'Closed' : 'Archived'}, unavailable`
+    : insufficient
+      ? `short by ${formatMoney(shortfall, settings.currencyCode)}, unavailable`
+      : `${formatMoney(resulting, settings.currencyCode)} unallocated after import`;
   return (
     <Pressable
-      accessibilityLabel={`${paycheck.name}, income date ${formatDate(paycheck.incomeDate)}, ${formatMoney(paycheck.unallocatedMinor, settings.currencyCode)} currently unallocated, ${insufficient ? `short by ${formatMoney(shortfall, settings.currencyCode)}, unavailable` : `${formatMoney(resulting, settings.currencyCode)} unallocated after import`}`}
+      accessibilityLabel={`${paycheck.name}, income date ${formatDate(paycheck.incomeDate)}, ${formatMoney(paycheck.unallocatedMinor, settings.currencyCode)} currently unallocated, ${availability}`}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected, disabled }}
       disabled={disabled}
@@ -431,7 +544,11 @@ function PaycheckChoice({
       </AppText>
       <AppText variant="caption">
         Current: {formatMoney(paycheck.unallocatedMinor, settings.currencyCode)} · Result:{' '}
-        {insufficient ? 'Cannot fit' : formatMoney(resulting, settings.currencyCode)}
+        {inactive
+          ? 'Unavailable'
+          : insufficient
+            ? 'Cannot fit'
+            : formatMoney(resulting, settings.currencyCode)}
       </AppText>
       {insufficient ? (
         <AppText style={{ color: colors.danger }} variant="caption">
