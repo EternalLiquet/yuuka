@@ -194,11 +194,61 @@ describe('Recurring Bills timeline route', () => {
     mockPush.mockClear();
     expect(card.props.accessibilityActions).toContainEqual({
       label: 'Edit recurring Bill',
-      name: 'activate',
+      name: 'edit',
     });
-    await fireEvent(card, 'accessibilityAction', { nativeEvent: { actionName: 'activate' } });
+    await fireEvent(card, 'accessibilityAction', { nativeEvent: { actionName: 'edit' } });
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith(`/recurring-bills/${definitionId}/edit`);
+  });
+
+  it('opens one imported entry on normal press and accessibility activation', async () => {
+    const imported = occurrence(localToday(), 'Rent', 1);
+    mockApi.recurringBillTimeline.mockImplementation(async (from: string, through: string) =>
+      timeline(from, through, [imported]),
+    );
+    const view = await render(<RecurringBillsTimelineScreen />, { wrapper: wrapper(client()) });
+    const card = await view.findByLabelText(/Rent.*Added to Paycheck 1.*Not Paid/);
+
+    await fireEvent.press(card);
+    expect(mockPush).toHaveBeenLastCalledWith({
+      pathname: '/paychecks/[id]',
+      params: { highlightEntryId: imported.imports[0].entryId, id: imported.imports[0].paycheckId },
+    });
+
+    mockPush.mockClear();
+    await fireEvent(card, 'accessibilityAction', { nativeEvent: { actionName: 'activate' } });
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/paychecks/[id]',
+      params: { highlightEntryId: imported.imports[0].entryId, id: imported.imports[0].paycheckId },
+    });
+  });
+
+  it('opens a scrollable many-import review from press and accessibility activation', async () => {
+    const imported = occurrence(localToday(), 'Utilities', 12);
+    mockApi.recurringBillTimeline.mockImplementation(async (from: string, through: string) =>
+      timeline(from, through, [imported]),
+    );
+    const view = await render(<RecurringBillsTimelineScreen />, { wrapper: wrapper(client()) });
+    const card = await view.findByLabelText(/Utilities.*Added to 12 paychecks.*Review imports/);
+
+    await fireEvent.press(card);
+    expect(view.getByText('Review imports')).toBeTruthy();
+    expect(view.getByTestId('recurring-import-review-list').type).toBe('RCTScrollView');
+    expect(view.getByLabelText('Open Utilities in Paycheck 12, Posted')).toBeTruthy();
+    expect(view.getByLabelText('Close').props.accessibilityRole).toBe('button');
+    await fireEvent.press(view.getByLabelText('Close'));
+    await waitFor(() => expect(view.queryByText('Review imports')).toBeNull());
+
+    await fireEvent(card, 'accessibilityAction', { nativeEvent: { actionName: 'activate' } });
+    expect(await view.findByText('Review imports')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Open Utilities in Paycheck 12, Posted'));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/paychecks/[id]',
+      params: {
+        highlightEntryId: imported.imports[11].entryId,
+        id: imported.imports[11].paycheckId,
+      },
+    });
   });
 
   it('restores the current range before jumping to Today when only distant pages are cached', async () => {
@@ -491,13 +541,20 @@ function timeline(
   return { from, items, through };
 }
 
-function occurrence(date: string, name = 'Electric'): RecurringBillOccurrence {
+function occurrence(date: string, name = 'Electric', importCount = 0): RecurringBillOccurrence {
+  const imports = Array.from({ length: importCount }, (_, index) => ({
+    entryId: `11111111-1111-4111-8111-${String(index + 1).padStart(12, '0')}`,
+    paycheckId: `22222222-2222-4222-8222-${String(index + 1).padStart(12, '0')}`,
+    paycheckName: `Paycheck ${index + 1}`,
+    status:
+      importCount > 1 && index === importCount - 1 ? ('POSTED' as const) : ('NOT_PAID' as const),
+  }));
   return {
     accountName: null,
     definitionId,
     definitionVersion: 2,
-    importCount: 0,
-    imports: [],
+    importCount,
+    imports,
     name,
     notes: null,
     occurrenceDate: date,

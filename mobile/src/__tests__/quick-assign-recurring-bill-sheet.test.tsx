@@ -80,6 +80,47 @@ const short = paycheck(
   '2026-08-02',
   5000,
 );
+const second = paycheck(
+  '22222222-2222-4222-8222-222222222223',
+  'Second paycheck',
+  '2026-08-03',
+  18000,
+);
+
+function importResult(createdEntryId: string) {
+  return {
+    ...first,
+    entries: [
+      {
+        accountName: 'Checking',
+        amountMinor: 12000,
+        createdAt: '2026-08-05T12:00:00Z',
+        dueDate: '2026-08-09',
+        entryType: 'BILL' as const,
+        id: createdEntryId,
+        name: 'Electric',
+        notes: null,
+        overBudget: null,
+        paybackId: null,
+        paycheckId: first.id,
+        payee: 'Power Co',
+        paymentMethod: 'AUTOPAY' as const,
+        position: 0,
+        remainingMinor: null,
+        sinkingFundId: null,
+        sourceExpenseLedgerId: null,
+        sourceRecurringBillDefinitionId: occurrence.definitionId,
+        sourceRecurringOccurrenceDate: occurrence.occurrenceDate,
+        spentMinor: null,
+        status: 'NOT_PAID' as const,
+        targetDate: null,
+        targetMinor: null,
+        updatedAt: '2026-08-05T12:00:00Z',
+        version: 0,
+      },
+    ],
+  };
+}
 
 async function setup() {
   const client = new QueryClient({
@@ -89,14 +130,18 @@ async function setup() {
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
   const onCreated = jest.fn();
+  const onClose = jest.fn();
+  const onCreatePaycheck = jest.fn();
   return {
     client,
+    onClose,
+    onCreatePaycheck,
     onCreated,
     view: await render(
       <QuickAssignRecurringBillSheet
         occurrence={occurrence}
-        onClose={jest.fn()}
-        onCreatePaycheck={jest.fn()}
+        onClose={onClose}
+        onCreatePaycheck={onCreatePaycheck}
         onCreated={onCreated}
       />,
       { wrapper: Wrapper },
@@ -112,10 +157,10 @@ describe('quick recurring Bill assignment', () => {
     jest.resetAllMocks();
     mockApi.activePaychecks.mockResolvedValue({
       hasNext: false,
-      items: [first, short],
+      items: [first, second, short],
       page: 0,
       size: 100,
-      totalItems: 2,
+      totalItems: 3,
       totalPages: 1,
     });
   });
@@ -147,38 +192,7 @@ describe('quick recurring Bill assignment', () => {
 
   it('imports one occurrence with typical amount and navigates by authoritative provenance', async () => {
     const createdEntryId = '33333333-3333-4333-8333-333333333333';
-    mockApi.importRecurringBills.mockResolvedValue({
-      ...first,
-      entries: [
-        {
-          accountName: 'Checking',
-          amountMinor: 12000,
-          createdAt: '2026-08-05T12:00:00Z',
-          dueDate: '2026-08-09',
-          entryType: 'BILL',
-          id: createdEntryId,
-          name: 'Electric',
-          notes: null,
-          overBudget: null,
-          paybackId: null,
-          paycheckId: first.id,
-          payee: 'Power Co',
-          paymentMethod: 'AUTOPAY',
-          position: 0,
-          remainingMinor: null,
-          sinkingFundId: null,
-          sourceExpenseLedgerId: null,
-          sourceRecurringBillDefinitionId: occurrence.definitionId,
-          sourceRecurringOccurrenceDate: occurrence.occurrenceDate,
-          spentMinor: null,
-          status: 'NOT_PAID',
-          targetDate: null,
-          targetMinor: null,
-          updatedAt: '2026-08-05T12:00:00Z',
-          version: 0,
-        },
-      ],
-    });
+    mockApi.importRecurringBills.mockResolvedValue(importResult(createdEntryId));
     const { onCreated, view } = await setup();
     await fireEvent.press(await view.findByLabelText(/First paycheck/));
     await fireEvent.press(view.getByLabelText('Confirm import'));
@@ -197,6 +211,54 @@ describe('quick recurring Bill assignment', () => {
     await waitFor(() =>
       expect(view.getByLabelText('Confirm import').props.accessibilityState.busy).toBe(false),
     );
+  });
+
+  it('keeps invalid amount feedback visible in the editor and does not import', async () => {
+    const { view } = await setup();
+    await fireEvent.press(await view.findByLabelText('Edit amount'));
+    await fireEvent.changeText(view.getByLabelText('Amount for this paycheck'), '12.345');
+    await fireEvent.press(view.getByLabelText('This paycheck only'));
+
+    expect(
+      view.getByText('Enter a valid money amount with no more than two decimal places.'),
+    ).toBeTruthy();
+    expect(view.getByLabelText('Amount for this paycheck')).toBeTruthy();
+    expect(mockApi.importRecurringBills).not.toHaveBeenCalled();
+  });
+
+  it('blocks dismissal and competing actions during one in-flight import', async () => {
+    const pending = deferred<ReturnType<typeof importResult>>();
+    const createdEntryId = '33333333-3333-4333-8333-333333333334';
+    mockApi.importRecurringBills.mockReturnValue(pending.promise);
+    const { onClose, onCreatePaycheck, onCreated, view } = await setup();
+    await fireEvent.press(await view.findByLabelText(/First paycheck/));
+    fireEvent.press(view.getByLabelText('Confirm import'));
+    await waitFor(() => expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1));
+
+    const close = view.getByLabelText('Close quick assignment');
+    expect(close.props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(close);
+    const assignmentModal = view.getByTestId('quick-assignment-modal');
+    assignmentModal.props.onRequestClose();
+    fireEvent.press(view.getByLabelText(/Second paycheck/));
+    fireEvent.press(view.getByLabelText('Edit amount'));
+    fireEvent.press(view.getByLabelText('Create paycheck instead'));
+    fireEvent.press(view.getByLabelText('Confirm import'));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onCreatePaycheck).not.toHaveBeenCalled();
+    expect(view.getByLabelText(/First paycheck/).props.accessibilityState.checked).toBe(true);
+    expect(view.getByLabelText(/Second paycheck/).props.accessibilityState.checked).toBe(false);
+    expect(view.queryByLabelText('Amount for this paycheck')).toBeNull();
+    expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pending.resolve(importResult(createdEntryId));
+      await pending.promise;
+    });
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(first.id, createdEntryId));
+    expect(onCreated).toHaveBeenCalledTimes(1);
+    expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
   });
 
   it('prevents duplicate submission and preserves selection and override after failure', async () => {
@@ -225,3 +287,13 @@ describe('quick recurring Bill assignment', () => {
     expect(view.getByText('$130.00')).toBeTruthy();
   });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}

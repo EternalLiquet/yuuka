@@ -34,6 +34,7 @@ export function QuickAssignRecurringBillSheet({
   const [amountInput, setAmountInput] = useState('');
   const [editingAmount, setEditingAmount] = useState(false);
   const [updateTypicalAmount, setUpdateTypicalAmount] = useState(false);
+  const [amountError, setAmountError] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const submission = useRef(false);
@@ -50,7 +51,9 @@ export function QuickAssignRecurringBillSheet({
   const canFit = Boolean(selected && selected.unallocatedMinor >= amountMinor);
 
   function beginAmountEdit() {
+    if (saving) return;
     setAmountInput(minorToInput(amountMinor));
+    setAmountError('');
     setEditingAmount(true);
   }
 
@@ -59,9 +62,9 @@ export function QuickAssignRecurringBillSheet({
       setAmountMinor(parseMoneyToMinor(amountInput));
       setUpdateTypicalAmount(updateTypical);
       setEditingAmount(false);
-      setError('');
+      setAmountError('');
     } catch (valueError) {
-      setError(valueError instanceof Error ? valueError.message : 'Enter a valid amount.');
+      setAmountError(valueError instanceof Error ? valueError.message : 'Enter a valid amount.');
     }
   }
 
@@ -116,7 +119,14 @@ export function QuickAssignRecurringBillSheet({
 
   return (
     <>
-      <Modal animationType="slide" onRequestClose={onClose} visible={Boolean(occurrence)}>
+      <Modal
+        animationType="slide"
+        onRequestClose={() => {
+          if (!saving) onClose();
+        }}
+        testID="quick-assignment-modal"
+        visible={Boolean(occurrence)}
+      >
         <View style={[styles.screen, { backgroundColor: colors.background }]}>
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={styles.grow}>
@@ -127,6 +137,9 @@ export function QuickAssignRecurringBillSheet({
             </View>
             <Pressable
               accessibilityLabel="Close quick assignment"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: saving }}
+              disabled={saving}
               onPress={onClose}
               style={styles.close}
             >
@@ -138,6 +151,7 @@ export function QuickAssignRecurringBillSheet({
               <OccurrenceReview
                 item={occurrence}
                 amountMinor={amountMinor}
+                disabled={saving}
                 onEditAmount={beginAmountEdit}
               />
             ) : null}
@@ -159,18 +173,33 @@ export function QuickAssignRecurringBillSheet({
             {paychecks.data?.items.length === 0 ? (
               <View style={styles.empty}>
                 <AppText>No Active paychecks are available.</AppText>
-                <Button label="Create Paycheck" onPress={onCreatePaycheck} variant="secondary" />
+                <Button
+                  disabled={saving}
+                  label="Create Paycheck"
+                  onPress={onCreatePaycheck}
+                  variant="secondary"
+                />
               </View>
             ) : null}
             {paychecks.data?.items.map((paycheck) => (
               <PaycheckChoice
                 key={paycheck.id}
                 amountMinor={amountMinor}
+                interactionsDisabled={saving}
                 onSelect={() => setSelectedId(paycheck.id)}
                 paycheck={paycheck}
                 selected={selectedId === paycheck.id}
               />
             ))}
+            {paychecks.data?.items.length &&
+            paychecks.data.items.some((item) => item.unallocatedMinor >= amountMinor) ? (
+              <Button
+                disabled={saving}
+                label="Create paycheck instead"
+                onPress={onCreatePaycheck}
+                variant="ghost"
+              />
+            ) : null}
             {paychecks.data?.items.length &&
             !paychecks.data.items.some((item) => item.unallocatedMinor >= amountMinor) ? (
               <View style={styles.empty}>
@@ -178,7 +207,12 @@ export function QuickAssignRecurringBillSheet({
                   No Active paycheck has enough unallocated money. Create a paycheck or adjust the
                   amount.
                 </AppText>
-                <Button label="Create Paycheck" onPress={onCreatePaycheck} variant="secondary" />
+                <Button
+                  disabled={saving}
+                  label="Create Paycheck"
+                  onPress={onCreatePaycheck}
+                  variant="secondary"
+                />
               </View>
             ) : null}
             {error ? (
@@ -215,6 +249,11 @@ export function QuickAssignRecurringBillSheet({
               onChangeText={setAmountInput}
               value={amountInput}
             />
+            {amountError ? (
+              <AppText style={{ color: colors.danger }} variant="error">
+                {amountError}
+              </AppText>
+            ) : null}
             <AppText variant="label">Update the recurring Bill&apos;s typical amount?</AppText>
             <Button label="This paycheck only" onPress={() => applyAmount(false)} />
             <Button
@@ -233,10 +272,12 @@ export function QuickAssignRecurringBillSheet({
 function OccurrenceReview({
   item,
   amountMinor,
+  disabled,
   onEditAmount,
 }: {
   item: RecurringBillOccurrence;
   amountMinor: number;
+  disabled: boolean;
   onEditAmount: () => void;
 }) {
   const { settings } = useSettings();
@@ -257,18 +298,26 @@ function OccurrenceReview({
       <AppText style={{ color: colors.muted }} variant="caption">
         Notes: {item.notes ?? 'None'}
       </AppText>
-      <Button icon={Pencil} label="Edit amount" onPress={onEditAmount} variant="secondary" />
+      <Button
+        disabled={disabled}
+        icon={Pencil}
+        label="Edit amount"
+        onPress={onEditAmount}
+        variant="secondary"
+      />
     </View>
   );
 }
 
 function PaycheckChoice({
   amountMinor,
+  interactionsDisabled,
   onSelect,
   paycheck,
   selected,
 }: {
   amountMinor: number;
+  interactionsDisabled: boolean;
   onSelect: () => void;
   paycheck: Paycheck;
   selected: boolean;
@@ -276,11 +325,12 @@ function PaycheckChoice({
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const shortfall = Math.max(0, amountMinor - paycheck.unallocatedMinor);
-  const disabled = shortfall > 0;
+  const disabled = shortfall > 0 || interactionsDisabled;
+  const insufficient = shortfall > 0;
   const resulting = paycheck.unallocatedMinor - amountMinor;
   return (
     <Pressable
-      accessibilityLabel={`${paycheck.name}, income date ${formatDate(paycheck.incomeDate)}, ${formatMoney(paycheck.unallocatedMinor, settings.currencyCode)} currently unallocated, ${disabled ? `short by ${formatMoney(shortfall, settings.currencyCode)}, unavailable` : `${formatMoney(resulting, settings.currencyCode)} unallocated after import`}`}
+      accessibilityLabel={`${paycheck.name}, income date ${formatDate(paycheck.incomeDate)}, ${formatMoney(paycheck.unallocatedMinor, settings.currencyCode)} currently unallocated, ${insufficient ? `short by ${formatMoney(shortfall, settings.currencyCode)}, unavailable` : `${formatMoney(resulting, settings.currencyCode)} unallocated after import`}`}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected, disabled }}
       disabled={disabled}
@@ -297,9 +347,9 @@ function PaycheckChoice({
       </AppText>
       <AppText variant="caption">
         Current: {formatMoney(paycheck.unallocatedMinor, settings.currencyCode)} · Result:{' '}
-        {disabled ? 'Cannot fit' : formatMoney(resulting, settings.currencyCode)}
+        {insufficient ? 'Cannot fit' : formatMoney(resulting, settings.currencyCode)}
       </AppText>
-      {disabled ? (
+      {insufficient ? (
         <AppText style={{ color: colors.danger }} variant="caption">
           Short by {formatMoney(shortfall, settings.currencyCode)}
         </AppText>

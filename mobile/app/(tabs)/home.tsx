@@ -2,15 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight, Plus, RefreshCw } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AppState,
-  Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { AppState, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import type {
   DashboardAttentionItem,
@@ -33,9 +25,9 @@ import {
 import {
   recurringCoverageAction,
   recurringCoverageLabel,
-  statusLabel,
 } from '@/features/recurring-bills/coverage';
 import { QuickAssignRecurringBillSheet } from '@/features/recurring-bills/quick-assign-recurring-bill-sheet';
+import { RecurringImportsReviewSheet } from '@/features/recurring-bills/recurring-imports-review-sheet';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
@@ -532,49 +524,6 @@ function RecurringBillRow({
   );
 }
 
-function RecurringImportsReviewSheet({
-  item,
-  onClose,
-  onOpen,
-}: {
-  item: RecurringBillOccurrence | null;
-  onClose: () => void;
-  onOpen: (paycheckId: string, entryId: string) => void;
-}) {
-  const { colors } = useAppTheme();
-  return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible={Boolean(item)}>
-      <View style={styles.modalBackdrop}>
-        <View style={[styles.reviewDialog, { backgroundColor: colors.surface }]}>
-          <AppText variant="title">Review imports</AppText>
-          <AppText style={{ color: colors.muted }} variant="caption">
-            {item?.name} was added to {item?.imports.length ?? 0} paychecks.
-          </AppText>
-          {item?.imports.map((imported) => (
-            <Pressable
-              accessibilityHint="Opens the imported entry in its paycheck"
-              accessibilityLabel={`Open ${item.name} in ${imported.paycheckName}, ${statusLabel(imported.status)}`}
-              accessibilityRole="button"
-              key={imported.entryId}
-              onPress={() => onOpen(imported.paycheckId, imported.entryId)}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-            >
-              <View style={styles.rowText}>
-                <AppText variant="label">{imported.paycheckName}</AppText>
-                <AppText style={{ color: colors.muted }} variant="caption">
-                  {statusLabel(imported.status)}
-                </AppText>
-              </View>
-              <ChevronRight color={colors.muted} size={18} />
-            </Pressable>
-          ))}
-          <Button label="Close" onPress={onClose} variant="secondary" />
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 function openRecurringImport(
   router: ReturnType<typeof useRouter>,
   imported: RecurringBillOccurrence['imports'][number],
@@ -733,18 +682,11 @@ const styles = StyleSheet.create({
   },
   inlineState: { alignItems: 'flex-start', gap: 9 },
   metric: { flexBasis: '45%', flexGrow: 1, gap: 3, minWidth: 0 },
-  modalBackdrop: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   pressed: { opacity: 0.72 },
   row: { alignItems: 'center', flexDirection: 'row', gap: 10, minHeight: 52, paddingVertical: 7 },
   rows: { gap: 2 },
   rowText: { flex: 1, gap: 2, minWidth: 0 },
-  reviewDialog: { borderRadius: 10, gap: 12, maxHeight: '80%', padding: 18 },
   section: { borderTopWidth: 1, gap: 12, paddingVertical: 17 },
   sectionAction: { alignItems: 'center', flexDirection: 'row', minHeight: 44, paddingLeft: 8 },
   sectionHeader: {
