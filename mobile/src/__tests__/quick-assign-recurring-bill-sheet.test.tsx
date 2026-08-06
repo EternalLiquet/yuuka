@@ -356,6 +356,67 @@ describe('quick recurring Bill assignment', () => {
       expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
     });
 
+    it('blocks live occurrence navigation while an import remains in flight', async () => {
+      const pending = deferred<ReturnType<typeof importResult>>();
+      const createdEntryId = '33333333-3333-4333-8333-333333333335';
+      const oneImport = {
+        ...occurrence,
+        importCount: 1,
+        imports: [
+          {
+            entryId: '33333333-3333-4333-8333-333333333336',
+            paycheckId: first.id,
+            paycheckName: first.name,
+            status: 'NOT_PAID' as const,
+          },
+        ],
+      };
+      const multipleImports = {
+        ...occurrence,
+        importCount: 2,
+        imports: [
+          ...oneImport.imports,
+          {
+            entryId: '33333333-3333-4333-8333-333333333337',
+            paycheckId: second.id,
+            paycheckName: second.name,
+            status: 'POSTED' as const,
+          },
+        ],
+      };
+      mockApi.importRecurringBills.mockReturnValue(pending.promise);
+      const { onCreated, onOpenImport, onReviewImports, onViewTimeline, rerenderOccurrence, view } =
+        await setup();
+      await fireEvent.press(await view.findByLabelText(/First paycheck/));
+      fireEvent.press(view.getByLabelText('Confirm import'));
+      await waitFor(() => expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1));
+
+      await rerenderOccurrence(oneImport);
+      const openImport = view.getByLabelText('Open existing import');
+      expect(openImport.props.accessibilityState.disabled).toBe(true);
+      fireEvent.press(openImport);
+      expect(onOpenImport).not.toHaveBeenCalled();
+
+      await rerenderOccurrence(multipleImports);
+      const reviewImports = view.getByLabelText('Review existing imports');
+      expect(reviewImports.props.accessibilityState.disabled).toBe(true);
+      fireEvent.press(reviewImports);
+      expect(onReviewImports).not.toHaveBeenCalled();
+
+      await rerenderOccurrence(null);
+      const viewTimeline = view.getByLabelText('View Timeline');
+      expect(viewTimeline.props.accessibilityState.disabled).toBe(true);
+      fireEvent.press(viewTimeline);
+      expect(onViewTimeline).not.toHaveBeenCalled();
+
+      pending.resolve(importResult(createdEntryId));
+      await waitFor(() => expect(onCreated).toHaveBeenCalledWith(first.id, createdEntryId));
+      expect(onCreated).toHaveBeenCalledTimes(1);
+      expect(onOpenImport).not.toHaveBeenCalled();
+      expect(onReviewImports).not.toHaveBeenCalled();
+      expect(onViewTimeline).not.toHaveBeenCalled();
+    });
+
     it('prevents duplicate submission and preserves selection and override after failure', async () => {
       let rejectImport: (error: Error) => void = () => undefined;
       mockApi.importRecurringBills.mockReturnValue(
@@ -580,6 +641,7 @@ describe('quick recurring Bill assignment', () => {
       await fireEvent.press(view.getByLabelText('Confirm import'));
 
       const actionButton = await view.findByLabelText(action);
+      expect(actionButton.props.accessibilityState.disabled).toBe(false);
       expect(view.getByLabelText('Confirm import').props.accessibilityState.disabled).toBe(true);
       await fireEvent.press(actionButton);
       if (imports.length === 1)
@@ -600,7 +662,9 @@ describe('quick recurring Bill assignment', () => {
     expect(await view.findByText(/changed or is no longer available/)).toBeTruthy();
     expect(view.getByTestId('quick-assignment-modal').props.visible).toBe(true);
     expect(view.getByLabelText('Confirm import').props.accessibilityState.disabled).toBe(true);
-    await fireEvent.press(view.getByLabelText('View Timeline'));
+    const viewTimeline = view.getByLabelText('View Timeline');
+    expect(viewTimeline.props.accessibilityState.disabled).toBe(false);
+    await fireEvent.press(viewTimeline);
     expect(onViewTimeline).toHaveBeenCalledTimes(1);
     expect(mockApi.importRecurringBills).toHaveBeenCalledTimes(1);
   });

@@ -88,6 +88,7 @@ export function QuickAssignRecurringBillSheet({
     selected && selected.state === 'ACTIVE' && selected.unallocatedMinor >= amountMinor,
   );
   const interactionsLocked = progress !== 'idle' || outcomeUnknown;
+  const recoveryActionsLocked = interactionsLocked || completed;
   const displayOccurrence =
     occurrence &&
     (!lastOccurrence ||
@@ -111,6 +112,22 @@ export function QuickAssignRecurringBillSheet({
         ? 'This recurring Bill occurrence was already added to a paycheck.'
         : 'This recurring Bill occurrence already has imports to review.'
       : '';
+
+  function openExistingImport() {
+    if (recoveryActionsLocked || liveAssignedOccurrence?.imports.length !== 1) return;
+    const imported = liveAssignedOccurrence.imports[0];
+    onOpenImport(imported.paycheckId, imported.entryId);
+  }
+
+  function reviewExistingImports() {
+    if (recoveryActionsLocked || !liveAssignedOccurrence) return;
+    onReviewImports(liveAssignedOccurrence);
+  }
+
+  function viewTimeline() {
+    if (recoveryActionsLocked || !liveOccurrenceUnavailable) return;
+    onViewTimeline();
+  }
 
   function beginAmountEdit() {
     if (interactionsLocked) return;
@@ -410,23 +427,27 @@ export function QuickAssignRecurringBillSheet({
             ) : null}
             {liveAssignedOccurrence?.imports.length === 1 ? (
               <Button
+                disabled={recoveryActionsLocked}
                 label="Open existing import"
-                onPress={() => {
-                  const imported = liveAssignedOccurrence.imports[0];
-                  onOpenImport(imported.paycheckId, imported.entryId);
-                }}
+                onPress={openExistingImport}
                 variant="secondary"
               />
             ) : null}
             {liveAssignedOccurrence && liveAssignedOccurrence.imports.length > 1 ? (
               <Button
+                disabled={recoveryActionsLocked}
                 label="Review existing imports"
-                onPress={() => onReviewImports(liveAssignedOccurrence)}
+                onPress={reviewExistingImports}
                 variant="secondary"
               />
             ) : null}
             {liveOccurrenceUnavailable ? (
-              <Button label="View Timeline" onPress={onViewTimeline} variant="secondary" />
+              <Button
+                disabled={recoveryActionsLocked}
+                label="View Timeline"
+                onPress={viewTimeline}
+                variant="secondary"
+              />
             ) : null}
             <Button
               disabled={
