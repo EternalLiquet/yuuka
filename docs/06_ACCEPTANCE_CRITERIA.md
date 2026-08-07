@@ -33,6 +33,13 @@ owner-local calendar days ago is eligible; a two-day entry is not. Home-launched
 Android Back returns to cached Home content. All three Home query groups retry independently, and a
 partial pull-to-refresh failure does not hide successful cached groups.
 
+Upcoming Recurring Bills reports full-window due and unassigned counts and displays no more than
+three deterministically ordered rows. Assignment state is derived only from live occurrence
+imports, including imports in any paycheck lifecycle state and any entry payment status. An
+unassigned row can import once into a user-selected, sufficiently funded Active paycheck; a single
+import opens its highlighted entry, and multiple imports open a review list with highlighted-entry
+navigation.
+
 ### New paycheck from scratch
 
 Creating a paycheck named Free Paycheck for $1,977.57 dated July 17, 2026 produces:

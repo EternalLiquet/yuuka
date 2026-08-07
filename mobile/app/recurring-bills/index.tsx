@@ -34,6 +34,11 @@ import {
   previousTimelineRange,
   timelineContainsDate,
 } from '@/features/recurring-bills/timeline';
+import {
+  recurringCoverageAction,
+  recurringCoverageLabel,
+} from '@/features/recurring-bills/coverage';
+import { RecurringImportsReviewSheet } from '@/features/recurring-bills/recurring-imports-review-sheet';
 import type {
   TimelineDay,
   TimelineInfiniteData,
@@ -64,6 +69,9 @@ export default function RecurringBillsTimelineScreen() {
   const [jumpError, setJumpError] = useState(false);
   const [refreshPending, setRefreshPending] = useState(false);
   const [refreshError, setRefreshError] = useState(false);
+  const [reviewingOccurrence, setReviewingOccurrence] = useState<RecurringBillOccurrence | null>(
+    null,
+  );
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<TimelineDay>[] }) => {
       setTodayVisible(viewableItems.some((item) => item.item.date === today));
@@ -349,6 +357,13 @@ export default function RecurringBillsTimelineScreen() {
             <TimelineDayRow
               day={item}
               onEdit={(definitionId) => router.push(`/recurring-bills/${definitionId}/edit`)}
+              onOpenImport={(paycheckId, entryId) =>
+                router.push({
+                  pathname: '/paychecks/[id]',
+                  params: { highlightEntryId: entryId, id: paycheckId },
+                })
+              }
+              onReviewImports={setReviewingOccurrence}
               today={today}
             />
           )}
@@ -360,6 +375,17 @@ export default function RecurringBillsTimelineScreen() {
           testID="recurring-bills-floating-create"
         />
       </Screen>
+      <RecurringImportsReviewSheet
+        item={reviewingOccurrence}
+        onClose={() => setReviewingOccurrence(null)}
+        onOpen={(paycheckId, entryId) => {
+          setReviewingOccurrence(null);
+          router.push({
+            pathname: '/paychecks/[id]',
+            params: { highlightEntryId: entryId, id: paycheckId },
+          });
+        }}
+      />
     </>
   );
 }
@@ -476,10 +502,14 @@ function EdgeFeedback({
 function TimelineDayRow({
   day,
   onEdit,
+  onOpenImport,
+  onReviewImports,
   today,
 }: {
   day: TimelineDay;
   onEdit: (definitionId: string) => void;
+  onOpenImport: (paycheckId: string, entryId: string) => void;
+  onReviewImports: (item: RecurringBillOccurrence) => void;
   today: string;
 }) {
   const { colors } = useAppTheme();
@@ -505,6 +535,8 @@ function TimelineDayRow({
             item={item}
             key={item.definitionId}
             onEdit={() => onEdit(item.definitionId)}
+            onOpenImport={onOpenImport}
+            onReviewImports={() => onReviewImports(item)}
           />
         ))
       )}
@@ -512,22 +544,49 @@ function TimelineDayRow({
   );
 }
 
-function OccurrenceCard({ item, onEdit }: { item: RecurringBillOccurrence; onEdit: () => void }) {
+function OccurrenceCard({
+  item,
+  onEdit,
+  onOpenImport,
+  onReviewImports,
+}: {
+  item: RecurringBillOccurrence;
+  onEdit: () => void;
+  onOpenImport: (paycheckId: string, entryId: string) => void;
+  onReviewImports: () => void;
+}) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const posted =
     item.imports.length > 0 && item.imports.every((entry) => entry.status === 'POSTED');
+  const openPrimaryAction = () => {
+    if (item.imports.length === 1) {
+      onOpenImport(item.imports[0].paycheckId, item.imports[0].entryId);
+    } else if (item.imports.length > 1) {
+      onReviewImports();
+    }
+  };
+  const hasPrimaryAction = item.imports.length > 0;
   return (
     <Pressable
-      accessibilityActions={[{ label: 'Edit recurring Bill', name: 'activate' }]}
-      accessibilityHint="Long press to edit the recurring Bill definition"
-      accessibilityLabel={`${item.name}, ${formatMoney(item.typicalAmountMinor, settings.currencyCode)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}`}
+      accessibilityActions={[
+        ...(hasPrimaryAction ? [{ label: recurringCoverageAction(item), name: 'activate' }] : []),
+        { label: 'Edit recurring Bill', name: 'edit' },
+      ]}
+      accessibilityHint={
+        hasPrimaryAction
+          ? recurringCoverageAction(item)
+          : 'Long press or use the Edit recurring Bill action to edit the definition'
+      }
+      accessibilityLabel={`${item.name}, ${formatMoney(item.typicalAmountMinor, settings.currencyCode)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}, ${recurringCoverageLabel(item)}`}
       accessibilityRole="button"
       delayLongPress={500}
       onAccessibilityAction={({ nativeEvent }) => {
-        if (nativeEvent.actionName === 'activate') onEdit();
+        if (nativeEvent.actionName === 'activate') openPrimaryAction();
+        if (nativeEvent.actionName === 'edit') onEdit();
       }}
       onLongPress={onEdit}
+      onPress={openPrimaryAction}
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: colors.surface, borderColor: colors.border },
@@ -543,9 +602,8 @@ function OccurrenceCard({ item, onEdit }: { item: RecurringBillOccurrence; onEdi
       </View>
       <AppText style={{ color: colors.muted }} variant="caption">
         {item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}
-        {item.importCount
-          ? ` · Imported ${item.importCount} time${item.importCount === 1 ? '' : 's'}`
-          : ''}
+        {' · '}
+        {recurringCoverageLabel(item)}
       </AppText>
       {item.imports.map((entry) => (
         <AppText key={entry.entryId} style={{ color: colors.muted }} variant="caption">

@@ -49,6 +49,9 @@ journeys are candidates for Maestro once the flow is promoted into the critical 
 
 Home component coverage exercises all five sections, existing-route navigation, independent
 summary/bucket/recurring query states, cached stale content, retry, partial-failure pull-to-refresh,
+full-window recurring coverage counts and three-row caps, zero/one/multiple import interactions,
+quick assignment paycheck fit and ordering, amount review, transactional payload, authoritative
+highlight navigation, duplicate-submit prevention, and failure-state preservation,
 focus and app-active freshness, overlapping refresh coalescing, 30/90-day switching, compact
 positions, accessibility, and wrapping on a 320-point viewport.
 

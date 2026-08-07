@@ -43,8 +43,13 @@ visible during background refresh and when a refresh fails.
 Needs Attention rows push the relevant existing paycheck/entry or Expense List detail. Entry rows
 use the existing highlighted-entry parameter. The Active section shows four compact metrics and no
 more than two lightweight paycheck previews, with View Active and New Paycheck navigation. The
-30/90-day report lives on Home rather than Active. Upcoming Recurring Bills shows the next three
-timeline occurrences from owner-local today through the configured suggestion window. Financial
+30/90-day report lives on Home rather than Active. Upcoming Recurring Bills retains the full
+owner-local suggestion window for its due and unassigned counts, while showing at most the first
+three occurrences in deterministic date, name, and definition order. Coverage comes only from live
+occurrence imports: zero imports is `Not added to a paycheck`, one names the paycheck and entry
+status, and multiple imports open a review sheet. Not Paid, Processing, and Posted imports all count
+as assigned. Tapping an unassigned occurrence opens a focused assignment flow; one import opens its
+highlighted paycheck entry.
 Positions contains compact Payback, Planned Savings, and Expense List navigation rows.
 
 ## Active tab
@@ -307,6 +312,14 @@ deactivate, reactivate, and delete. Monthly dates shown in the timeline come fro
 clamped calendar policy.
 
 Scratch, template, duplicate, and existing-paycheck entry drafts expose Import recurring bills.
+Home quick assignment uses the same single-item import contract and amount behavior. The user must
+choose an Active paycheck and review the occurrence fields and amount. Paycheck choices retain the
+Active ordering and show current and resulting unallocated money; choices that cannot fit remain
+visible, disabled, and announce the currency-formatted shortfall. Empty and no-fitting-paycheck
+states offer Create Paycheck without carrying the occurrence into the new draft.
+An uncertain quick-import result must be reconciled against authoritative paycheck details before
+retry; optimistic-lock refreshes preserve the in-progress selection and amount while retrying with
+the latest paycheck and recurring Bill definition versions.
 Suggested results use the owner setting around the paycheck income date; All shows the relevant
 occurrence date near that income date. Nothing is preselected. Selecting uses the typical amount,
 and editing that selection offers This paycheck only or Update typical amount. Draft imports remain
