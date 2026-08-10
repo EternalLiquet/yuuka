@@ -53,6 +53,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest --passWithNoTests",
     "test:coverage": "jest --coverage --runInBand",
+    "test:audit-policy": "node scripts/audit-production.test.mjs",
+    "audit:production": "node scripts/audit-production.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

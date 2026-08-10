@@ -42,7 +42,12 @@ This document tracks foundation-level security controls. It does not define budg
 
 ## Known Follow-Up
 
-- The current Expo dependency graph reports a moderate transitive `uuid` advisory through Expo CLI/config tooling. `npm audit fix` cannot clear it without a breaking dependency change, so this should be revisited when Expo publishes a compatible patch path.
+- The Expo SDK 57 Metro dependency graph currently reports two high-severity denial-of-service
+  advisories in `image-size`. The affected parser only processes repository-controlled assets during
+  Yuuka's build and is not reachable from user-supplied mobile data. No patched `image-size` release
+  exists, and npm's proposed automatic fix would downgrade Expo to 53. CI temporarily accepts only
+  `GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq`; the acceptance expires on 2026-09-10 so the risk
+  and upstream patch availability must be reviewed again.
 - Before deployment, use the `prod` Spring profile, replace all example secrets, and configure production CORS origins explicitly.
 - Owner onboarding steps live in `docs/owner-onboarding.md`.
 - If the backend is deployed behind a reverse proxy, configure trusted forwarded-header handling at the proxy/platform layer before relying on client-address rate limits.
