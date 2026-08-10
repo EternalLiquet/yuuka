@@ -46,8 +46,9 @@ This document tracks foundation-level security controls. It does not define budg
   advisories in `image-size`. The affected parser only processes repository-controlled assets during
   Yuuka's build and is not reachable from user-supplied mobile data. No patched `image-size` release
   exists, and npm's proposed automatic fix would downgrade Expo to 53. CI temporarily accepts only
-  `GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq`; the acceptance expires on 2026-09-10 so the risk
-  and upstream patch availability must be reviewed again.
+  `GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq` when every installed production path is exactly
+  `yuuka-mobile > expo > @expo/metro > metro > image-size`. The acceptance expires on 2026-09-10 so
+  the risk and upstream patch availability must be reviewed again.
 - Before deployment, use the `prod` Spring profile, replace all example secrets, and configure production CORS origins explicitly.
 - Owner onboarding steps live in `docs/owner-onboarding.md`.
 - If the backend is deployed behind a reverse proxy, configure trusted forwarded-header handling at the proxy/platform layer before relying on client-address rate limits.
