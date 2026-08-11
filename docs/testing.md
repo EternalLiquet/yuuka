@@ -98,6 +98,13 @@ Pull-request and branch validation jobs use cancellable concurrency so newer com
 runs. The release job is separate, waits for all required validation jobs, runs only after a
 successful push to `master`, and does not run for pull requests.
 
+The mobile production audit runs `npm run test:audit-policy` and `npm run audit:production`. The
+policy fails closed for new high or critical advisories, expired exceptions, dependency-tree
+inspection failures, and any installed production path outside the exact approved Metro build-tool
+chain. Temporary exceptions must identify exact GitHub advisory IDs, enumerate approved dependency
+paths, document why the vulnerable path is not exposed, and include a near-term review deadline in
+`mobile/scripts/audit-production.mjs`.
+
 Android E2E is intentionally not part of every pull-request or push run because emulator jobs are
 slow and comparatively flaky on shared GitHub-hosted runners. The separate `Android E2E` workflow
 runs every night at 07:00 UTC and can also be started manually. It provisions disposable PostgreSQL,

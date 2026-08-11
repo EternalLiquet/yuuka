@@ -93,7 +93,7 @@ jobs:
         run: npx expo export --platform android --output-dir dist/android
       - name: Production dependency audit
         working-directory: mobile
-        run: npm audit --omit=dev --audit-level=high
+        run: npm run test:audit-policy && npm run audit:production
       - name: Upload mobile reports and export
         if: always()
         uses: actions/upload-artifact@v7
