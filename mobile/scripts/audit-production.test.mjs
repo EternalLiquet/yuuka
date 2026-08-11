@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  createNpmInvocation,
   evaluateAuditReport,
   evaluateDependencyTreeInspection,
   evaluateImageSizeDependencyTree,
+  invokeNpm,
+  runProductionAudit,
 } from './audit-production.mjs';
 
 const acceptedRoot = {
@@ -45,6 +48,126 @@ function approvedProductionTree(additionalRootDependencies = {}) {
     },
   };
 }
+
+test('constructs the POSIX npm fallback with the original arguments', () => {
+  const npmArguments = ['audit', '--omit=dev', '--json'];
+
+  const invocation = createNpmInvocation(npmArguments, {
+    platform: 'linux',
+    npmExecPath: null,
+    nodeExecPath: '/usr/bin/node',
+    comSpec: undefined,
+  });
+
+  assert.deepEqual(invocation, {
+    command: 'npm',
+    args: npmArguments,
+  });
+});
+
+test('constructs the Windows npm fallback without directly spawning bare npm', () => {
+  const invocation = createNpmInvocation(['audit', '--omit=dev', '--json'], {
+    platform: 'win32',
+    npmExecPath: null,
+    nodeExecPath: 'C:\\Program Files\\nodejs\\node.exe',
+    comSpec: 'C:\\Windows\\System32\\cmd.exe',
+  });
+
+  assert.equal(invocation.command, 'C:\\Windows\\System32\\cmd.exe');
+  assert.notEqual(invocation.command, 'npm');
+  assert.deepEqual(invocation.args, ['/d', '/s', '/c', 'npm.cmd', 'audit', '--omit=dev', '--json']);
+});
+
+test('invokes npm_execpath through Node with original arguments and bounded output', () => {
+  const calls = [];
+  const expectedResult = { status: 0, stdout: '{}', stderr: '' };
+
+  const result = invokeNpm(['ls', 'image-size', '--omit=dev', '--all', '--json'], {
+    platform: 'win32',
+    npmExecPath: 'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js',
+    nodeExecPath: 'C:\\Program Files\\nodejs\\node.exe',
+    comSpec: 'C:\\Windows\\System32\\cmd.exe',
+    spawn(command, args, options) {
+      calls.push({ command, args, options });
+      return expectedResult;
+    },
+  });
+
+  assert.equal(result, expectedResult);
+  assert.deepEqual(calls, [
+    {
+      command: 'C:\\Program Files\\nodejs\\node.exe',
+      args: [
+        'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js',
+        'ls',
+        'image-size',
+        '--omit=dev',
+        '--all',
+        '--json',
+      ],
+      options: {
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024,
+      },
+    },
+  ]);
+});
+
+test('uses the shared npm invocation for audit and dependency-tree inspection', () => {
+  const npmInvocations = [];
+
+  const status = runProductionAudit({
+    invokeNpmCommand(args) {
+      npmInvocations.push(args);
+      if (args[0] === 'audit') {
+        return {
+          error: undefined,
+          status: 1,
+          stderr: '',
+          stdout: JSON.stringify({ vulnerabilities: { 'image-size': acceptedRoot } }),
+        };
+      }
+      return {
+        error: undefined,
+        status: 0,
+        stderr: '',
+        stdout: JSON.stringify(approvedProductionTree()),
+      };
+    },
+    now: new Date('2026-08-10T12:00:00Z'),
+    output: { error() {}, log() {} },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(npmInvocations, [
+    ['audit', '--omit=dev', '--json'],
+    ['ls', 'image-size', '--omit=dev', '--all', '--json'],
+  ]);
+});
+
+test('fails closed with a clear diagnostic when npm cannot be launched', () => {
+  const errors = [];
+
+  const status = runProductionAudit({
+    invokeNpmCommand() {
+      return {
+        error: new Error('spawn npm ENOENT'),
+        status: null,
+        stderr: '',
+        stdout: '',
+      };
+    },
+    output: {
+      error(message) {
+        errors.push(message);
+      },
+      log() {},
+    },
+  });
+
+  assert.equal(status, 1);
+  assert.match(errors[0], /Unable to run npm audit: spawn npm ENOENT/);
+});
 
 test('accepts a propagated finding rooted only in an active exception', () => {
   const outcome = evaluateAuditReport(

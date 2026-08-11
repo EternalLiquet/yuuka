@@ -22,6 +22,56 @@ const acceptedAdvisories = new Map([
 
 const blockingSeverities = new Set(['high', 'critical']);
 const approvedImageSizePaths = new Set(['yuuka-mobile > expo > @expo/metro > metro > image-size']);
+const npmSpawnOptions = {
+  encoding: 'utf8',
+  maxBuffer: 10 * 1024 * 1024,
+};
+
+export function createNpmInvocation(
+  npmArguments,
+  {
+    platform = process.platform,
+    npmExecPath = process.env.npm_execpath,
+    nodeExecPath = process.execPath,
+    comSpec = process.env.ComSpec,
+  } = {},
+) {
+  const args = [...npmArguments];
+  if (typeof npmExecPath === 'string' && npmExecPath.trim() !== '') {
+    return {
+      command: nodeExecPath,
+      args: [npmExecPath, ...args],
+    };
+  }
+
+  if (platform === 'win32') {
+    return {
+      command: comSpec || 'cmd.exe',
+      args: ['/d', '/s', '/c', 'npm.cmd', ...args],
+    };
+  }
+
+  return { command: 'npm', args };
+}
+
+export function invokeNpm(
+  npmArguments,
+  {
+    spawn = spawnSync,
+    platform = process.platform,
+    npmExecPath = process.env.npm_execpath,
+    nodeExecPath = process.execPath,
+    comSpec = process.env.ComSpec,
+  } = {},
+) {
+  const invocation = createNpmInvocation(npmArguments, {
+    platform,
+    npmExecPath,
+    nodeExecPath,
+    comSpec,
+  });
+  return spawn(invocation.command, invocation.args, npmSpawnOptions);
+}
 
 export function evaluateAuditReport(report, now = new Date()) {
   const vulnerabilities = report?.vulnerabilities;
@@ -189,62 +239,63 @@ function isExpired(expiresOn, now) {
   return Number.isNaN(endOfDayUtc.getTime()) || now > endOfDayUtc;
 }
 
-function run() {
-  const result = spawnSync('npm', ['audit', '--omit=dev', '--json'], {
-    encoding: 'utf8',
-    maxBuffer: 10 * 1024 * 1024,
-  });
+export function runProductionAudit({
+  invokeNpmCommand = invokeNpm,
+  now = new Date(),
+  output = console,
+} = {}) {
+  const result = invokeNpmCommand(['audit', '--omit=dev', '--json']);
 
   if (result.error) {
-    console.error(`Unable to run npm audit: ${result.error.message}`);
-    process.exit(1);
+    output.error(`Unable to run npm audit: ${result.error.message}`);
+    return 1;
   }
 
   let report;
   try {
     report = JSON.parse(result.stdout);
   } catch {
-    console.error('npm audit did not return valid JSON.');
-    if (result.stderr) console.error(result.stderr.trim());
-    process.exit(1);
+    output.error('npm audit did not return valid JSON.');
+    if (result.stderr) output.error(result.stderr.trim());
+    return 1;
   }
 
-  const outcome = evaluateAuditReport(report);
+  const outcome = evaluateAuditReport(report, now);
   if (outcome.errors.length > 0) {
-    console.error('Production dependency audit failed:');
-    for (const error of outcome.errors) console.error(`- ${error}`);
-    process.exit(1);
+    output.error('Production dependency audit failed:');
+    for (const error of outcome.errors) output.error(`- ${error}`);
+    return 1;
   }
 
   if (outcome.accepted.length === 0) {
-    console.log('Production dependency audit passed with no high or critical findings.');
-    return;
+    output.log('Production dependency audit passed with no high or critical findings.');
+    return 0;
   }
 
-  const dependencyTreeResult = spawnSync(
-    'npm',
-    ['ls', 'image-size', '--omit=dev', '--all', '--json'],
-    {
-      encoding: 'utf8',
-      maxBuffer: 10 * 1024 * 1024,
-    },
-  );
+  const dependencyTreeResult = invokeNpmCommand([
+    'ls',
+    'image-size',
+    '--omit=dev',
+    '--all',
+    '--json',
+  ]);
   const dependencyTreeOutcome = evaluateDependencyTreeInspection(dependencyTreeResult);
   if (dependencyTreeOutcome.errors.length > 0) {
-    console.error('Production dependency audit failed:');
-    for (const error of dependencyTreeOutcome.errors) console.error(`- ${error}`);
-    process.exit(1);
+    output.error('Production dependency audit failed:');
+    for (const error of dependencyTreeOutcome.errors) output.error(`- ${error}`);
+    return 1;
   }
 
-  console.log('Production dependency audit passed with temporary accepted advisories:');
+  output.log('Production dependency audit passed with temporary accepted advisories:');
   for (const advisory of outcome.accepted) {
-    console.log(`- ${advisory.url} (${advisory.dependency}), expires ${advisory.expiresOn}`);
-    console.log(`  ${advisory.reason}`);
+    output.log(`- ${advisory.url} (${advisory.dependency}), expires ${advisory.expiresOn}`);
+    output.log(`  ${advisory.reason}`);
   }
-  console.log('Approved production dependency paths:');
-  for (const path of dependencyTreeOutcome.paths) console.log(`- ${path}`);
+  output.log('Approved production dependency paths:');
+  for (const path of dependencyTreeOutcome.paths) output.log(`- ${path}`);
+  return 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  run();
+  process.exitCode = runProductionAudit();
 }
