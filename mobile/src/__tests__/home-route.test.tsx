@@ -239,6 +239,8 @@ describe('Home dashboard', () => {
     expect(view.getByLabelText('Upcoming Recurring Bills section')).toBeTruthy();
     expect(view.getByLabelText('Financial Positions section')).toBeTruthy();
     expect(view.getByText('Spending Buckets · Last 30 days')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('View Insights'));
+    expect(mockPush).toHaveBeenCalledWith('/spending-buckets/insights');
     expect(view.getByText('Internet')).toBeTruthy();
     expect(view.getByText(/1 due in the next 7 days/)).toBeTruthy();
     expect(view.getByText(/1 not added to a paycheck/)).toBeTruthy();

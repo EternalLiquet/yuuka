@@ -2351,6 +2351,40 @@
         "security" : [ ]
       }
     },
+    "/api/v1/spending-buckets/insights" : {
+      "get" : {
+        "tags" : [ "spending-bucket-performance-controller" ],
+        "operationId" : "insights",
+        "parameters" : [ {
+          "name" : "bucketName",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "asOfDate",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SpendingBucketInsightsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/spending-buckets/performance/rolling" : {
       "get" : {
         "tags" : [ "spending-bucket-performance-controller" ],
@@ -5048,6 +5082,74 @@
           },
           "hasNext" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "SpendingBucketInsightPointResponse" : {
+        "type" : "object",
+        "properties" : {
+          "paycheckId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "paycheckName" : {
+            "type" : "string"
+          },
+          "incomeDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "matchingBucketCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "budgetedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "spentMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "netMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "SpendingBucketInsightsResponse" : {
+        "type" : "object",
+        "properties" : {
+          "asOfDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "recentPaycheckLimit" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "qualifyingPaycheckCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "scope" : {
+            "type" : "string",
+            "enum" : [ "ALL", "BUCKET_NAME" ]
+          },
+          "selectedBucketName" : {
+            "type" : "string"
+          },
+          "availableBucketNames" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "points" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SpendingBucketInsightPointResponse"
+            }
           }
         }
       },

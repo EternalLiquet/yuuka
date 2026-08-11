@@ -44,6 +44,7 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/paychecks/from-draft",
           "/api/v1/spending-buckets/performance/rolling",
           "/api/v1/spending-buckets/performance/rolling-90-days",
+          "/api/v1/spending-buckets/insights",
           "/api/v1/paychecks/from-template",
           "/api/v1/search/entries",
           "/api/v1/paybacks",
@@ -127,6 +128,47 @@ class OpenApiContractTests extends AbstractIntegrationTest {
     assertThat(compatibilityParameters.size()).isEqualTo(1);
     assertThat(compatibilityParameters.get(0).path("name").asText()).isEqualTo("asOfDate");
     assertThat(compatibilityParameters.get(0).path("required").asBoolean()).isFalse();
+
+    JsonNode insightsOperation =
+        generated.path("paths").path("/api/v1/spending-buckets/insights").path("get");
+    assertThat(insightsOperation.path("parameters").findValuesAsText("name"))
+        .containsExactly("bucketName", "asOfDate");
+    assertThat(
+            insightsOperation
+                .path("responses")
+                .path("200")
+                .path("content")
+                .path("*/*")
+                .path("schema")
+                .path("$ref")
+                .asText())
+        .isEqualTo("#/components/schemas/SpendingBucketInsightsResponse");
+    JsonNode insightPointProperties =
+        generated
+            .path("components")
+            .path("schemas")
+            .path("SpendingBucketInsightPointResponse")
+            .path("properties");
+    assertThat(insightPointProperties.fieldNames())
+        .toIterable()
+        .containsExactly(
+            "paycheckId",
+            "paycheckName",
+            "incomeDate",
+            "matchingBucketCount",
+            "budgetedMinor",
+            "spentMinor",
+            "netMinor");
+    assertThat(
+            generated
+                .path("components")
+                .path("schemas")
+                .path("SpendingBucketInsightsResponse")
+                .path("properties")
+                .path("scope")
+                .path("enum"))
+        .extracting(JsonNode::asText)
+        .containsExactly("ALL", "BUCKET_NAME");
 
     JsonNode bucketTransactionParameters =
         generated

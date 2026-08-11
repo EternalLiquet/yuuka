@@ -106,6 +106,11 @@ Status-change request:
 - `DELETE /bucket-transactions/{id}`
 - `GET /spending-buckets/performance/rolling?days=30|90` returns a current 30- or 90-day snapshot across qualifying Active, Closed, and Archived paychecks; `days` defaults to `30`, unsupported values are rejected, and `summary` is absent only when there are zero qualifying live Spending Bucket entries.
 - `GET /spending-buckets/performance/rolling-90-days` remains available as a compatibility endpoint delegating to the 90-day calculation.
+- `GET /spending-buckets/insights?bucketName={name}&asOfDate={date}` returns the 12 most recent
+  qualifying paychecks in chronological display order, available historical bucket names, and exact
+  budgeted/spent/net points. `bucketName` is optional and uses trimmed, case-insensitive exact
+  matching within the same recent-paycheck window; selected-name points are sparse when the name is
+  absent. `asOfDate` is optional and otherwise uses the owner-local current date.
 
 ### Home dashboard
 

@@ -89,6 +89,9 @@ Use React Native Testing Library for:
 - Home section/navigation behavior, independent query loading/error/stale/retry states,
   pull-to-refresh partial failures, Active previews, 30/90-day bucket switching, recurring preview,
   financial rows, narrow layouts, and font-scaling-safe wrapping.
+- Spending Insights recent-12 selection and ordering, owner/date/deletion/lifecycle semantics,
+  per-paycheck and rolling reconciliation, exact-name grouping and sparse drill-down, chart math,
+  non-color graph semantics, accessible textual equivalents, and cached-overall drill-down failure.
 - exactly five ordered tabs with centered Home, authenticated Home landing, menu reachability,
   Planned Savings compatibility, detail push/Back semantics, and top-level stack replacement.
 

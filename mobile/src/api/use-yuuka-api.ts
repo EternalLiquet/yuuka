@@ -20,6 +20,7 @@ import {
   paybackSchema,
   paycheckSchema,
   rollingSpendingBucketPerformanceSchema,
+  spendingBucketInsightsSchema,
   recurringBillListSchema,
   recurringBillSchema,
   recurringBillTimelineSchema,
@@ -165,6 +166,10 @@ export function useYuukaApi() {
           `/spending-buckets/performance/rolling?days=${days}`,
           rollingSpendingBucketPerformanceSchema,
         ),
+      spendingBucketInsights: (bucketName?: string) => {
+        const query = bucketName ? `?bucketName=${encodeURIComponent(bucketName)}` : '';
+        return get(`/spending-buckets/insights${query}`, spendingBucketInsightsSchema);
+      },
       historyPaychecks: (query = '') =>
         get(`/paychecks/history?size=100${query}`, pageSchema(paycheckSchema)),
       searchEntries: ({

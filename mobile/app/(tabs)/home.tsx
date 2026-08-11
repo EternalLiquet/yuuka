@@ -195,7 +195,11 @@ export default function HomeScreen() {
           ) : null}
         </Section>
 
-        <Section title="Spending Buckets">
+        <Section
+          actionLabel="View Insights"
+          onAction={() => router.push('/spending-buckets/insights')}
+          title="Spending Buckets"
+        >
           <RollingSpendingBucketPerformanceSection
             onPeriodChange={setRollingPeriod}
             period={rollingPeriod}

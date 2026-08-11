@@ -12,6 +12,7 @@ import {
   pageSchema,
   paycheckSchema,
   rollingSpendingBucketPerformanceSchema,
+  spendingBucketInsightsSchema,
   sinkingFundListSchema,
   sinkingFundSchema,
   sinkingFundTransactionSchema,
@@ -130,6 +131,27 @@ describe('API response contracts', () => {
         windowStartDate: '2026-04-16',
       }),
     ).toMatchObject({ paycheckCount: 2 });
+    expect(
+      spendingBucketInsightsSchema.parse({
+        asOfDate: '2026-07-14',
+        availableBucketNames: ['Gas'],
+        points: [
+          {
+            budgetedMinor: 5000,
+            incomeDate: '2026-07-10',
+            matchingBucketCount: 2,
+            netMinor: -250,
+            paycheckId: '11111111-1111-4111-8111-111111111110',
+            paycheckName: 'Paycheck',
+            spentMinor: 5250,
+          },
+        ],
+        qualifyingPaycheckCount: 1,
+        recentPaycheckLimit: 12,
+        scope: 'BUCKET_NAME',
+        selectedBucketName: 'Gas',
+      }),
+    ).toMatchObject({ points: [expect.objectContaining({ netMinor: -250 })] });
     expect(
       templateSchema.parse({
         archived: false,

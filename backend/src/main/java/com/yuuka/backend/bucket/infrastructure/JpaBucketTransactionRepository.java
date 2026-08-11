@@ -148,4 +148,76 @@ public interface JpaBucketTransactionRepository extends JpaRepository<BucketTran
       @Param("ownerId") UUID ownerId,
       @Param("windowStartDate") LocalDate windowStartDate,
       @Param("asOfDate") LocalDate asOfDate);
+
+  @Query(
+      value =
+          """
+          with qualifying_paychecks as (
+              select p.id, p.name, p.income_date
+              from paychecks p
+              where p.owner_id = :ownerId
+                and p.state in ('ACTIVE', 'CLOSED', 'ARCHIVED')
+                and p.income_date <= :asOfDate
+                and exists (
+                    select 1
+                    from paycheck_entries e
+                    where e.paycheck_id = p.id
+                      and e.owner_id = :ownerId
+                      and e.deleted_at is null
+                      and e.entry_type = 'SPENDING_BUCKET'
+                )
+              order by p.income_date desc, p.id desc
+              limit :paycheckLimit
+          ),
+          live_buckets as (
+              select
+                  p.id as paycheck_id,
+                  p.name as paycheck_name,
+                  p.income_date,
+                  e.id as entry_id,
+                  e.name as entry_name,
+                  lower(btrim(e.name)) as normalized_name,
+                  e.amount_minor,
+                  e.updated_at
+              from qualifying_paychecks p
+              join paycheck_entries e
+                on e.paycheck_id = p.id
+               and e.owner_id = :ownerId
+               and e.deleted_at is null
+               and e.entry_type = 'SPENDING_BUCKET'
+          ),
+          transaction_totals as (
+              select t.entry_id, sum(t.amount_minor) as spent_minor
+              from bucket_transactions t
+              join live_buckets b on b.entry_id = t.entry_id
+              where t.owner_id = :ownerId
+                and t.deleted_at is null
+                and t.effective_date <= :asOfDate
+              group by t.entry_id
+          ),
+          latest_spelling as (
+              select distinct on (normalized_name) normalized_name, btrim(entry_name) as display_name
+              from live_buckets
+              order by normalized_name, income_date desc, paycheck_id desc, updated_at desc, entry_id desc
+          )
+          select
+              b.paycheck_id as paycheckId,
+              b.paycheck_name as paycheckName,
+              b.income_date as incomeDate,
+              b.normalized_name as normalizedName,
+              s.display_name as displayName,
+              count(*) as matchingBucketCount,
+              sum(b.amount_minor) as budgetedMinor,
+              coalesce(sum(t.spent_minor), 0) as spentMinor
+          from live_buckets b
+          join latest_spelling s on s.normalized_name = b.normalized_name
+          left join transaction_totals t on t.entry_id = b.entry_id
+          group by b.paycheck_id, b.paycheck_name, b.income_date, b.normalized_name, s.display_name
+          order by b.income_date asc, b.paycheck_id asc, b.normalized_name asc
+          """,
+      nativeQuery = true)
+  List<SpendingBucketInsightProjection> findRecentInsightRows(
+      @Param("ownerId") UUID ownerId,
+      @Param("asOfDate") LocalDate asOfDate,
+      @Param("paycheckLimit") int paycheckLimit);
 }

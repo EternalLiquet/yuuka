@@ -158,6 +158,16 @@ paychecks with income dates from `asOfDate - 29 days` through `asOfDate` for 30 
 when they have no purchases, and excludes future-dated paychecks, soft-deleted entries,
 soft-deleted purchases, non-bucket entries, and purchases effective after `asOfDate`.
 
+Spending Insights adds a paycheck-based timeline over the 12 most recent qualifying paychecks,
+selected deterministically and then displayed chronologically. Every point derives `budgeted` from
+live Spending Bucket entries, `spent` from their live purchases effective on or before owner-local
+`asOfDate`, and `net = budgeted - spent`; Posted status does not affect the result. An optional
+bucket-name view uses trimmed, case-insensitive exact matching. Similar names remain separate,
+renaming starts separate history, duplicate exact-name entries within one paycheck are combined and
+disclosed, and absent names do not create zero-valued points. Points reconcile with the existing
+per-paycheck and rolling calculations when their qualifying paycheck sets are identical. Range
+controls, calendar grouping, cumulative trends, and advanced analytics are deferred.
+
 ## Home financial dashboard
 
 Home is a read-only financial orientation surface. It summarizes and links to existing records; it
