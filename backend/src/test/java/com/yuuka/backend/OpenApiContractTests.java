@@ -169,6 +169,16 @@ class OpenApiContractTests extends AbstractIntegrationTest {
                 .path("enum"))
         .extracting(JsonNode::asText)
         .containsExactly("ALL", "BUCKET_NAME");
+    assertThat(
+            generated
+                .path("components")
+                .path("schemas")
+                .path("SpendingBucketInsightsResponse")
+                .path("properties")
+                .path("selectedBucketName")
+                .path("type"))
+        .extracting(JsonNode::asText)
+        .containsExactly("string", "null");
 
     JsonNode bucketTransactionParameters =
         generated

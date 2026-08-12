@@ -153,6 +153,17 @@ describe('API response contracts', () => {
       }),
     ).toMatchObject({ points: [expect.objectContaining({ netMinor: -250 })] });
     expect(
+      spendingBucketInsightsSchema.parse({
+        asOfDate: '2026-07-14',
+        availableBucketNames: ['Gas'],
+        points: [],
+        qualifyingPaycheckCount: 0,
+        recentPaycheckLimit: 12,
+        scope: 'ALL',
+        selectedBucketName: null,
+      }),
+    ).toMatchObject({ scope: 'ALL', selectedBucketName: null });
+    expect(
       templateSchema.parse({
         archived: false,
         archivedAt: null,

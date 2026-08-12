@@ -9,6 +9,6 @@ public record SpendingBucketInsightsResponse(
     int recentPaycheckLimit,
     int qualifyingPaycheckCount,
     @Schema(allowableValues = {"ALL", "BUCKET_NAME"}) String scope,
-    String selectedBucketName,
+    @Schema(types = {"string", "null"}) String selectedBucketName,
     List<String> availableBucketNames,
     List<SpendingBucketInsightPointResponse> points) {}

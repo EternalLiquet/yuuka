@@ -813,6 +813,7 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
                 .header("Authorization", bearer(token)),
             200);
     assertThat(overall.path("scope").asText()).isEqualTo("ALL");
+    assertThat(overall.path("selectedBucketName").isNull()).isTrue();
     assertThat(overall.path("recentPaycheckLimit").asInt()).isEqualTo(12);
     assertThat(overall.path("qualifyingPaycheckCount").asInt()).isEqualTo(12);
     assertThat(overall.path("points")).hasSize(12);

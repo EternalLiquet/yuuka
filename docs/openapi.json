@@ -5137,7 +5137,7 @@
             "enum" : [ "ALL", "BUCKET_NAME" ]
           },
           "selectedBucketName" : {
-            "type" : "string"
+            "type" : [ "string", "null" ]
           },
           "availableBucketNames" : {
             "type" : "array",

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, RefreshCw } from 'lucide-react-native';
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { SpendingBucketInsights } from '@/api/contracts';
@@ -18,30 +18,54 @@ import { BudgetSpentChart, NetChart } from '@/features/spending-insights/insight
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
-const ALL = '__all__';
+const OVERALL_OPTION_ID = 'scope:overall';
 
 export default function SpendingInsightsScreen() {
   const api = useYuukaApi();
   const router = useRouter();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
-  const [selection, setSelection] = useState(ALL);
+  const [selection, setSelection] = useState(OVERALL_OPTION_ID);
+  const refreshPromise = useRef<Promise<unknown> | null>(null);
   const overall = useQuery({
     queryKey: ['spending-buckets', 'insights', 'all'],
     queryFn: () => api.spendingBucketInsights(),
   });
+  const bucketOptions = useMemo(
+    () =>
+      (overall.data?.availableBucketNames ?? []).map((name, index) => ({
+        label: name,
+        name,
+        value: `bucket:${index}`,
+      })),
+    [overall.data?.availableBucketNames],
+  );
+  const selectedBucketName = bucketOptions.find((option) => option.value === selection)?.name;
   const drillDown = useQuery({
-    enabled: selection !== ALL,
-    queryKey: ['spending-buckets', 'insights', selection],
-    queryFn: () => api.spendingBucketInsights(selection),
+    enabled: selectedBucketName !== undefined,
+    queryKey: ['spending-buckets', 'insights', selectedBucketName],
+    queryFn: () => api.spendingBucketInsights(selectedBucketName),
   });
-  const selectedFailed = selection !== ALL && drillDown.isError && !drillDown.data;
-  const displayed = selection === ALL ? overall.data : (drillDown.data ?? overall.data);
-  const activeQuery = selection === ALL ? overall : drillDown;
-  const options = [
-    { label: 'All Spending Buckets', value: ALL },
-    ...(overall.data?.availableBucketNames ?? []).map((name) => ({ label: name, value: name })),
-  ];
+  const selectedFailed = selectedBucketName !== undefined && drillDown.isError && !drillDown.data;
+  const displayed =
+    selectedBucketName === undefined ? overall.data : (drillDown.data ?? overall.data);
+  const activeQuery = selectedBucketName === undefined ? overall : drillDown;
+  const refreshing = overall.isFetching || drillDown.isFetching;
+  const options = [{ label: 'All Spending Buckets', value: OVERALL_OPTION_ID }, ...bucketOptions];
+  const refreshInsights = () => {
+    if (refreshPromise.current) return refreshPromise.current;
+    const refresh =
+      selectedBucketName === undefined
+        ? overall.refetch()
+        : Promise.allSettled([overall.refetch(), drillDown.refetch()]);
+    refreshPromise.current = refresh;
+    void refresh.finally(() => {
+      if (refreshPromise.current === refresh) {
+        refreshPromise.current = null;
+      }
+    });
+    return refresh;
+  };
 
   return (
     <Screen>
@@ -98,25 +122,42 @@ export default function SpendingInsightsScreen() {
                 style={[styles.notice, { backgroundColor: colors.processingSoft }]}
               >
                 <AppText style={{ color: colors.processing }} variant="caption">
-                  {selection} history could not be loaded. Showing usable overall history.{' '}
+                  {selectedBucketName} history could not be loaded. Showing usable overall history.{' '}
                   {displayError(drillDown.error, settings.currencyCode, 'Retry when connected.')}
                 </AppText>
                 <Button
+                  accessibilityLabel="Retry Spending Insights refresh"
                   icon={RefreshCw}
                   label="Retry bucket history"
-                  onPress={() => void drillDown.refetch()}
+                  loading={refreshing}
+                  onPress={() => void refreshInsights()}
                   variant="secondary"
                 />
               </View>
             ) : null}
-            {activeQuery.isError && activeQuery.data ? <StaleBanner /> : null}
-            {selection !== ALL && drillDown.isPending && !drillDown.data ? (
-              <YuukaLoadingState message={`Loading ${selection} history...`} minHeight={120} />
+            {activeQuery.isError && activeQuery.data ? (
+              <View style={styles.staleActions}>
+                <StaleBanner />
+                <Button
+                  accessibilityLabel="Retry Spending Insights refresh"
+                  icon={RefreshCw}
+                  label="Retry"
+                  loading={refreshing}
+                  onPress={() => void refreshInsights()}
+                  variant="secondary"
+                />
+              </View>
+            ) : null}
+            {selectedBucketName !== undefined && drillDown.isPending && !drillDown.data ? (
+              <YuukaLoadingState
+                message={`Loading ${selectedBucketName} history...`}
+                minHeight={120}
+              />
             ) : null}
             {displayed ? (
               <InsightsContent
                 data={displayed}
-                fallbackOverall={selection !== ALL && !drillDown.data}
+                fallbackOverall={selectedBucketName !== undefined && !drillDown.data}
               />
             ) : null}
           </>
@@ -135,6 +176,7 @@ function InsightsContent({
 }) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const overallScope = fallbackOverall || data.scope === 'ALL';
   const scopeLabel = fallbackOverall
     ? 'All Spending Buckets'
     : data.scope === 'ALL'
@@ -175,7 +217,7 @@ function InsightsContent({
         </AppText>
         {data.points.map((point) => (
           <View
-            accessibilityLabel={`${point.paycheckName}, ${formatDate(point.incomeDate)}. Budgeted ${formatMoney(point.budgetedMinor, settings.currencyCode)}. Spent ${formatMoney(point.spentMinor, settings.currencyCode)}. ${netSentence(point.netMinor, settings.currencyCode)}. ${point.matchingBucketCount} matching buckets.`}
+            accessibilityLabel={`${point.paycheckName}, ${formatDate(point.incomeDate)}. Budgeted ${formatMoney(point.budgetedMinor, settings.currencyCode)}. Spent ${formatMoney(point.spentMinor, settings.currencyCode)}. ${netSentence(point.netMinor, settings.currencyCode)}. ${bucketCountDescription(point.matchingBucketCount, overallScope)}.`}
             key={point.paycheckId}
             style={[styles.point, { borderColor: colors.border }]}
           >
@@ -205,9 +247,9 @@ function InsightsContent({
             >
               {insightNetLabel(point)} · {netSentence(point.netMinor, settings.currencyCode)}
             </AppText>
-            {point.matchingBucketCount > 1 ? (
+            {overallScope || point.matchingBucketCount > 1 ? (
               <AppText style={{ color: colors.muted }} variant="caption">
-                {point.matchingBucketCount} same-name bucket entries combined
+                {bucketCountDescription(point.matchingBucketCount, overallScope)}
               </AppText>
             ) : null}
           </View>
@@ -215,6 +257,14 @@ function InsightsContent({
       </View>
     </View>
   );
+}
+
+function bucketCountDescription(count: number, overallScope: boolean) {
+  if (overallScope) {
+    return `${count} Spending Bucket ${count === 1 ? 'entry' : 'entries'} included`;
+  }
+  if (count > 1) return `${count} same-name bucket entries combined`;
+  return '1 selected bucket entry included';
 }
 
 function netSentence(netMinor: number, currencyCode: string) {
@@ -245,4 +295,5 @@ const styles = StyleSheet.create({
   results: { gap: 22 },
   scopeTitle: { gap: 3 },
   selectorBlock: { gap: 10 },
+  staleActions: { alignItems: 'flex-start', gap: 10 },
 });
