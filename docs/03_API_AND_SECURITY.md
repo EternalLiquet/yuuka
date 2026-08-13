@@ -45,6 +45,8 @@ display. Example:
 
 ### Authentication
 
+- `POST /auth/register` creates an account only when registration is explicitly enabled. Registration
+  is disabled by default and returns not found while disabled.
 - `POST /auth/login`
 - `POST /auth/refresh`
 - `POST /auth/logout`
@@ -243,6 +245,7 @@ requests may carry nullable recurring-definition and occurrence provenance for B
 - `GET /health` returns liveness and the packaged backend version.
 - `GET /health/live` returns the same liveness contract explicitly for deployment checks.
 - `GET /health/ready` checks dependency readiness, including PostgreSQL.
+- `GET /health/version` returns only the packaged backend version for the mobile Settings footer.
 
 Liveness response:
 
@@ -258,6 +261,14 @@ Readiness response:
 ```json
 {
   "status": "UP"
+}
+```
+
+Version response:
+
+```json
+{
+  "version": "1.0.2"
 }
 ```
 
