@@ -755,6 +755,186 @@ class SpendingBucketPerformanceWorkflowTests extends AbstractIntegrationTest {
     assertThat(error.path("traceId").asText()).isNotBlank();
   }
 
+  @Test
+  void insightsReturnRecentChronologicalPointsAndExactNameDrillDown() throws Exception {
+    String token = register("bucket-insights@yuuka.local");
+    String otherToken = register("bucket-insights-other@yuuka.local");
+
+    for (int day = 1; day <= 13; day++) {
+      JsonNode paycheck =
+          createPaycheck(token, "Paycheck " + day, 20000, "2026-07-%02d".formatted(day));
+      JsonNode gas =
+          addEntry(
+              token,
+              paycheck.path("id").asText(),
+              "SPENDING_BUCKET",
+              day == 13 ? " Gas " : day == 12 ? "gas" : "Gas",
+              1000 + day);
+      addBucketTransaction(
+          token, gas.path("id").asText(), 200 + day, "2026-07-%02d".formatted(day));
+      if (day == 13) {
+        JsonNode duplicate =
+            addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "GAS", 500);
+        addBucketTransaction(token, duplicate.path("id").asText(), 100, "2026-07-13");
+        addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Gasoline", 700);
+        addEntry(token, paycheck.path("id").asText(), "BILL", "Not a bucket", 600);
+        addBucketTransaction(token, gas.path("id").asText(), 999, "2026-07-16");
+        JsonNode deletedPurchaseBucket =
+            addEntry(
+                token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Deleted Purchase", 800);
+        JsonNode deletedPurchase =
+            addBucketTransaction(
+                token, deletedPurchaseBucket.path("id").asText(), 400, "2026-07-13");
+        mockMvc
+            .perform(
+                delete("/api/v1/bucket-transactions/{id}", deletedPurchase.path("id").asText())
+                    .param("version", deletedPurchase.path("version").asText())
+                    .header("Authorization", bearer(token)))
+            .andExpect(status().isNoContent());
+        JsonNode deletedEntry =
+            addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Deleted Entry", 900);
+        mockMvc
+            .perform(
+                delete("/api/v1/entries/{id}", deletedEntry.path("id").asText())
+                    .param("version", deletedEntry.path("version").asText())
+                    .header("Authorization", bearer(token)))
+            .andExpect(status().isNoContent());
+      }
+    }
+    JsonNode other = createPaycheck(otherToken, "Other owner", 1000, "2026-07-14");
+    addEntry(otherToken, other.path("id").asText(), "SPENDING_BUCKET", "Gas", 1000);
+    JsonNode future = createPaycheck(token, "Future", 1000, "2026-07-16");
+    addEntry(token, future.path("id").asText(), "SPENDING_BUCKET", "Gas", 1000);
+
+    JsonNode overall =
+        json(
+            get("/api/v1/spending-buckets/insights")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)),
+            200);
+    assertThat(overall.path("scope").asText()).isEqualTo("ALL");
+    assertThat(overall.path("selectedBucketName").isNull()).isTrue();
+    assertThat(overall.path("recentPaycheckLimit").asInt()).isEqualTo(12);
+    assertThat(overall.path("qualifyingPaycheckCount").asInt()).isEqualTo(12);
+    assertThat(overall.path("points")).hasSize(12);
+    assertThat(overall.path("points").get(0).path("paycheckName").asText()).isEqualTo("Paycheck 2");
+    assertThat(overall.path("points").get(11).path("paycheckName").asText())
+        .isEqualTo("Paycheck 13");
+    assertThat(overall.path("availableBucketNames").toString()).contains("Gas", "Gasoline");
+
+    JsonNode selected =
+        json(
+            get("/api/v1/spending-buckets/insights")
+                .param("bucketName", "  gAs ")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)),
+            200);
+    assertThat(selected.path("scope").asText()).isEqualTo("BUCKET_NAME");
+    assertThat(selected.path("selectedBucketName").asText()).isEqualTo("GAS");
+    assertThat(selected.path("points")).hasSize(12);
+    JsonNode latest = selected.path("points").get(11);
+    assertThat(latest.path("matchingBucketCount").asLong()).isEqualTo(2);
+    assertThat(latest.path("budgetedMinor").asLong()).isEqualTo(1513);
+    assertThat(latest.path("spentMinor").asLong()).isEqualTo(313);
+    assertThat(latest.path("netMinor").asLong()).isEqualTo(1200);
+
+    JsonNode similar =
+        json(
+            get("/api/v1/spending-buckets/insights")
+                .param("bucketName", "Gasoline")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)),
+            200);
+    assertThat(similar.path("points")).hasSize(1);
+    assertThat(similar.path("points").get(0).path("budgetedMinor").asLong()).isEqualTo(700);
+
+    JsonNode deletedPurchaseHistory =
+        json(
+            get("/api/v1/spending-buckets/insights")
+                .param("bucketName", "Deleted Purchase")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)),
+            200);
+    assertThat(deletedPurchaseHistory.path("points").get(0).path("budgetedMinor").asLong())
+        .isEqualTo(800);
+    assertThat(deletedPurchaseHistory.path("points").get(0).path("spentMinor").asLong()).isZero();
+    JsonNode deletedEntryHistory =
+        json(
+            get("/api/v1/spending-buckets/insights")
+                .param("bucketName", "Deleted Entry")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)),
+            200);
+    assertThat(deletedEntryHistory.path("points")).isEmpty();
+  }
+
+  @Test
+  void insightsReconcileWithPaycheckSummariesAndRollingForAnIdenticalSet() throws Exception {
+    String token = register("bucket-insights-reconcile@yuuka.local");
+    long expectedBudgeted = 0;
+    long expectedSpent = 0;
+    for (int day = 10; day <= 12; day++) {
+      JsonNode paycheck =
+          createPaycheck(token, "Reconcile " + day, 10000, "2026-07-%02d".formatted(day));
+      JsonNode first =
+          addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Food", 1000 + day);
+      JsonNode second =
+          addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Gas", 500 + day);
+      addBucketTransaction(token, first.path("id").asText(), 100 + day, "2026-07-12");
+      addBucketTransaction(token, second.path("id").asText(), 50 + day, "2026-07-12");
+      expectedBudgeted += 1500 + day * 2L;
+      expectedSpent += 150 + day * 2L;
+      JsonNode summary = getPaycheck(token, paycheck.path("id").asText());
+      assertThat(summary.path("spendingBucketPerformance").path("budgetedMinor").asLong())
+          .isEqualTo(1500 + day * 2L);
+      assertThat(summary.path("spendingBucketPerformance").path("spentMinor").asLong())
+          .isEqualTo(150 + day * 2L);
+    }
+
+    JsonNode insights =
+        json(
+            get("/api/v1/spending-buckets/insights")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)),
+            200);
+    long insightBudgeted = 0;
+    long insightSpent = 0;
+    for (JsonNode point : insights.path("points")) {
+      insightBudgeted += point.path("budgetedMinor").asLong();
+      insightSpent += point.path("spentMinor").asLong();
+    }
+    assertThat(insightBudgeted).isEqualTo(expectedBudgeted);
+    assertThat(insightSpent).isEqualTo(expectedSpent);
+
+    JsonNode rolling = rollingPerformance(token, 200);
+    assertThat(rolling.path("summary").path("budgetedMinor").asLong()).isEqualTo(insightBudgeted);
+    assertThat(rolling.path("summary").path("spentMinor").asLong()).isEqualTo(insightSpent);
+    assertThat(rolling.path("summary").path("netMinor").asLong())
+        .isEqualTo(insightBudgeted - insightSpent);
+  }
+
+  @Test
+  void insightsUseUuidTieBreakersForSameDateSelectionAndChronologicalDisplay() throws Exception {
+    String token = register("bucket-insights-ties@yuuka.local");
+    List<String> ids = new java.util.ArrayList<>();
+    for (int index = 0; index < 13; index++) {
+      JsonNode paycheck = createPaycheck(token, "Tied " + index, 1000, "2026-07-10");
+      ids.add(paycheck.path("id").asText());
+      addEntry(token, paycheck.path("id").asText(), "SPENDING_BUCKET", "Food", 1000);
+    }
+    ids.sort(String::compareTo);
+
+    JsonNode insights =
+        json(
+            get("/api/v1/spending-buckets/insights")
+                .param("asOfDate", "2026-07-15")
+                .header("Authorization", bearer(token)),
+            200);
+    assertThat(insights.path("points")).hasSize(12);
+    assertThat(insights.path("points").get(0).path("paycheckId").asText()).isEqualTo(ids.get(1));
+    assertThat(insights.path("points").get(11).path("paycheckId").asText()).isEqualTo(ids.get(12));
+  }
+
   private JsonNode createPaycheck(String token, String name, long amount, String incomeDate)
       throws Exception {
     return json(

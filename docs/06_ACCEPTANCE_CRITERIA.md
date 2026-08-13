@@ -40,6 +40,15 @@ unassigned row can import once into a user-selected, sufficiently funded Active 
 import opens its highlighted entry, and multiple imports open a review list with highlighted-entry
 navigation.
 
+Home's Spending Buckets section retains its 30/90-day report and opens Spending Insights. The
+Insights default is all Spending Buckets over the 12 most recent qualifying paychecks, returned in
+chronological order. Budgeted, spent, and net values reconcile with per-paycheck summaries; when a
+rolling window covers the identical qualifying set, summed points reconcile with that report.
+Trimmed case-insensitive exact-name selection remains sparse for absent paychecks and discloses
+duplicates. Both graphs have non-color semantics, and visible paycheck details state every plotted
+value in accessibility reading order. Loading, empty, one-point, stale, retry, and isolated
+drill-down failure states remain usable on narrow and large-text layouts.
+
 ### New paycheck from scratch
 
 Creating a paycheck named Free Paycheck for $1,977.57 dated July 17, 2026 produces:

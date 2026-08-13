@@ -100,6 +100,28 @@ export type RollingSpendingBucketPerformance = z.infer<
   typeof rollingSpendingBucketPerformanceSchema
 >;
 
+export const spendingBucketInsightPointSchema = z.object({
+  paycheckId: uuid,
+  paycheckName: z.string(),
+  incomeDate: date,
+  matchingBucketCount: z.number().int().positive(),
+  budgetedMinor: minor.nonnegative(),
+  spentMinor: minor.nonnegative(),
+  netMinor: minor,
+});
+export type SpendingBucketInsightPoint = z.infer<typeof spendingBucketInsightPointSchema>;
+
+export const spendingBucketInsightsSchema = z.object({
+  asOfDate: date,
+  recentPaycheckLimit: z.literal(12),
+  qualifyingPaycheckCount: z.number().int().min(0).max(12),
+  scope: z.enum(['ALL', 'BUCKET_NAME']),
+  selectedBucketName: z.string().nullable(),
+  availableBucketNames: z.array(z.string()),
+  points: z.array(spendingBucketInsightPointSchema).max(12),
+});
+export type SpendingBucketInsights = z.infer<typeof spendingBucketInsightsSchema>;
+
 export const dashboardAttentionKindSchema = z.enum([
   'MANUAL_BILL_NOT_PAID',
   'UNALLOCATED_PAYCHECK',

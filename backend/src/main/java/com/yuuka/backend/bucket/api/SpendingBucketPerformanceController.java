@@ -2,6 +2,7 @@ package com.yuuka.backend.bucket.api;
 
 import com.yuuka.backend.auth.application.OwnerLocalDateService;
 import com.yuuka.backend.bucket.api.dto.RollingSpendingBucketPerformanceResponse;
+import com.yuuka.backend.bucket.api.dto.SpendingBucketInsightsResponse;
 import com.yuuka.backend.bucket.application.SpendingBucketPerformanceService;
 import com.yuuka.backend.common.security.AuthenticatedOwner;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -54,6 +55,18 @@ public class SpendingBucketPerformanceController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate asOfDate) {
     return rollingFor(jwt, supportedDays(days), asOfDate);
+  }
+
+  @GetMapping("/spending-buckets/insights")
+  public SpendingBucketInsightsResponse insights(
+      @AuthenticationPrincipal Jwt jwt,
+      @RequestParam(required = false) String bucketName,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate asOfDate) {
+    UUID ownerId = AuthenticatedOwner.id(jwt);
+    LocalDate effectiveDate =
+        asOfDate == null ? ownerLocalDateService.currentDate(ownerId) : asOfDate;
+    return service.insights(ownerId, effectiveDate, bucketName);
   }
 
   private RollingSpendingBucketPerformanceResponse rollingFor(

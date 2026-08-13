@@ -87,6 +87,9 @@ Paycheck visibility/metrics, immutable status history, bucket totals, Payback su
 Savings balances, and Expense List state/totals. It introduces no writable aggregate, cached total,
 or database table. Rolling Spending Bucket performance and recurring-Bill occurrences remain on
 their focused endpoints so the three Home query groups can fail, retry, and refresh independently.
+Spending Insights is likewise a focused derived read model. One set-based PostgreSQL query selects
+the recent qualifying paycheck window and aggregates live entries and effective purchases; it does
+not add a persisted total, analytics table, or generic reporting subsystem.
 
 ## Core domain tables and compatibility identifiers
 

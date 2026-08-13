@@ -4,7 +4,12 @@ import { resolve } from 'node:path';
 describe('committed backend contract', () => {
   const contract = JSON.parse(
     readFileSync(resolve(__dirname, '../../../docs/openapi.json'), 'utf8'),
-  ) as { paths: Record<string, Record<string, unknown>> };
+  ) as {
+    components?: {
+      schemas?: Record<string, { properties?: Record<string, { type?: string | string[] }> }>;
+    };
+    paths: Record<string, Record<string, unknown>>;
+  };
 
   it.each([
     ['/api/v1/auth/login', 'post'],
@@ -15,6 +20,7 @@ describe('committed backend contract', () => {
     ['/api/v1/dashboard/summary', 'get'],
     ['/api/v1/spending-buckets/performance/rolling', 'get'],
     ['/api/v1/spending-buckets/performance/rolling-90-days', 'get'],
+    ['/api/v1/spending-buckets/insights', 'get'],
     ['/api/v1/search/entries', 'get'],
     ['/api/v1/paychecks/from-draft', 'post'],
     ['/api/v1/paychecks/from-template', 'post'],
@@ -71,5 +77,12 @@ describe('committed backend contract', () => {
         required: false,
       },
     );
+  });
+
+  it('allows an overall Spending Insights response to return a null selected bucket name', () => {
+    expect(
+      contract.components?.schemas?.SpendingBucketInsightsResponse?.properties?.selectedBucketName
+        ?.type,
+    ).toEqual(['string', 'null']);
   });
 });

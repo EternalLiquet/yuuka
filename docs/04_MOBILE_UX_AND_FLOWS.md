@@ -52,6 +52,15 @@ as assigned. Tapping an unassigned occurrence opens a focused assignment flow; o
 highlighted paycheck entry.
 Positions contains compact Payback, Planned Savings, and Expense List navigation rows.
 
+The Spending Buckets section keeps its 30/90-day report and adds View Insights. Spending Insights
+defaults to all buckets across the 12 most recent qualifying paychecks, with a compact exact-name
+selector. It presents purpose-built `react-native-svg` Budgeted vs Spent and Net Under / Over graphs,
+including a visible zero baseline and non-color line/shape treatments. A chronological text history
+is the authoritative accessible representation of every plotted value and discloses combined
+same-name entries. Empty and one-paycheck histories remain readable; cached overall history stays
+visible when a selected-name request fails. No range controls, gestures, tooltips, or advice appear
+in the MVP.
+
 ## Active tab
 
 Show paychecks that are not fully allocated, contain at least one entry that is not Posted, or were
