@@ -82,6 +82,10 @@ type ScrollToIndexFailureInfo = {
   highestMeasuredFrameIndex: number;
   index: number;
 };
+type ReorderEntriesMutation = {
+  entryIds: string[];
+  paycheckVersion: number;
+};
 
 const HIGHLIGHT_SCROLL_RETRY_DELAY_MS = 80;
 const MAX_HIGHLIGHT_SCROLL_RETRIES = 2;
@@ -110,6 +114,7 @@ export default function PaycheckDetailScreen() {
   const [paycheckEditorVisible, setPaycheckEditorVisible] = useState(false);
   const [recurringImportVisible, setRecurringImportVisible] = useState(false);
   const leftoverInFlight = useRef(false);
+  const reorderInFlight = useRef(false);
   const listRef = useRef<EntryListHandle | null>(null);
   const highlightScrolledRef = useRef(false);
   const highlightRetryCountRef = useRef(0);
@@ -195,11 +200,42 @@ export default function PaycheckDetailScreen() {
     },
   });
   const reorderMutation = useMutation({
-    mutationFn: (entryIds: string[]) => {
-      if (!query.data) throw new Error('Refresh the paycheck before reordering.');
-      return api.reorderEntries(id, entryIds, query.data.version);
+    mutationFn: ({ entryIds, paycheckVersion }: ReorderEntriesMutation) =>
+      api.reorderEntries(id, entryIds, paycheckVersion),
+    onMutate: async ({ entryIds }) => {
+      await queryClient.cancelQueries({ queryKey: ['paycheck', id] });
+      const previousPaycheck = queryClient.getQueryData<Paycheck>(['paycheck', id]);
+      if (previousPaycheck) {
+        const entriesById = new Map(previousPaycheck.entries.map((entry) => [entry.id, entry]));
+        const reorderedEntries = entryIds.map((entryId, position) => {
+          const entry = entriesById.get(entryId);
+          return entry ? { ...entry, position } : null;
+        });
+        if (reorderedEntries.every((entry): entry is Entry => entry !== null)) {
+          queryClient.setQueryData<Paycheck>(['paycheck', id], {
+            ...previousPaycheck,
+            entries: reorderedEntries,
+          });
+        }
+      }
+      setDetailError('');
+      return { previousPaycheck };
     },
-    onSuccess: invalidate,
+    onError: async (error, _variables, context) => {
+      if (context?.previousPaycheck) {
+        queryClient.setQueryData(['paycheck', id], context.previousPaycheck);
+      }
+      setDetailError(displayError(error, settings.currencyCode, 'The entry order was not saved.'));
+      await query.refetch();
+    },
+    onSuccess: async (updatedPaycheck) => {
+      queryClient.setQueryData(['paycheck', id], updatedPaycheck);
+      setDetailError('');
+      await queryClient.invalidateQueries({ queryKey: ['paychecks'] });
+    },
+    onSettled: () => {
+      reorderInFlight.current = false;
+    },
   });
   const lifecycleMutation = useMutation({
     mutationFn: (action: 'archive' | 'close' | 'reopen') => {
@@ -237,12 +273,13 @@ export default function PaycheckDetailScreen() {
     () => query.data?.entries.find((entry) => entry.id === bucketEntryId) ?? null,
     [bucketEntryId, query.data?.entries],
   );
-  const canReorder =
+  const showReorderControls =
     sort === 'custom' &&
     statusFilter === 'ALL' &&
     typeFilter === 'ALL' &&
     paymentMethodFilter === 'ALL' &&
     query.data?.state === 'ACTIVE';
+  const canReorder = showReorderControls && !reorderMutation.isPending;
 
   const markListInteracted = useCallback(() => {
     userInteractedWithListRef.current = true;
@@ -359,8 +396,16 @@ export default function PaycheckDetailScreen() {
   }
 
   function reorder(entryIds: string[]) {
-    if (!canReorder) return;
-    reorderMutation.mutate(entryIds);
+    if (reorderInFlight.current || !canReorder || !query.data) return;
+    const currentIds = displayedEntries.map((entry) => entry.id);
+    if (
+      currentIds.length !== entryIds.length ||
+      currentIds.every((entryId, index) => entryId === entryIds[index])
+    ) {
+      return;
+    }
+    reorderInFlight.current = true;
+    reorderMutation.mutate({ entryIds, paycheckVersion: query.data.version });
   }
 
   function moveEntry(index: number, offset: number) {
@@ -383,6 +428,7 @@ export default function PaycheckDetailScreen() {
       />
       <Screen>
         <DraggableFlatList
+          activationDistance={8}
           contentContainerStyle={styles.list}
           data={displayedEntries}
           keyExtractor={(entry) => entry.id}
@@ -437,11 +483,25 @@ export default function PaycheckDetailScreen() {
               tintColor="transparent"
             />
           }
+          renderPlaceholder={({ item }) => (
+            <View
+              accessibilityLabel={`Drop ${item.name} here`}
+              style={[
+                styles.dropPlaceholder,
+                { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+              ]}
+            >
+              <AppText style={{ color: colors.accent }} variant="label">
+                Drop here
+              </AppText>
+            </View>
+          )}
           renderItem={(params: RenderItemParams<Entry>) => {
             const index = displayedEntries.findIndex((entry) => entry.id === params.item.id);
             return (
               <EntryRow
                 drag={params.drag}
+                dragActive={params.isActive}
                 entry={params.item}
                 isFirst={index === 0}
                 isLast={index === displayedEntries.length - 1}
@@ -460,7 +520,8 @@ export default function PaycheckDetailScreen() {
                 }
                 onStatusPress={() => setStatusEntry(params.item)}
                 highlighted={params.item.id === highlightEntryId}
-                reorderEnabled={canReorder}
+                reorderDisabled={reorderMutation.isPending}
+                reorderEnabled={showReorderControls}
               />
             );
           }}
@@ -859,6 +920,15 @@ const styles = StyleSheet.create({
   },
   controlHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   controls: { borderTopWidth: 1, gap: 10, paddingTop: 16 },
+  dropPlaceholder: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderStyle: 'dashed',
+    borderWidth: 2,
+    justifyContent: 'center',
+    minHeight: 88,
+    padding: 16,
+  },
   header: { gap: 16, paddingBottom: 6 },
   lifecycleActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   list: { flexGrow: 1, padding: 16 },
