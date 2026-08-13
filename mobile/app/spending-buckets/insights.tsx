@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, RefreshCw } from 'lucide-react-native';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { SpendingBucketInsights } from '@/api/contracts';
@@ -40,6 +40,7 @@ export default function SpendingInsightsScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
+  const queryClient = useQueryClient();
   const [selection, setSelection] = useState(OVERALL_OPTION_ID);
   const refreshPromise = useRef<Promise<unknown> | null>(null);
   const overall = useQuery({
@@ -55,12 +56,32 @@ export default function SpendingInsightsScreen() {
       })),
     [overall.data?.availableBucketNames],
   );
-  const selectedBucketName = bucketOptions.find((option) => option.value === selection)?.name;
+  const selectionAvailable =
+    selection === OVERALL_OPTION_ID || bucketOptions.some((option) => option.value === selection);
+  const effectiveSelection = selectionAvailable ? selection : OVERALL_OPTION_ID;
+  if (!selectionAvailable) setSelection(OVERALL_OPTION_ID);
+  const selectedBucketName = bucketOptions.find(
+    (option) => option.value === effectiveSelection,
+  )?.name;
   const drillDown = useQuery({
     enabled: selectedBucketName !== undefined,
     queryKey: bucketQueryKey(selectedBucketName),
     queryFn: () => api.spendingBucketInsights(selectedBucketName),
   });
+  const refetchDrillDown = drillDown.refetch;
+  const previousSelectedBucketName = useRef(selectedBucketName);
+  useEffect(() => {
+    const previousName = previousSelectedBucketName.current;
+    previousSelectedBucketName.current = selectedBucketName;
+    if (
+      previousName !== undefined &&
+      selectedBucketName !== undefined &&
+      previousName !== selectedBucketName &&
+      bucketIdentity(previousName) === bucketIdentity(selectedBucketName)
+    ) {
+      void refetchDrillDown();
+    }
+  }, [refetchDrillDown, selectedBucketName]);
   const selectedFailed = selectedBucketName !== undefined && drillDown.isError && !drillDown.data;
   const displayed =
     selectedBucketName === undefined ? overall.data : (drillDown.data ?? overall.data);
@@ -73,12 +94,24 @@ export default function SpendingInsightsScreen() {
   const options = [{ label: 'All Spending Buckets', value: OVERALL_OPTION_ID }, ...bucketOptions];
   const refreshInsights = () => {
     if (refreshPromise.current) return refreshPromise.current;
-    const refresh =
+    const refresh: Promise<unknown> = (
       selectedBucketName === undefined
         ? overall.refetch()
-        : Promise.allSettled([overall.refetch(), drillDown.refetch()]);
+        : (async () => {
+            const result = await overall.refetch();
+            const refreshedBucketName = result.data?.availableBucketNames.find(
+              (name) => `bucket:${encodeURIComponent(bucketIdentity(name))}` === selection,
+            );
+            if (refreshedBucketName === undefined) return;
+            await queryClient.fetchQuery({
+              queryFn: () => api.spendingBucketInsights(refreshedBucketName),
+              queryKey: bucketQueryKey(refreshedBucketName),
+              staleTime: 0,
+            });
+          })()
+    ).catch(() => undefined);
     refreshPromise.current = refresh;
-    void refresh.finally(() => {
+    void refresh.then(() => {
       if (refreshPromise.current === refresh) {
         refreshPromise.current = null;
       }
@@ -127,7 +160,7 @@ export default function SpendingInsightsScreen() {
                 label="Spending Insights bucket"
                 onChange={setSelection}
                 options={options}
-                value={selection}
+                value={effectiveSelection}
               />
               <AppText style={{ color: colors.muted }} variant="caption">
                 Bucket names are grouped only when their trimmed names match exactly, ignoring
@@ -177,6 +210,7 @@ export default function SpendingInsightsScreen() {
               <InsightsContent
                 data={displayed}
                 fallbackOverall={selectedBucketName !== undefined && !drillDown.data}
+                selectedBucketName={selectedBucketName}
               />
             ) : null}
           </>
@@ -189,9 +223,11 @@ export default function SpendingInsightsScreen() {
 function InsightsContent({
   data,
   fallbackOverall,
+  selectedBucketName,
 }: {
   data: SpendingBucketInsights;
   fallbackOverall: boolean;
+  selectedBucketName: string | undefined;
 }) {
   const { colors } = useAppTheme();
   const { settings } = useSettings();
@@ -200,14 +236,14 @@ function InsightsContent({
     ? 'All Spending Buckets'
     : data.scope === 'ALL'
       ? 'All Spending Buckets'
-      : data.selectedBucketName;
+      : (selectedBucketName ?? data.selectedBucketName);
   if (!data.points.length) {
     return (
       <EmptyState
         message={
           data.scope === 'ALL'
             ? 'Add a Spending Bucket to a current or past paycheck to begin a paycheck-based history.'
-            : `No recent qualifying paycheck contains ${data.selectedBucketName}. Missing paychecks are not shown as $0.`
+            : `No recent qualifying paycheck contains ${selectedBucketName ?? data.selectedBucketName}. Missing paychecks are not shown as $0.`
         }
         title="No Spending Bucket history"
       />

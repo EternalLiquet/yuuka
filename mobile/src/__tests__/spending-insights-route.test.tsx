@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
 
 import type { SpendingBucketInsights } from '@/api/contracts';
@@ -177,6 +177,44 @@ describe('Spending Insights route', () => {
     });
   });
 
+  it('deduplicates a repeated selected retry when the bucket remains offline', async () => {
+    const selected = {
+      ...overall,
+      points: [{ ...overall.points[0], matchingBucketCount: 2 }],
+      scope: 'BUCKET_NAME' as const,
+      selectedBucketName: 'Gas',
+    };
+    const retryFailure = deferred<SpendingBucketInsights>();
+    let gasCalls = 0;
+    mockInsights.mockImplementation(async (name?: string) => {
+      if (name === 'Gas') {
+        gasCalls += 1;
+        if (gasCalls === 1) throw new Error('offline');
+        return retryFailure.promise;
+      }
+      return overall;
+    });
+    const { view } = await renderScreenWithClient((client) => {
+      client.setQueryData(overallQueryKey, overall);
+      client.setQueryData(bucketQueryKey('Gas'), selected);
+    });
+    fireEvent.press(await view.findByLabelText('Gas'));
+    const retry = await view.findByLabelText('Retry Spending Insights refresh');
+    await fireEvent.press(retry);
+    await waitFor(() => expect(gasCalls).toBe(2));
+    await fireEvent.press(retry);
+    await act(async () => {
+      retryFailure.reject(new Error('still offline'));
+      await retryFailure.promise.catch(() => undefined);
+    });
+    await waitFor(() => {
+      expect(mockInsights.mock.calls.filter(([name]) => name === undefined)).toHaveLength(2);
+      expect(mockInsights.mock.calls.filter(([name]) => name === 'Gas')).toHaveLength(2);
+    });
+    expect(view.getByLabelText('Gas insight history')).toBeTruthy();
+    expect(view.getByText('Showing saved data. Reconnect to refresh.')).toBeTruthy();
+  });
+
   it('keeps the selected bucket stable while retrying stale reordered selector metadata', async () => {
     const selected = {
       ...overall,
@@ -196,7 +234,7 @@ describe('Spending Insights route', () => {
       if (overallCalls === 1) throw new Error('offline');
       return respelledAndReorderedOverall;
     });
-    const { client, view } = await renderScreenWithClient((queryClient) => {
+    const { view } = await renderScreenWithClient((queryClient) => {
       queryClient.setQueryData(overallQueryKey, overall);
       queryClient.setQueryData(bucketQueryKey('Gas'), selected);
     });
@@ -207,10 +245,74 @@ describe('Spending Insights route', () => {
     fireEvent.press(view.getByLabelText('Retry Spending Insights refresh'));
     await waitFor(() => expect(overallCalls).toBe(2));
     expect(await view.findByLabelText('gas')).toBeTruthy();
-    expect(view.getByLabelText('Gas insight history')).toBeTruthy();
+    expect(await view.findByLabelText('gas insight history')).toBeTruthy();
+    expect(view.queryByLabelText('Gas insight history')).toBeNull();
+    expect(view.getAllByText('gas')).toHaveLength(2);
     expect(mockInsights).not.toHaveBeenCalledWith('Dining');
-    await client.refetchQueries({ queryKey: bucketQueryKey('gas') });
-    expect(mockInsights).toHaveBeenCalledWith('gas');
+    await waitFor(() => expect(mockInsights).toHaveBeenCalledWith('gas'));
+  });
+
+  it('keeps Gasoline selected when overall metadata inserts and reorders buckets', async () => {
+    const selected = {
+      ...overall,
+      points: [{ ...overall.points[1], paycheckName: 'Gasoline paycheck' }],
+      scope: 'BUCKET_NAME' as const,
+      selectedBucketName: 'Gasoline',
+    };
+    mockInsights.mockImplementation(async (name?: string) =>
+      name === 'Gasoline' ? selected : overall,
+    );
+    const { client, view } = await renderScreenWithClient();
+    await view.findByText('First paycheck');
+    fireEvent.press(view.getByLabelText('Gasoline'));
+    expect(await view.findByLabelText('Gasoline insight history')).toBeTruthy();
+
+    await act(async () => {
+      client.setQueryData(overallQueryKey, {
+        ...overall,
+        availableBucketNames: ['Food', 'Gas', 'Gasoline'],
+      });
+    });
+
+    expect(view.getByLabelText('Gasoline').props.accessibilityState.checked).toBe(true);
+    expect(view.getByLabelText('Gas').props.accessibilityState.checked).toBe(false);
+    expect(view.getByLabelText('Gasoline insight history')).toBeTruthy();
+    expect(view.getByText('Gasoline paycheck')).toBeTruthy();
+    expect(mockInsights).not.toHaveBeenCalledWith('Gas');
+  });
+
+  it('returns to a visibly selected overall scope when the selected bucket disappears', async () => {
+    const selected = {
+      ...overall,
+      points: [{ ...overall.points[1], paycheckName: 'Gasoline paycheck' }],
+      scope: 'BUCKET_NAME' as const,
+      selectedBucketName: 'Gasoline',
+    };
+    mockInsights.mockImplementation(async (name?: string) =>
+      name === 'Gasoline' ? selected : overall,
+    );
+    const { client, view } = await renderScreenWithClient();
+    await view.findByText('First paycheck');
+    fireEvent.press(view.getByLabelText('Gasoline'));
+    expect(await view.findByLabelText('Gasoline insight history')).toBeTruthy();
+
+    await act(async () => {
+      client.setQueryData(overallQueryKey, {
+        ...overall,
+        availableBucketNames: ['Gas'],
+      });
+    });
+
+    await waitFor(() =>
+      expect(view.getByLabelText('All Spending Buckets').props.accessibilityState.checked).toBe(
+        true,
+      ),
+    );
+    expect(view.getByLabelText('Gas').props.accessibilityState.checked).toBe(false);
+    expect(view.getByLabelText('All Spending Buckets insight history')).toBeTruthy();
+    expect(view.getByText('First paycheck')).toBeTruthy();
+    expect(view.queryByText('Gasoline paycheck')).toBeNull();
+    expect(mockInsights).not.toHaveBeenCalledWith('Gas');
   });
 
   it('selects a bucket literally named __all__ by its opaque option ID', async () => {
@@ -301,6 +403,16 @@ describe('Spending Insights route', () => {
     expect(view.getByText('First paycheck')).toBeTruthy();
   });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
 
 async function renderScreen() {
   return (await renderScreenWithClient()).view;
