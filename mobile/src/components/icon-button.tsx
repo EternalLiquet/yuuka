@@ -12,6 +12,7 @@ type IconButtonProps = {
   label: string;
   onLongPress?: () => void;
   onPress: () => void;
+  onPressIn?: () => void;
   selected?: boolean;
 };
 
@@ -21,6 +22,7 @@ export function IconButton({
   label,
   onLongPress,
   onPress,
+  onPressIn,
   selected,
 }: IconButtonProps) {
   const { colors } = useAppTheme();
@@ -36,6 +38,7 @@ export function IconButton({
         onHoverOut={() => setHovered(false)}
         onLongPress={onLongPress}
         onPress={onPress}
+        onPressIn={onPressIn}
         style={({ pressed }) => [
           styles.button,
           {

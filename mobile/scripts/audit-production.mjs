@@ -18,10 +18,23 @@ const acceptedAdvisories = new Map([
       reason: 'Metro only parses repository-controlled build assets; no patched release exists.',
     },
   ],
+  [
+    'https://github.com/advisories/GHSA-2v37-7h3g-55p8',
+    {
+      dependency: 'nanoid',
+      expiresOn: '2026-08-27',
+      reason:
+        'npm audit still flags the advisory although every approved production path resolves the patched 3.3.17 release.',
+    },
+  ],
 ]);
 
 const blockingSeverities = new Set(['high', 'critical']);
 const approvedImageSizePaths = new Set(['yuuka-mobile > expo > @expo/metro > metro > image-size']);
+const approvedNanoidPaths = new Set([
+  'yuuka-mobile > expo > @expo/metro-config > postcss > nanoid@3.3.17',
+  'yuuka-mobile > expo-router > nanoid@3.3.17',
+]);
 const npmSpawnOptions = {
   encoding: 'utf8',
   maxBuffer: 10 * 1024 * 1024,
@@ -119,26 +132,35 @@ export function evaluateAuditReport(report, now = new Date()) {
   };
 }
 
-export function evaluateDependencyTreeInspection(result) {
+export function evaluateDependencyTreeInspection(result, dependencies = ['image-size']) {
   if (result.error) {
     return {
-      errors: [`Unable to inspect production image-size paths: ${result.error.message}`],
+      errors: [`Unable to inspect production dependency paths: ${result.error.message}`],
       paths: [],
     };
   }
   if (result.status !== 0) {
     const detail = result.stderr?.trim() || `npm ls exited with status ${result.status}.`;
-    return { errors: [`Unable to inspect production image-size paths: ${detail}`], paths: [] };
+    return { errors: [`Unable to inspect production dependency paths: ${detail}`], paths: [] };
   }
 
   let tree;
   try {
     tree = JSON.parse(result.stdout);
   } catch {
-    return { errors: ['Production image-size dependency tree is not valid JSON.'], paths: [] };
+    return { errors: ['Production dependency tree is not valid JSON.'], paths: [] };
   }
 
-  return evaluateImageSizeDependencyTree(tree);
+  const outcomes = dependencies.map((dependency) => {
+    if (dependency === 'image-size') return evaluateImageSizeDependencyTree(tree);
+    if (dependency === 'nanoid') return evaluateNanoidDependencyTree(tree);
+    return { errors: [`No dependency-tree policy exists for ${dependency}.`], paths: [] };
+  });
+
+  return {
+    errors: outcomes.flatMap((outcome) => outcome.errors),
+    paths: outcomes.flatMap((outcome) => outcome.paths),
+  };
 }
 
 export function evaluateImageSizeDependencyTree(tree) {
@@ -177,6 +199,41 @@ export function evaluateImageSizeDependencyTree(tree) {
   return { errors, paths: paths.map(formatPath) };
 }
 
+export function evaluateNanoidDependencyTree(tree) {
+  if (!isRecord(tree) || typeof tree.name !== 'string' || !isRecord(tree.dependencies)) {
+    return {
+      errors: ['Production nanoid dependency tree has an unsupported shape.'],
+      paths: [],
+    };
+  }
+
+  const paths = [];
+  const malformedPaths = [];
+  collectNanoidPaths(tree.dependencies, [tree.name], paths, malformedPaths);
+
+  if (malformedPaths.length > 0) {
+    return {
+      errors: malformedPaths.map(
+        (path) => `Production nanoid dependency tree is malformed at: ${formatPath(path)}.`,
+      ),
+      paths,
+    };
+  }
+  if (paths.length === 0) {
+    return { errors: ['No production dependency path to nanoid was found.'], paths: [] };
+  }
+
+  const errors = paths
+    .filter((path) => !approvedNanoidPaths.has(path))
+    .map(
+      (path) =>
+        `Unexpected production dependency path or version for nanoid: ${path}. ` +
+        `Approved paths: ${[...approvedNanoidPaths].join(', ')}.`,
+    );
+
+  return { errors, paths };
+}
+
 function collectImageSizePaths(dependencies, parentPath, paths, malformedPaths) {
   for (const [dependencyName, dependency] of Object.entries(dependencies)) {
     const path = [...parentPath, dependencyName];
@@ -194,6 +251,26 @@ function collectImageSizePaths(dependencies, parentPath, paths, malformedPaths) 
       continue;
     }
     collectImageSizePaths(dependency.dependencies, path, paths, malformedPaths);
+  }
+}
+
+function collectNanoidPaths(dependencies, parentPath, paths, malformedPaths) {
+  for (const [dependencyName, dependency] of Object.entries(dependencies)) {
+    const path = [...parentPath, dependencyName];
+    if (!isRecord(dependency) || typeof dependency.version !== 'string') {
+      malformedPaths.push(path);
+      continue;
+    }
+    if (dependencyName === 'nanoid') {
+      paths.push(`${formatPath(path)}@${dependency.version}`);
+      continue;
+    }
+    if (dependency.dependencies === undefined) continue;
+    if (!isRecord(dependency.dependencies)) {
+      malformedPaths.push(path);
+      continue;
+    }
+    collectNanoidPaths(dependency.dependencies, path, paths, malformedPaths);
   }
 }
 
@@ -272,14 +349,20 @@ export function runProductionAudit({
     return 0;
   }
 
+  const acceptedDependencies = [
+    ...new Set(outcome.accepted.map((advisory) => advisory.dependency)),
+  ].sort();
   const dependencyTreeResult = invokeNpmCommand([
     'ls',
-    'image-size',
+    ...acceptedDependencies,
     '--omit=dev',
     '--all',
     '--json',
   ]);
-  const dependencyTreeOutcome = evaluateDependencyTreeInspection(dependencyTreeResult);
+  const dependencyTreeOutcome = evaluateDependencyTreeInspection(
+    dependencyTreeResult,
+    acceptedDependencies,
+  );
   if (dependencyTreeOutcome.errors.length > 0) {
     output.error('Production dependency audit failed:');
     for (const error of dependencyTreeOutcome.errors) output.error(`- ${error}`);

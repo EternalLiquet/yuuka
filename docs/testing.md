@@ -150,10 +150,10 @@ successful push to `master`, and does not run for pull requests.
 
 The mobile production audit runs `npm run test:audit-policy` and `npm run audit:production`. The
 policy fails closed for new high or critical advisories, expired exceptions, dependency-tree
-inspection failures, and any installed production path outside the exact approved Metro build-tool
-chain. Temporary exceptions must identify exact GitHub advisory IDs, enumerate approved dependency
-paths, document why the vulnerable path is not exposed, and include a near-term review deadline in
-`mobile/scripts/audit-production.mjs`.
+inspection failures, and any installed production path or version outside its exact approved set.
+Temporary exceptions must identify exact GitHub advisory IDs, enumerate approved dependency paths
+and versions where a patch is available, document why the finding is temporarily acceptable, and
+include a near-term review deadline in `mobile/scripts/audit-production.mjs`.
 
 Android E2E is intentionally not part of every pull-request or push run because emulator jobs are
 slow and comparatively flaky on shared GitHub-hosted runners. The separate `Android E2E` workflow

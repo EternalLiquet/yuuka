@@ -12,6 +12,10 @@ import PaycheckDetailScreen from '../../app/paychecks/[id]';
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockScrollToIndex = jest.fn();
+const mockDrag = jest.fn();
+let mockActivationDistance: number | undefined;
+let mockActiveDragEntryId: string | null = null;
+let mockRenderPlaceholder: ((params: { index: number; item: Entry }) => ReactNode) | undefined;
 let mockParams: Record<string, string> = {};
 let mockOnScrollBeginDrag: (() => void) | null = null;
 let mockOnScrollToIndexFailed:
@@ -65,9 +69,12 @@ jest.mock('react-native-draggable-flatlist', () => {
   const { FlatList } = require('react-native');
   const DraggableFlatList = React.forwardRef(function DraggableFlatList(
     {
+      activationDistance,
       renderItem,
+      renderPlaceholder: _renderPlaceholder,
       ...props
     }: {
+      activationDistance?: number;
       onScrollBeginDrag?: () => void;
       onScrollToIndexFailed?: (info: {
         averageItemLength: number;
@@ -75,20 +82,34 @@ jest.mock('react-native-draggable-flatlist', () => {
         index: number;
       }) => void;
       onDragEnd?: (params: { data: Entry[] }) => void;
-      renderItem: (params: { drag: () => void; index: number; item: Entry }) => ReactNode;
+      renderItem: (params: {
+        drag: () => void;
+        getIndex: () => number;
+        index: number;
+        isActive: boolean;
+        item: Entry;
+      }) => ReactNode;
+      renderPlaceholder?: (params: { index: number; item: Entry }) => ReactNode;
     },
     ref: unknown,
   ) {
     React.useImperativeHandle(ref, () => ({
       scrollToIndex: mockScrollToIndex,
     }));
+    mockActivationDistance = activationDistance;
+    mockRenderPlaceholder = _renderPlaceholder;
     mockOnScrollBeginDrag = props.onScrollBeginDrag ?? null;
     mockOnScrollToIndexFailed = props.onScrollToIndexFailed ?? null;
     mockOnDragEnd = props.onDragEnd ?? null;
     return React.createElement(FlatList, {
       ...props,
       renderItem: (params: { index: number; item: Entry }) =>
-        renderItem({ ...params, drag: jest.fn() }),
+        renderItem({
+          ...params,
+          drag: mockDrag,
+          getIndex: () => params.index,
+          isActive: params.item.id === mockActiveDragEntryId,
+        }),
     });
   });
   return { __esModule: true, default: DraggableFlatList };
@@ -201,6 +222,9 @@ describe('paycheck route regressions', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockParams = { id: paycheck.id };
+    mockActivationDistance = undefined;
+    mockActiveDragEntryId = null;
+    mockRenderPlaceholder = undefined;
     mockOnScrollBeginDrag = null;
     mockOnScrollToIndexFailed = null;
     mockOnDragEnd = null;
@@ -214,6 +238,9 @@ describe('paycheck route regressions', () => {
       },
     });
     mockApi.paycheck.mockResolvedValue(paycheck);
+    mockApi.reorderEntries.mockImplementation((_paycheckId: string, entryIds: string[]) =>
+      Promise.resolve(reorderedPaycheck(entryIds, paycheck.version + 1)),
+    );
     mockApi.allocateLeftover.mockResolvedValue(
       entry({
         amountMinor: 2500,
@@ -333,6 +360,7 @@ describe('paycheck route regressions', () => {
   }, 10000);
 
   it('opens an existing paycheck detail with draggable entries without crashing', async () => {
+    mockActiveDragEntryId = entries[1].id;
     const view = await renderRoute(<PaycheckDetailScreen />);
 
     await waitFor(() => expect(mockApi.paycheck).toHaveBeenCalled());
@@ -344,6 +372,14 @@ describe('paycheck route regressions', () => {
     expect(view.getByLabelText('Status: Processing')).toBeTruthy();
     expect(view.getByLabelText('Status: Posted')).toBeTruthy();
     expect(view.queryByText('Add LEFTOVER')).toBeNull();
+    expect(mockActivationDistance).toBe(8);
+    const placeholder = mockRenderPlaceholder?.({ index: 0, item: entries[1] }) as ReactElement<{
+      accessibilityLabel: string;
+    }>;
+    expect(placeholder.props.accessibilityLabel).toBe('Drop Work Food here');
+    expect(view.getByLabelText(/Entry 2: Work Food/).props.accessibilityState.selected).toBe(true);
+    fireEvent(view.getByLabelText('Drag Work Food'), 'pressIn');
+    expect(mockDrag).toHaveBeenCalledTimes(1);
   });
 
   it('offers duplicate paycheck for active paychecks', async () => {
@@ -429,15 +465,49 @@ describe('paycheck route regressions', () => {
     expect(view.getByLabelText('Move Work Food up')).toBeTruthy();
     expect(view.getByLabelText('Move Tires up')).toBeTruthy();
     expect(mockApi.reorderEntries).not.toHaveBeenCalled();
+    let resolveReorder: ((value: Paycheck) => void) | undefined;
+    const reordered = reorderedPaycheck(
+      [entries[1].id, entries[0].id, entries[2].id],
+      paycheck.version + 1,
+    );
+    mockApi.reorderEntries.mockReturnValue(
+      new Promise<Paycheck>((resolve) => {
+        resolveReorder = resolve;
+      }),
+    );
 
     await act(async () => {
       fireEvent.press(view.getByLabelText('Move Work Food up'));
+      fireEvent.press(view.getByLabelText('Move Tires up'));
     });
     expect(mockApi.reorderEntries).toHaveBeenCalledWith(
       paycheck.id,
       [entries[1].id, entries[0].id, entries[2].id],
       paycheck.version,
     );
+    expect(mockApi.reorderEntries).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(view.getByLabelText(/Entry 1: Work Food/)).toBeTruthy());
+    expect(view.getByLabelText('Drag Work Food').props.accessibilityState.disabled).toBe(true);
+    await act(async () => resolveReorder?.(reordered));
+    await waitFor(() =>
+      expect(view.getByLabelText('Drag Work Food').props.accessibilityState.disabled).toBe(false),
+    );
+
+    mockApi.reorderEntries.mockRejectedValue(
+      new Error('This paycheck changed. Refresh and try again.'),
+    );
+    fireEvent.press(view.getByLabelText('Move Electricity down'));
+    await waitFor(() =>
+      expect(mockApi.reorderEntries).toHaveBeenLastCalledWith(
+        paycheck.id,
+        [entries[1].id, entries[2].id, entries[0].id],
+        paycheck.version + 1,
+      ),
+    );
+    expect(await view.findByText('This paycheck changed. Refresh and try again.')).toBeTruthy();
+    await waitFor(() => expect(mockApi.paycheck).toHaveBeenCalledTimes(2));
+    expect(view.getByLabelText(/Entry 1: Electricity/)).toBeTruthy();
+    expect(view.getByLabelText(/Entry 2: Work Food/)).toBeTruthy();
   });
 
   it('allocates leftover as an exact bill entry', async () => {
@@ -530,6 +600,15 @@ function entry(overrides: Partial<Entry>): Entry {
 
 function paycheckId() {
   return '11111111-1111-4111-8111-111111111110';
+}
+
+function reorderedPaycheck(entryIds: string[], version: number): Paycheck {
+  const entriesById = new Map(entries.map((candidate) => [candidate.id, candidate]));
+  return {
+    ...paycheck,
+    entries: entryIds.map((entryId, position) => ({ ...entriesById.get(entryId)!, position })),
+    version,
+  };
 }
 
 async function waitForHighlightRetry() {

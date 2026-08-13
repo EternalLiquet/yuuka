@@ -6,6 +6,7 @@ import {
   evaluateAuditReport,
   evaluateDependencyTreeInspection,
   evaluateImageSizeDependencyTree,
+  evaluateNanoidDependencyTree,
   invokeNpm,
   runProductionAudit,
 } from './audit-production.mjs';
@@ -24,6 +25,20 @@ const acceptedRoot = {
 };
 
 const imageSizeNode = { version: '1.2.1' };
+const nanoidNode = { version: '3.3.17' };
+
+const nanoidRoot = {
+  name: 'nanoid',
+  severity: 'high',
+  via: [
+    {
+      dependency: 'nanoid',
+      name: 'nanoid',
+      title: 'nanoid custom generators can loop indefinitely when size is zero',
+      url: 'https://github.com/advisories/GHSA-2v37-7h3g-55p8',
+    },
+  ],
+};
 
 function approvedProductionTree(additionalRootDependencies = {}) {
   return {
@@ -33,6 +48,15 @@ function approvedProductionTree(additionalRootDependencies = {}) {
       expo: {
         version: '57.0.12',
         dependencies: {
+          '@expo/metro-config': {
+            version: '57.0.8',
+            dependencies: {
+              postcss: {
+                version: '8.5.26',
+                dependencies: { nanoid: nanoidNode },
+              },
+            },
+          },
           '@expo/metro': {
             version: '56.0.0',
             dependencies: {
@@ -43,6 +67,10 @@ function approvedProductionTree(additionalRootDependencies = {}) {
             },
           },
         },
+      },
+      'expo-router': {
+        version: '57.0.12',
+        dependencies: { nanoid: nanoidNode },
       },
       ...additionalRootDependencies,
     },
@@ -124,7 +152,9 @@ test('uses the shared npm invocation for audit and dependency-tree inspection', 
           error: undefined,
           status: 1,
           stderr: '',
-          stdout: JSON.stringify({ vulnerabilities: { 'image-size': acceptedRoot } }),
+          stdout: JSON.stringify({
+            vulnerabilities: { 'image-size': acceptedRoot, nanoid: nanoidRoot },
+          }),
         };
       }
       return {
@@ -141,7 +171,7 @@ test('uses the shared npm invocation for audit and dependency-tree inspection', 
   assert.equal(status, 0);
   assert.deepEqual(npmInvocations, [
     ['audit', '--omit=dev', '--json'],
-    ['ls', 'image-size', '--omit=dev', '--all', '--json'],
+    ['ls', 'image-size', 'nanoid', '--omit=dev', '--all', '--json'],
   ]);
 });
 
@@ -218,6 +248,20 @@ test('rejects an accepted advisory after its review deadline', () => {
   assert.match(outcome.errors[0], /expired on 2026-09-10/);
 });
 
+test('accepts the nanoid advisory only before its review deadline', () => {
+  const active = evaluateAuditReport(
+    { vulnerabilities: { nanoid: nanoidRoot } },
+    new Date('2026-08-27T12:00:00Z'),
+  );
+  const expired = evaluateAuditReport(
+    { vulnerabilities: { nanoid: nanoidRoot } },
+    new Date('2026-08-28T00:00:00Z'),
+  );
+
+  assert.deepEqual(active.errors, []);
+  assert.match(expired.errors[0], /expired on 2026-08-27/);
+});
+
 test('rejects a blocking dependency chain without a resolvable advisory', () => {
   const outcome = evaluateAuditReport(
     {
@@ -279,6 +323,31 @@ test('rejects an unrelated path alongside the approved Metro path', () => {
   ]);
   assert.equal(outcome.errors.length, 1);
   assert.match(outcome.errors[0], /runtime-image-parser > image-size/);
+});
+
+test('accepts only the patched nanoid version on approved Expo production paths', () => {
+  const outcome = evaluateNanoidDependencyTree(approvedProductionTree());
+
+  assert.deepEqual(outcome.errors, []);
+  assert.deepEqual(outcome.paths, [
+    'yuuka-mobile > expo > @expo/metro-config > postcss > nanoid@3.3.17',
+    'yuuka-mobile > expo-router > nanoid@3.3.17',
+  ]);
+});
+
+test('rejects a vulnerable nanoid version on an approved path', () => {
+  const tree = approvedProductionTree();
+  tree.dependencies['expo-router'].dependencies.nanoid = { version: '3.3.16' };
+
+  const outcome = evaluateNanoidDependencyTree(tree);
+
+  assert.match(outcome.errors[0], /expo-router > nanoid@3.3.16/);
+});
+
+test('rejects nanoid on an unapproved production path', () => {
+  const outcome = evaluateNanoidDependencyTree(approvedProductionTree({ nanoid: nanoidNode }));
+
+  assert.match(outcome.errors[0], /yuuka-mobile > nanoid@3.3.17/);
 });
 
 test('rejects dependency-tree inspection failure', () => {

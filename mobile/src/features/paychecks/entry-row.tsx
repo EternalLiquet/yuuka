@@ -24,6 +24,7 @@ const typeLabels = {
 
 type EntryRowProps = {
   drag?: () => void;
+  dragActive?: boolean;
   entry: Entry;
   isFirst?: boolean;
   isLast?: boolean;
@@ -35,11 +36,13 @@ type EntryRowProps = {
   onStatusPress: () => void;
   highlighted?: boolean;
   position?: number;
+  reorderDisabled?: boolean;
   reorderEnabled?: boolean;
 };
 
 export function EntryRow({
   drag,
+  dragActive,
   entry,
   isFirst,
   isLast,
@@ -51,6 +54,7 @@ export function EntryRow({
   onStatusPress,
   highlighted,
   position,
+  reorderDisabled,
   reorderEnabled,
 }: EntryRowProps) {
   const { colors } = useAppTheme();
@@ -66,15 +70,17 @@ export function EntryRow({
       style={({ pressed }) => [
         styles.row,
         {
-          backgroundColor: highlighted ? colors.accentSoft : 'transparent',
-          borderBottomColor: highlighted ? colors.accent : colors.border,
+          backgroundColor: highlighted || dragActive ? colors.accentSoft : 'transparent',
+          borderBottomColor: highlighted || dragActive ? colors.accent : colors.border,
         },
+        dragActive && styles.dragActive,
         pressed && styles.pressed,
       ]}
     >
       <View
         accessible
         accessibilityLabel={entryAccessibilityLabel(entry, amount, position)}
+        accessibilityState={{ selected: dragActive }}
         style={styles.main}
       >
         <View style={styles.titleRow}>
@@ -129,22 +135,23 @@ export function EntryRow({
         {reorderEnabled ? (
           <>
             <IconButton
-              disabled={isFirst}
+              disabled={isFirst || reorderDisabled}
               icon={ArrowUp}
               label={`Move ${entry.name} up`}
               onPress={onMoveUp ?? (() => undefined)}
             />
             <IconButton
-              disabled={isLast}
+              disabled={isLast || reorderDisabled}
               icon={ArrowDown}
               label={`Move ${entry.name} down`}
               onPress={onMoveDown ?? (() => undefined)}
             />
             <IconButton
+              disabled={reorderDisabled}
               icon={GripVertical}
               label={`Drag ${entry.name}`}
-              onLongPress={drag}
-              onPress={drag ?? (() => undefined)}
+              onPress={() => undefined}
+              onPressIn={drag}
             />
           </>
         ) : null}
@@ -215,6 +222,12 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   detailRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
+  dragActive: {
+    elevation: 6,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    transform: [{ scale: 1.01 }],
+  },
   main: { gap: 11 },
   pressed: { opacity: 0.74 },
   row: {
