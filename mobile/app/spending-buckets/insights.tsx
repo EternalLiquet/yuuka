@@ -19,6 +19,21 @@ import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
 
 const OVERALL_OPTION_ID = 'scope:overall';
+const OVERALL_QUERY_KEY = ['spending-buckets', 'insights', 'scope', 'overall'] as const;
+
+function bucketIdentity(bucketName: string) {
+  return bucketName.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '').toLowerCase();
+}
+
+function bucketQueryKey(bucketName: string | undefined) {
+  return [
+    'spending-buckets',
+    'insights',
+    'scope',
+    'bucket-name',
+    bucketName === undefined ? undefined : bucketIdentity(bucketName),
+  ] as const;
+}
 
 export default function SpendingInsightsScreen() {
   const api = useYuukaApi();
@@ -28,28 +43,32 @@ export default function SpendingInsightsScreen() {
   const [selection, setSelection] = useState(OVERALL_OPTION_ID);
   const refreshPromise = useRef<Promise<unknown> | null>(null);
   const overall = useQuery({
-    queryKey: ['spending-buckets', 'insights', 'all'],
+    queryKey: OVERALL_QUERY_KEY,
     queryFn: () => api.spendingBucketInsights(),
   });
   const bucketOptions = useMemo(
     () =>
-      (overall.data?.availableBucketNames ?? []).map((name, index) => ({
+      (overall.data?.availableBucketNames ?? []).map((name) => ({
         label: name,
         name,
-        value: `bucket:${index}`,
+        value: `bucket:${encodeURIComponent(bucketIdentity(name))}`,
       })),
     [overall.data?.availableBucketNames],
   );
   const selectedBucketName = bucketOptions.find((option) => option.value === selection)?.name;
   const drillDown = useQuery({
     enabled: selectedBucketName !== undefined,
-    queryKey: ['spending-buckets', 'insights', selectedBucketName],
+    queryKey: bucketQueryKey(selectedBucketName),
     queryFn: () => api.spendingBucketInsights(selectedBucketName),
   });
   const selectedFailed = selectedBucketName !== undefined && drillDown.isError && !drillDown.data;
   const displayed =
     selectedBucketName === undefined ? overall.data : (drillDown.data ?? overall.data);
   const activeQuery = selectedBucketName === undefined ? overall : drillDown;
+  const showStaleRetry =
+    !selectedFailed &&
+    ((activeQuery.isError && activeQuery.data !== undefined) ||
+      (selectedBucketName !== undefined && overall.isError && overall.data !== undefined));
   const refreshing = overall.isFetching || drillDown.isFetching;
   const options = [{ label: 'All Spending Buckets', value: OVERALL_OPTION_ID }, ...bucketOptions];
   const refreshInsights = () => {
@@ -135,7 +154,7 @@ export default function SpendingInsightsScreen() {
                 />
               </View>
             ) : null}
-            {activeQuery.isError && activeQuery.data ? (
+            {showStaleRetry ? (
               <View style={styles.staleActions}>
                 <StaleBanner />
                 <Button
