@@ -114,6 +114,7 @@ internal wording while the mobile product uses Planned Savings and Expense Lists
 
 - id UUID
 - user_id
+- family_id
 - token_hash
 - expires_at
 - revoked_at
@@ -134,6 +135,7 @@ internal wording while the mobile product uses Planned Savings and Expense Lists
 - created_at
 - updated_at
 - closed_at nullable
+- reopened_at nullable
 - archived_at nullable
 - optimistic-lock version
 
@@ -146,6 +148,7 @@ internal wording while the mobile product uses Planned Savings and Expense Lists
 - sinking_fund_id nullable
 - source_expense_ledger_id nullable
 - entry_type: BILL, SPENDING_BUCKET, SINKING_FUND
+- payment_method: AUTOPAY or MANUAL for Bills, otherwise null
 - name
 - amount_minor BIGINT
 - status: NOT_PAID, PROCESSING, POSTED
@@ -156,13 +159,17 @@ internal wording while the mobile product uses Planned Savings and Expense Lists
 - notes nullable
 - target_minor nullable
 - target_date nullable
+- source_recurring_bill_definition_id nullable
+- source_recurring_occurrence_date nullable
 - created_at
 - updated_at
 - deleted_at nullable
 - optimistic-lock version
 
 `payback_id` and `sinking_fund_id` are mutually exclusive. A `sinking_fund_id` may only appear on
-`SINKING_FUND` entries.
+`SINKING_FUND` entries. Bills require a valid `payment_method`; non-Bill entries require it to be
+null. Recurring-Bill definition and occurrence provenance are both present or both absent and may
+only appear on Bills.
 
 ### entry_status_events
 
@@ -278,6 +285,7 @@ provenance.
 - archived
 - created_at
 - updated_at
+- archived_at nullable
 - optimistic-lock version
 
 ### template_entries
@@ -286,6 +294,7 @@ provenance.
 - owner_id
 - template_id
 - entry_type
+- payment_method: AUTOPAY or MANUAL for Bills, otherwise null
 - name
 - default_amount_minor BIGINT
 - position
@@ -298,6 +307,8 @@ provenance.
 - created_at
 - updated_at
 - optimistic-lock version
+
+Template Bills require a valid `payment_method`; non-Bill template entries require it to be null.
 
 ### audit_events
 
