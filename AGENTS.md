@@ -76,6 +76,25 @@ Do not:
 
 Preserve backward compatibility and production data unless the task explicitly requires otherwise.
 
+## Codex development loop
+
+Repository-scoped role skills live under `.agents/skills/`, with independent Planner, Verifier, and
+Reviewer subagent defaults under `.codex/agents/`. These role instructions supplement this file and
+must never relax or replace it. Keep implementation in one writer thread; use fresh threads for
+independent verification and review when the client supports subagents.
+
+Use the stable repository verification entry points:
+
+```sh
+./scripts/verify-fast.sh
+./scripts/verify-full.sh
+```
+
+Run focused checks first. A completed coding task proceeds through an approved plan, implementation,
+independent verification, independent review, PR CI, and human merge. Return failures to the
+Implementer and rerun verification after every correction. See `docs/codex-development-loop.md` for
+role handoffs, stopping rules, automation boundaries, and component verification commands.
+
 ## Mandatory Git workflow for coding tasks
 
 All coding work must be performed on a dedicated branch created from the latest `master`.
@@ -742,6 +761,19 @@ Relevant locations include:
 Do not update unrelated documents merely to create churn.
 
 Do not leave documentation claiming a feature is planned after it has been implemented.
+
+## Code Review Rules
+
+- Flag money arithmetic that is not checked integer-minor-unit arithmetic, private access that is
+  not owner-scoped, stale writes that bypass optimistic locking, partial multi-record writes, or
+  updates/deletes to immutable history. Require focused regression coverage for the affected
+  invariant.
+- Flag changes that break Payback or Planned Savings apply/reverse behavior, allow duplicate
+  mutations or false-success mobile UX, or let backend, OpenAPI, runtime schemas, and mobile usage
+  drift.
+- Flag unsafe migration changes, hidden weakening of tests or validation, sensitive-data exposure,
+  and unrelated refactors that obscure the requested behavior. Leave deterministic formatting,
+  lint, and build checks to the repository verification scripts and CI.
 
 ## Final review before commit
 
