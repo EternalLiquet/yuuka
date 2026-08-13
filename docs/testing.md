@@ -1,5 +1,54 @@
 # Testing and Quality Gates
 
+## Repository verification interface
+
+Use Java 21, Node.js 22.13 or a newer version supported by the pinned Expo stack, and a working
+Docker daemon. Backend `check` runs PostgreSQL Testcontainers, so even fast verification requires
+Docker. Install mobile dependencies once after checkout or lockfile changes:
+
+```sh
+cd mobile
+npm ci
+```
+
+Run stable aggregate checks from the repository root:
+
+```sh
+./scripts/verify-fast.sh
+./scripts/verify-full.sh
+```
+
+Fast verification runs:
+
+- backend `check`, including formatting, PostgreSQL integration, coverage, and OpenAPI snapshot;
+- mobile formatting, lint, TypeScript, and Jest coverage;
+- Codex workflow metadata, shell orchestration, and CI-wiring validation;
+- `docker compose config --quiet`.
+
+Full verification includes every fast gate and adds:
+
+- backend PIT mutation testing and `bootJar` packaging;
+- Expo Doctor, Android export, audit-policy tests, and the live production dependency audit;
+- production-preflight tests and the hardened backend image build.
+
+For focused iteration or parallel execution, use the component interfaces:
+
+```sh
+./scripts/verify-backend.sh fast
+./scripts/verify-mobile.sh fast
+./scripts/verify-infrastructure.sh fast
+```
+
+Each also accepts `full`. GitHub CI installs the required runtimes and dependencies, then calls the
+three full component scripts in parallel jobs. CI retains GitHub-specific setup, report uploads,
+CodeQL, Dependency Review, release packaging/publishing, and Android emulator orchestration.
+
+`npx expo-doctor`, the live npm advisory query, dependency or image downloads, Testcontainers, and
+Docker image builds require their relevant network/runtime environment. Report an unavailable
+required gate as unverified rather than passing. Android Maestro, physical-device USB checks,
+private Tailscale reachability, production deployment verification, and restore drills are not part
+of deterministic local full verification.
+
 ## Backend
 
 ```sh
@@ -90,9 +139,10 @@ CI runs on pull requests targeting `master`, pushes to `master`, and manual disp
 
 Required validation jobs:
 
-- Backend: `./gradlew check`, `./gradlew pitest`, and `./gradlew bootJar` with CI build metadata.
-- Mobile: `npm ci`, formatting, lint, TypeScript, Jest coverage, Expo Doctor, Android export, and production dependency audit.
-- Infrastructure: `docker compose config --quiet` and a hardened backend image build.
+- Backend: `./scripts/verify-backend.sh full` with CI build metadata.
+- Mobile: `npm ci`, then `./scripts/verify-mobile.sh full`.
+- Infrastructure: `./scripts/verify-infrastructure.sh full`, including workflow validation,
+  production-preflight tests, quiet Compose validation, and the hardened backend image build.
 
 Pull-request and branch validation jobs use cancellable concurrency so newer commits replace stale
 runs. The release job is separate, waits for all required validation jobs, runs only after a
