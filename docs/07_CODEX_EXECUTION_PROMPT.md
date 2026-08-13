@@ -1,5 +1,9 @@
 # Codex Execution Prompt
 
+> Historical whole-project construction prompt. Yuuka is already implemented; do not use this file
+> as the workflow for incremental tasks. Current work follows root `AGENTS.md` and
+> `docs/codex-development-loop.md`.
+
 Build Project Yuuka according to every markdown file in this repository.
 
 ## First action

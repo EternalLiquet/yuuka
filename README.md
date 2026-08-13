@@ -83,18 +83,19 @@ Development-only acceptance data is seeded idempotently when `SPRING_PROFILES_AC
 ## Quality gates
 
 ```sh
-cd backend && ./gradlew check pitest
-cd mobile && npm run format:check && npm run lint && npm run typecheck && npm run test:coverage
+./scripts/verify-fast.sh
+./scripts/verify-full.sh
 ```
 
-CI runs those gates, Compose validation, Docker image build validation, Expo Doctor, and Android
-export for pull requests and pushes to `master`. Critical Android Maestro flows run nightly and
-can be started manually when a mobile change needs emulator coverage. Successful `master` pushes
-publish the next `vMAJOR.MINOR.PATCH` tag and GitHub Release. Pull requests can request
-`release:major`, `release:minor`, or `release:patch`; unlabeled PRs and direct pushes default to a
-patch bump. The running backend reports its packaged version at `/health/live`.
+Install mobile dependencies with `npm ci` first. CI calls the same backend, mobile, and
+infrastructure component scripts while keeping those jobs parallel. Critical Android Maestro flows
+remain nightly/manual because they require a hosted emulator. Successful `master` pushes publish
+the next `vMAJOR.MINOR.PATCH` tag and GitHub Release. Pull requests can request `release:major`,
+`release:minor`, or `release:patch`; unlabeled PRs and direct pushes default to a patch bump. The
+running backend reports its packaged version at `/health/live`.
 
-See [testing](docs/testing.md) for reports and E2E commands.
+See [testing](docs/testing.md) for checks and reports, and the
+[Codex development loop](docs/codex-development-loop.md) for role handoffs and PR boundaries.
 
 ## Deploy and recover
 

@@ -28,15 +28,10 @@ jobs:
           cache: gradle
       - name: Make Gradle wrapper executable
         run: chmod +x backend/gradlew
-      - name: Check, PostgreSQL integration, coverage, and contract
-        working-directory: backend
-        run: ./gradlew check --no-daemon
-      - name: Mutation testing
-        working-directory: backend
-        run: ./gradlew pitest --no-daemon
-      - name: Package backend with CI build metadata
-        working-directory: backend
-        run: ./gradlew bootJar --no-daemon -PyuukaVersion=0.0.0-ci+${{ github.sha }}
+      - name: Run full backend verification
+        env:
+          YUUKA_BUILD_VERSION: 0.0.0-ci+${{ github.sha }}
+        run: ./scripts/verify-backend.sh full
       - name: Upload backend reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -73,27 +68,8 @@ jobs:
       - name: Install dependencies
         working-directory: mobile
         run: npm ci
-      - name: Format check
-        working-directory: mobile
-        run: npm run format:check
-      - name: Lint
-        working-directory: mobile
-        run: npm run lint
-      - name: Typecheck
-        working-directory: mobile
-        run: npm run typecheck
-      - name: Test
-        working-directory: mobile
-        run: npm run test:coverage
-      - name: Expo Doctor
-        working-directory: mobile
-        run: npx expo-doctor
-      - name: Export Android bundle
-        working-directory: mobile
-        run: npx expo export --platform android --output-dir dist/android
-      - name: Production dependency audit
-        working-directory: mobile
-        run: npm run test:audit-policy && npm run audit:production
+      - name: Run full mobile verification
+        run: ./scripts/verify-mobile.sh full
       - name: Upload mobile reports and export
         if: always()
         uses: actions/upload-artifact@v7
@@ -113,14 +89,10 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7.0.1
-      - name: Production preflight validation logic
-        run: ./ops/prod-preflight-tests.sh
-      - name: Validate Compose configuration
-        run: docker compose config --quiet
-      - name: Build hardened backend image
+      - name: Run full infrastructure verification
         env:
           YUUKA_VERSION: 0.0.0-ci
-        run: docker compose build backend
+        run: ./scripts/verify-infrastructure.sh full
 
   release:
     name: Release
