@@ -261,6 +261,14 @@ class OpenApiContractTests extends AbstractIntegrationTest {
         generated, "UpdateExpenseLedgerItemRequest", "amountMinor", "expenseDate", "version");
     assertRequired(generated, "SettleExpenseLedgerAsBillRequest", "paycheckId", "ledgerVersion");
     assertRequired(generated, "SettleExpenseLedgerAsPaybackRequest", "ledgerVersion");
+    assertRequired(
+        generated,
+        "LinkRecurringBillRequest",
+        "entryVersion",
+        "paycheckVersion",
+        "definitionVersion");
+    assertRequired(
+        generated, "CreateRecurringBillFromEntryRequest", "entryVersion", "paycheckVersion");
 
     assertBalanceAssignmentSchema(generated, "DraftPaycheckEntryRequest");
     assertBalanceAssignmentSchema(generated, "TemplateApplicationEntryRequest");

@@ -237,7 +237,12 @@ The entry reconciliation operations are owner-scoped and version-guarded. Link/c
 current definition server-side, validates its exact monthly occurrence and resulting allocation,
 then returns the authoritative paycheck. Duplicate occurrence assignments require an explicit
 confirmation flag but are not prohibited. Create-from-entry atomically creates the definition and
-normalizes/links the existing Bill; unlink clears only the two recurring provenance fields.
+normalizes/links the existing Bill; unlink clears only the two recurring provenance fields. Link
+and create requests require non-negative `entryVersion` and `paycheckVersion`; link also requires
+`definitionVersion`. When a Bill is assigned to a Payback, reconciliation locks that owner-scoped
+Payback before the paycheck, entry, and recurring definition, then revalidates the discovered
+Payback assignment and all submitted versions inside the same transaction. A changed assignment or
+version receives the normal stale-write conflict instead of continuing against different state.
 
 ### Search
 

@@ -343,7 +343,18 @@ explicit month, and create-from-Bill also requires an explicit due day. Before c
 shows only material snapshot changes, allocation impact, and any other live assignments for the
 same occurrence. Link/change updates the existing Bill; remove clears only recurring provenance.
 Successful mutations remain in paycheck context, refresh paycheck/dashboard/timeline coverage,
-and expose View recurring Bill for linked entries.
+and expose View recurring Bill for linked entries. Recurring actions are available only for the
+persisted Bill state and are disabled while the entry editor has unsaved changes, including name,
+amount, payment method, notes, type, or Payback selection changes. The user must save or discard the
+entry edits before changing its recurring relationship.
+
+Each confirmation uses an immutable action-specific snapshot. A failed response is checked against
+the authoritative paycheck before Yuuka offers another write. Confirmed link, unlink, and create
+results close successfully without repeating the mutation; an absent result retains the latest
+entry/paycheck versions and returns to that action's fresh review. If both the mutation and that
+check fail, the result is marked unknown: confirmation, Close, and Android back dismissal remain
+blocked while `Check result` performs a read-only check. A different concurrent relationship exits
+the stale review and requires a newly chosen action.
 
 ## Settings
 

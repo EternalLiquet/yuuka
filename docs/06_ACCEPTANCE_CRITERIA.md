@@ -121,6 +121,14 @@ duplicate confirmation, and unlink changes only recurring provenance. Creating a
 the Bill creates and links in one transaction. Duplicate Paycheck omits linked recurring Bills,
 reports the count, and leaves occurrence selection to Import recurring Bills.
 
+The existing-Bill recurring controls remain unavailable until all unsaved entry-editor changes are
+saved or discarded. Every reconciliation confirmation is action-specific and single-flight. Lost
+responses are resolved from the authoritative paycheck without repeating confirmed writes; unknown
+results block confirmation and dismissal until the read-only Check result succeeds. Safe retries use
+the latest entry, paycheck, and definition versions, and a different concurrent relationship always
+requires fresh review. For Payback-assigned Bills, link/create locks the owner-scoped Payback before
+the paycheck, entry, and recurring definition and revalidates the assignment in the same transaction.
+
 ### Security
 
 One user cannot read or mutate another user’s records through direct API requests.

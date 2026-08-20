@@ -1,5 +1,6 @@
 import {
   allocationChangeMessage,
+  classifyReconciliationResult,
   materialRecurringChanges,
   nearbyOccurrenceMonths,
   occurrenceForMonth,
@@ -117,6 +118,125 @@ describe('recurring Bill reconciliation helpers', () => {
       occurrence: currentOccurrence,
     });
   });
+
+  it('classifies authoritative link unlink and normalized create outcomes by exact attempt', () => {
+    const source = entry();
+    const linked = {
+      ...source,
+      sourceRecurringBillDefinitionId: recurringDefinition().id,
+      sourceRecurringOccurrenceDate: '2026-08-21',
+    };
+    const base = {
+      baselineEntryVersion: 0,
+      baselinePaycheckVersion: 3,
+      entryId: source.id,
+      paycheckId: source.paycheckId,
+    };
+
+    expect(
+      classifyReconciliationResult(paycheck(linked), {
+        ...base,
+        action: 'link',
+        baselineDefinitionId: null,
+        baselineOccurrenceDate: null,
+        confirmDuplicateOccurrence: false,
+        definitionId: recurringDefinition().id,
+        definitionVersion: 3,
+        occurrenceDate: '2026-08-21',
+      }),
+    ).toMatchObject({ kind: 'succeeded' });
+    expect(
+      classifyReconciliationResult(paycheck(source), {
+        ...base,
+        action: 'unlink',
+        previousDefinitionId: recurringDefinition().id,
+        previousOccurrenceDate: '2026-08-21',
+      }),
+    ).toMatchObject({ kind: 'succeeded' });
+    expect(
+      classifyReconciliationResult(
+        paycheck({
+          ...linked,
+          accountName: 'Visa',
+          amountMinor: 1499,
+          dueDate: '2026-08-21',
+          name: 'Netflix',
+          notes: null,
+          payee: 'Netflix Inc',
+          paymentMethod: 'AUTOPAY',
+        }),
+        {
+          ...base,
+          action: 'create',
+          baselineDefinitionId: null,
+          occurrenceDate: '2026-08-21',
+          reviewedDefinitionValues: {
+            accountName: ' Visa ',
+            dueDay: 21,
+            name: ' Netflix ',
+            notes: ' ',
+            payee: ' Netflix Inc ',
+            typicalAmountMinor: 1499,
+          },
+        },
+      ),
+    ).toMatchObject({ kind: 'succeeded' });
+  });
+
+  it('does not treat a different concurrent recurring relationship as the attempted result', () => {
+    const source = entry();
+    const result = classifyReconciliationResult(
+      paycheck({
+        ...source,
+        sourceRecurringBillDefinitionId: '44444444-4444-4444-8444-444444444444',
+        sourceRecurringOccurrenceDate: '2026-09-21',
+      }),
+      {
+        action: 'unlink',
+        baselineEntryVersion: 0,
+        baselinePaycheckVersion: 3,
+        entryId: source.id,
+        paycheckId: source.paycheckId,
+        previousDefinitionId: recurringDefinition().id,
+        previousOccurrenceDate: '2026-08-21',
+      },
+    );
+
+    expect(result.kind).toBe('different-state');
+  });
+
+  it('distinguishes an unchanged baseline link from a different concurrent link', () => {
+    const source = {
+      ...entry(),
+      sourceRecurringBillDefinitionId: recurringDefinition().id,
+      sourceRecurringOccurrenceDate: '2026-08-21',
+    };
+    const attempt = {
+      action: 'link' as const,
+      baselineDefinitionId: source.sourceRecurringBillDefinitionId,
+      baselineEntryVersion: 0,
+      baselineOccurrenceDate: source.sourceRecurringOccurrenceDate,
+      baselinePaycheckVersion: 3,
+      confirmDuplicateOccurrence: false,
+      definitionId: '55555555-5555-4555-8555-555555555555',
+      definitionVersion: 4,
+      entryId: source.id,
+      occurrenceDate: '2026-09-15',
+      paycheckId: source.paycheckId,
+    };
+
+    expect(classifyReconciliationResult(paycheck(source), attempt).kind).toBe('not-applied');
+    expect(
+      classifyReconciliationResult(
+        paycheck({
+          ...source,
+          sourceRecurringBillDefinitionId: '66666666-6666-4666-8666-666666666666',
+          sourceRecurringOccurrenceDate: '2026-10-01',
+        }),
+        attempt,
+      ).kind,
+    ).toBe('different-state');
+  });
 });
 
 function money(value: number) {
@@ -185,4 +305,8 @@ function recurringOccurrence() {
     paymentMethod: 'AUTOPAY' as const,
     typicalAmountMinor: 1499,
   };
+}
+
+function paycheck(currentEntry: Entry): Paycheck {
+  return { entries: [currentEntry], id: currentEntry.paycheckId } as Paycheck;
 }

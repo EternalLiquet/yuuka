@@ -19,10 +19,12 @@ import { useAppTheme } from '@/theme/use-app-theme';
 
 import {
   allocationChangeMessage,
+  classifyReconciliationResult,
   materialRecurringChanges,
   nearbyOccurrenceMonths,
   occurrenceForMonth,
   refreshedReconciliationSelection,
+  type ReconciliationAttempt,
   timelineRange,
 } from './reconciliation';
 
@@ -37,10 +39,12 @@ type Step =
   | 'review-unlink';
 
 export function RecurringBillSection({
+  disabledReason,
   entry,
   onChanged,
   paycheck,
 }: {
+  disabledReason?: string | null;
   entry: Entry;
   onChanged: (paycheck: Paycheck) => Promise<void>;
   paycheck: Paycheck;
@@ -60,6 +64,11 @@ export function RecurringBillSection({
   );
   const linkedName = linkedDefinition.data?.name ?? entry.name;
 
+  function begin(nextStep: Step) {
+    if (disabledReason) return;
+    setStep(nextStep);
+  }
+
   return (
     <View style={[styles.relationship, { borderColor: colors.border }]}>
       <AppText variant="label">Recurring Bill</AppText>
@@ -74,6 +83,11 @@ export function RecurringBillSection({
           The linked definition is unavailable. The Bill snapshot is unchanged.
         </AppText>
       ) : null}
+      {disabledReason ? (
+        <AppText style={{ color: colors.muted }} variant="caption">
+          {disabledReason}
+        </AppText>
+      ) : null}
       <View style={styles.actions}>
         {linked ? (
           <>
@@ -85,30 +99,39 @@ export function RecurringBillSection({
               />
             ) : null}
             <Button
+              disabled={Boolean(disabledReason)}
               label="Change link"
-              onPress={() => setStep('definitions')}
+              onPress={() => begin('definitions')}
               variant="secondary"
             />
-            <Button label="Remove link" onPress={() => setStep('review-unlink')} variant="ghost" />
+            <Button
+              disabled={Boolean(disabledReason)}
+              label="Remove link"
+              onPress={() => begin('review-unlink')}
+              variant="ghost"
+            />
           </>
         ) : (
           <>
             <Button
+              disabled={Boolean(disabledReason)}
               icon={Link2}
               label="Link to recurring Bill"
-              onPress={() => setStep('definitions')}
+              onPress={() => begin('definitions')}
               variant="secondary"
             />
             <Button
+              disabled={Boolean(disabledReason)}
               icon={Plus}
               label="Turn into recurring Bill"
-              onPress={() => setStep('create-definition')}
+              onPress={() => begin('create-definition')}
               variant="secondary"
             />
           </>
         )}
       </View>
       <RecurringBillReconciliationSheet
+        disabledReason={disabledReason}
         entry={entry}
         onChanged={onChanged}
         onClose={() => setStep('closed')}
@@ -121,6 +144,7 @@ export function RecurringBillSection({
 }
 
 function RecurringBillReconciliationSheet({
+  disabledReason,
   entry,
   onChanged,
   onClose,
@@ -128,6 +152,7 @@ function RecurringBillReconciliationSheet({
   setStep,
   step,
 }: {
+  disabledReason?: string | null;
   entry: Entry;
   onChanged: (paycheck: Paycheck) => Promise<void>;
   onClose: () => void;
@@ -139,14 +164,22 @@ function RecurringBillReconciliationSheet({
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
   const { settings } = useSettings();
-  const inFlight = useRef(false);
+  const operationGuard = useRef(false);
+  const completed = useRef(false);
+  const unresolvedAttempt = useRef<ReconciliationAttempt | null>(null);
+  const originalMutationError = useRef<unknown>(null);
   const [definition, setDefinition] = useState<RecurringBill | null>(null);
   const [occurrence, setOccurrence] = useState<RecurringBillOccurrence | null>(null);
   const [createdValues, setCreatedValues] = useState<RecurringBillPayload | null>(null);
   const [createdOccurrence, setCreatedOccurrence] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [recoveryMessage, setRecoveryMessage] = useState('');
-  const anchor = entry.dueDate ?? paycheck.incomeDate;
+  const [operation, setOperation] = useState<'idle' | 'submitting' | 'checking'>('idle');
+  const [outcomeUnknown, setOutcomeUnknown] = useState(false);
+  const [authoritativePaycheck, setAuthoritativePaycheck] = useState<Paycheck | null>(null);
+  const effectivePaycheck = authoritativePaycheck ?? paycheck;
+  const effectiveEntry = effectivePaycheck.entries.find((item) => item.id === entry.id) ?? entry;
+  const anchor = effectiveEntry.dueDate ?? effectivePaycheck.incomeDate;
   const range = useMemo(() => timelineRange(anchor), [anchor]);
   const definitions = useQuery({
     queryKey: ['recurring-bills', 'definitions', 'active'],
@@ -161,138 +194,300 @@ function RecurringBillReconciliationSheet({
 
   const selectedOccurrence =
     occurrence ??
-    (step === 'occurrence' && definition && entry.dueDate
+    (step === 'occurrence' && definition && effectiveEntry.dueDate
       ? (timeline.data?.items.find(
           (item) =>
             item.definitionId === definition.id &&
-            item.occurrenceDate.slice(0, 7) === entry.dueDate!.slice(0, 7),
+            item.occurrenceDate.slice(0, 7) === effectiveEntry.dueDate!.slice(0, 7),
         ) ?? null)
       : null);
 
   const mutation = useMutation({
-    mutationFn: async (action: 'link' | 'create' | 'unlink') => {
-      if (action === 'unlink')
-        return api.unlinkRecurringBill(entry.id, entry.version, paycheck.version);
-      if (action === 'create') {
-        if (!createdValues || !createdOccurrence) throw new Error('Review an occurrence first.');
-        return api.createRecurringBillFromEntry(entry.id, {
-          ...createdValues,
-          entryVersion: entry.version,
-          paycheckVersion: paycheck.version,
-          occurrenceDate: createdOccurrence,
+    mutationFn: async (attempt: ReconciliationAttempt) => {
+      if (attempt.action === 'unlink')
+        return api.unlinkRecurringBill(
+          attempt.entryId,
+          attempt.baselineEntryVersion,
+          attempt.baselinePaycheckVersion,
+        );
+      if (attempt.action === 'create') {
+        return api.createRecurringBillFromEntry(attempt.entryId, {
+          ...attempt.reviewedDefinitionValues,
+          entryVersion: attempt.baselineEntryVersion,
+          paycheckVersion: attempt.baselinePaycheckVersion,
+          occurrenceDate: attempt.occurrenceDate,
         });
       }
-      if (!selectedOccurrence) throw new Error('Choose a recurring Bill occurrence.');
-      return api.linkRecurringBill(entry.id, {
-        entryVersion: entry.version,
-        paycheckVersion: paycheck.version,
-        definitionId: selectedOccurrence.definitionId,
-        definitionVersion: selectedOccurrence.definitionVersion,
-        occurrenceDate: selectedOccurrence.occurrenceDate,
-        confirmDuplicateOccurrence: selectedOccurrence.imports.some(
-          (item) => item.entryId !== entry.id,
-        ),
+      return api.linkRecurringBill(attempt.entryId, {
+        entryVersion: attempt.baselineEntryVersion,
+        paycheckVersion: attempt.baselinePaycheckVersion,
+        definitionId: attempt.definitionId,
+        definitionVersion: attempt.definitionVersion,
+        occurrenceDate: attempt.occurrenceDate,
+        confirmDuplicateOccurrence: attempt.confirmDuplicateOccurrence,
       });
     },
   });
 
-  async function submit(action: 'link' | 'create' | 'unlink') {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setError('');
-    setRecoveryMessage('');
-    try {
-      const updated = await mutation.mutateAsync(action);
-      queryClient.setQueryData(['paycheck', paycheck.id], updated);
-      await onChanged(updated);
-      onClose();
-    } catch (mutationError) {
-      const mutationMessage = displayError(
-        mutationError,
-        settings.currencyCode,
-        'The recurring link was not saved.',
-      );
-      setError(mutationMessage);
-      setRecoveryMessage('Refreshing current data before another attempt.');
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['paycheck', paycheck.id] }),
-        queryClient.invalidateQueries({ queryKey: ['recurring-bills'] }),
-        queryClient.invalidateQueries({ queryKey: ['recurring-bill'] }),
-      ]);
-      try {
-        const refreshedPaycheck = await api.paycheck(paycheck.id);
-        queryClient.setQueryData(['paycheck', paycheck.id], refreshedPaycheck);
-        if (definition && selectedOccurrence) {
-          const [refreshedDefinitions, refreshedTimeline] = await Promise.all([
-            api.recurringBills('ACTIVE'),
-            api.recurringBillTimeline(range.from, range.through),
-          ]);
-          queryClient.setQueryData(
-            ['recurring-bills', 'definitions', 'active'],
-            refreshedDefinitions,
-          );
-          queryClient.setQueryData(
-            ['recurring-bills', 'reconciliation-options', anchor],
-            refreshedTimeline,
-          );
-          const refreshedSelection = refreshedReconciliationSelection(
-            refreshedDefinitions.items,
-            refreshedTimeline.items,
-            selectedOccurrence.definitionId,
-            selectedOccurrence.occurrenceDate,
-          );
-          setDefinition(refreshedSelection.definition);
-          setOccurrence(refreshedSelection.occurrence);
-          setRecoveryMessage(refreshedSelection.message);
-          if (refreshedSelection.kind === 'definition-unavailable') {
-            setStep('definitions');
-            return;
-          }
-          if (refreshedSelection.kind === 'occurrence-unavailable') {
-            setStep('occurrence');
-            return;
-          }
-        }
-      } catch {
-        setRecoveryMessage(
-          'Current data could not be refreshed. Retry when the connection is available.',
-        );
-      }
-    } finally {
-      inFlight.current = false;
-    }
-  }
-
-  function close() {
-    if (mutation.isPending) return;
+  function clearActionState() {
     setDefinition(null);
     setOccurrence(null);
     setCreatedValues(null);
     setCreatedOccurrence(null);
+  }
+
+  function resetWorkflow() {
+    clearActionState();
     setError('');
     setRecoveryMessage('');
+    setOutcomeUnknown(false);
+    setAuthoritativePaycheck(null);
+    setOperation('idle');
+    operationGuard.current = false;
+    unresolvedAttempt.current = null;
+    originalMutationError.current = null;
+    completed.current = false;
+  }
+
+  function createAttempt(action: 'link' | 'create' | 'unlink'): ReconciliationAttempt | null {
+    const base = {
+      baselineEntryVersion: effectiveEntry.version,
+      baselinePaycheckVersion: effectivePaycheck.version,
+      entryId: effectiveEntry.id,
+      paycheckId: effectivePaycheck.id,
+    };
+    if (action === 'link') {
+      if (!selectedOccurrence) return null;
+      return Object.freeze({
+        ...base,
+        action,
+        baselineDefinitionId: effectiveEntry.sourceRecurringBillDefinitionId,
+        baselineOccurrenceDate: effectiveEntry.sourceRecurringOccurrenceDate,
+        confirmDuplicateOccurrence: selectedOccurrence.imports.some(
+          (item) => item.entryId !== effectiveEntry.id,
+        ),
+        definitionId: selectedOccurrence.definitionId,
+        definitionVersion: selectedOccurrence.definitionVersion,
+        occurrenceDate: selectedOccurrence.occurrenceDate,
+      });
+    }
+    if (action === 'create') {
+      if (!createdValues || !createdOccurrence) return null;
+      return Object.freeze({
+        ...base,
+        action,
+        baselineDefinitionId: effectiveEntry.sourceRecurringBillDefinitionId,
+        occurrenceDate: createdOccurrence,
+        reviewedDefinitionValues: Object.freeze({ ...createdValues }),
+      });
+    }
+    if (
+      !effectiveEntry.sourceRecurringBillDefinitionId ||
+      !effectiveEntry.sourceRecurringOccurrenceDate
+    )
+      return null;
+    return Object.freeze({
+      ...base,
+      action,
+      previousDefinitionId: effectiveEntry.sourceRecurringBillDefinitionId,
+      previousOccurrenceDate: effectiveEntry.sourceRecurringOccurrenceDate,
+    });
+  }
+
+  async function finishSuccess(updated: Paycheck) {
+    if (completed.current) return;
+    completed.current = true;
+    queryClient.setQueryData(['paycheck', updated.id], updated);
+    try {
+      await onChanged(updated);
+    } catch {
+      // The authoritative result is already cached. A local refresh failure must
+      // never turn a confirmed mutation into a retryable write.
+    } finally {
+      resetWorkflow();
+      onClose();
+    }
+  }
+
+  async function recoverLink(attempt: Extract<ReconciliationAttempt, { action: 'link' }>) {
+    try {
+      const [refreshedDefinitions, refreshedTimeline] = await Promise.all([
+        api.recurringBills('ACTIVE'),
+        api.recurringBillTimeline(range.from, range.through),
+      ]);
+      queryClient.setQueryData(['recurring-bills', 'definitions', 'active'], refreshedDefinitions);
+      queryClient.setQueryData(
+        ['recurring-bills', 'reconciliation-options', anchor],
+        refreshedTimeline,
+      );
+      const refreshedSelection = refreshedReconciliationSelection(
+        refreshedDefinitions.items,
+        refreshedTimeline.items,
+        attempt.definitionId,
+        attempt.occurrenceDate,
+      );
+      setDefinition(refreshedSelection.definition);
+      setOccurrence(refreshedSelection.occurrence);
+      setRecoveryMessage(refreshedSelection.message);
+      setStep(
+        refreshedSelection.kind === 'definition-unavailable'
+          ? 'definitions'
+          : refreshedSelection.kind === 'occurrence-unavailable'
+            ? 'occurrence'
+            : 'review-link',
+      );
+    } catch {
+      clearActionState();
+      setRecoveryMessage(
+        'The attempted recurring Bill could not be refreshed. Choose it again before retrying.',
+      );
+      setStep('definitions');
+    }
+  }
+
+  async function reconcile(attempt: ReconciliationAttempt, refreshed: Paycheck) {
+    queryClient.setQueryData(['paycheck', refreshed.id], refreshed);
+    setAuthoritativePaycheck(refreshed);
+    const result = classifyReconciliationResult(refreshed, attempt);
+    if (result.kind === 'succeeded') {
+      setOutcomeUnknown(false);
+      await finishSuccess(refreshed);
+      return;
+    }
+
+    unresolvedAttempt.current = null;
+    setOutcomeUnknown(false);
+    setError(
+      displayError(
+        originalMutationError.current,
+        settings.currencyCode,
+        'The recurring Bill relationship was not changed.',
+      ),
+    );
+    await Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: ['recurring-bills'] }),
+      queryClient.invalidateQueries({ queryKey: ['recurring-bill'] }),
+    ]);
+    if (result.kind === 'different-state') {
+      clearActionState();
+      setRecoveryMessage(
+        'The Bill now has different recurring information. Review its current relationship before choosing another action.',
+      );
+      setStep('closed');
+      return;
+    }
+    if (attempt.action === 'link') {
+      await recoverLink(attempt);
+      return;
+    }
+    if (attempt.action === 'unlink') {
+      setRecoveryMessage('Current data was refreshed. Review removal again before retrying.');
+      setStep('review-unlink');
+      return;
+    }
+    setCreatedValues({ ...attempt.reviewedDefinitionValues });
+    setCreatedOccurrence(attempt.occurrenceDate);
+    setRecoveryMessage('Current data was refreshed. Review creation again before retrying.');
+    setStep('review-create');
+  }
+
+  async function submit(action: 'link' | 'create' | 'unlink') {
+    if (disabledReason || operationGuard.current || outcomeUnknown || completed.current) return;
+    const attempt = createAttempt(action);
+    if (!attempt) return;
+    operationGuard.current = true;
+    setOperation('submitting');
+    setError('');
+    setRecoveryMessage('');
+    originalMutationError.current = null;
+    unresolvedAttempt.current = attempt;
+    try {
+      const updated = await mutation.mutateAsync(attempt);
+      await finishSuccess(updated);
+    } catch (mutationError) {
+      originalMutationError.current = mutationError;
+      try {
+        await reconcile(attempt, await api.paycheck(attempt.paycheckId));
+      } catch {
+        setOutcomeUnknown(true);
+        setError(
+          'Yuuka could not confirm whether this recurring Bill change was saved. Check the result before trying again.',
+        );
+        setRecoveryMessage('Check result fetches current data and will not repeat the change.');
+      }
+    } finally {
+      operationGuard.current = false;
+      setOperation('idle');
+    }
+  }
+
+  async function checkResult() {
+    const attempt = unresolvedAttempt.current;
+    if (!attempt || operationGuard.current || completed.current) return;
+    operationGuard.current = true;
+    setOperation('checking');
+    try {
+      await reconcile(attempt, await api.paycheck(attempt.paycheckId));
+    } catch {
+      setOutcomeUnknown(true);
+      setError(
+        'Yuuka could not confirm whether this recurring Bill change was saved. Check the result before trying again.',
+      );
+    } finally {
+      operationGuard.current = false;
+      setOperation('idle');
+    }
+  }
+
+  function close() {
+    if (operationGuard.current || operation !== 'idle' || outcomeUnknown) return;
+    resetWorkflow();
     onClose();
   }
 
-  if (step === 'closed') return null;
+  if (step === 'closed') {
+    return error ? (
+      <View style={[styles.error, { borderColor: colors.danger }]}>
+        <AppText style={{ color: colors.danger }} variant="error">
+          {error}
+        </AppText>
+        {recoveryMessage ? (
+          <AppText style={{ color: colors.muted }} variant="caption">
+            {recoveryMessage}
+          </AppText>
+        ) : null}
+      </View>
+    ) : null;
+  }
   if (step === 'create-definition') {
     return (
-      <Modal animationType="slide" onRequestClose={close} visible>
-        <SheetHeader onClose={close} title="Turn into recurring Bill" />
+      <Modal
+        animationType="slide"
+        onRequestClose={close}
+        testID="recurring-reconciliation-modal"
+        visible
+      >
+        <SheetHeader
+          disabled={operation !== 'idle' || outcomeUnknown}
+          onClose={close}
+          title="Turn into recurring Bill"
+        />
         <RecurringBillEditor
           initialValues={{
-            accountName: entry.accountName,
-            dueDay: entry.dueDate ? Number(entry.dueDate.slice(-2)) : undefined,
-            name: entry.name,
-            notes: entry.notes,
-            payee: entry.payee,
-            paymentMethod: entry.paymentMethod ?? 'AUTOPAY',
-            typicalAmountMinor: entry.amountMinor,
+            accountName: effectiveEntry.accountName,
+            dueDay: effectiveEntry.dueDate ? Number(effectiveEntry.dueDate.slice(-2)) : undefined,
+            name: effectiveEntry.name,
+            notes: effectiveEntry.notes,
+            payee: effectiveEntry.payee,
+            paymentMethod: effectiveEntry.paymentMethod ?? 'AUTOPAY',
+            typicalAmountMinor: effectiveEntry.amountMinor,
           }}
           onSubmit={async (payload) => {
             setCreatedValues(payload);
             setCreatedOccurrence(
-              entry.dueDate ? occurrenceForMonth(entry.dueDate, payload.dueDay) : null,
+              effectiveEntry.dueDate
+                ? occurrenceForMonth(effectiveEntry.dueDate, payload.dueDay)
+                : null,
             );
             setStep('create-occurrence');
           }}
@@ -303,9 +498,18 @@ function RecurringBillReconciliationSheet({
   }
 
   return (
-    <Modal animationType="slide" onRequestClose={close} visible>
+    <Modal
+      animationType="slide"
+      onRequestClose={close}
+      testID="recurring-reconciliation-modal"
+      visible
+    >
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <SheetHeader onClose={close} title={titleForStep(step)} />
+        <SheetHeader
+          disabled={operation !== 'idle' || outcomeUnknown}
+          onClose={close}
+          title={titleForStep(step)}
+        />
         <ScrollView contentContainerStyle={styles.content}>
           {step === 'definitions' ? (
             <DefinitionPicker
@@ -323,7 +527,7 @@ function RecurringBillReconciliationSheet({
           {step === 'occurrence' ? (
             <OccurrencePicker
               current={selectedOccurrence}
-              entry={entry}
+              entry={effectiveEntry}
               error={timeline.error}
               loading={timeline.isPending}
               onContinue={() => {
@@ -340,21 +544,22 @@ function RecurringBillReconciliationSheet({
           {step === 'review-link' && definition && selectedOccurrence ? (
             <ReviewChanges
               definition={selectedOccurrence}
-              entry={entry}
+              entry={effectiveEntry}
               occurrence={selectedOccurrence.occurrenceDate}
               duplicateImports={selectedOccurrence.imports.filter(
-                (item) => item.entryId !== entry.id,
+                (item) => item.entryId !== effectiveEntry.id,
               )}
               onConfirm={() => submit('link')}
-              paycheck={paycheck}
-              pending={mutation.isPending}
+              paycheck={effectivePaycheck}
+              pending={operation === 'submitting'}
+              disabled={outcomeUnknown}
             />
           ) : null}
           {step === 'create-occurrence' && createdValues ? (
             <CreateOccurrencePicker
               anchor={anchor}
               dueDay={createdValues.dueDay}
-              explicitRequired={!entry.dueDate}
+              explicitRequired={!effectiveEntry.dueDate}
               onContinue={() => setStep('review-create')}
               onSelect={setCreatedOccurrence}
               selected={createdOccurrence}
@@ -370,11 +575,12 @@ function RecurringBillReconciliationSheet({
                 paymentMethod: createdValues.paymentMethod ?? 'AUTOPAY',
                 typicalAmountMinor: createdValues.typicalAmountMinor,
               }}
-              entry={entry}
+              entry={effectiveEntry}
               occurrence={createdOccurrence}
               onConfirm={() => submit('create')}
-              paycheck={paycheck}
-              pending={mutation.isPending}
+              paycheck={effectivePaycheck}
+              pending={operation === 'submitting'}
+              disabled={outcomeUnknown}
             />
           ) : null}
           {step === 'review-unlink' ? (
@@ -385,9 +591,10 @@ function RecurringBillReconciliationSheet({
                 unchanged.
               </AppText>
               <Button
+                disabled={outcomeUnknown}
                 icon={Unlink}
                 label="Confirm remove link"
-                loading={mutation.isPending}
+                loading={operation === 'submitting'}
                 onPress={() => submit('unlink')}
                 variant="danger"
               />
@@ -404,6 +611,14 @@ function RecurringBillReconciliationSheet({
                 </AppText>
               ) : null}
             </View>
+          ) : null}
+          {outcomeUnknown ? (
+            <Button
+              label="Check result"
+              loading={operation === 'checking'}
+              onPress={() => void checkResult()}
+              variant="secondary"
+            />
           ) : null}
         </ScrollView>
       </View>
@@ -525,6 +740,7 @@ function CreateOccurrencePicker({
 
 function ReviewChanges({
   definition,
+  disabled,
   duplicateImports = [],
   entry,
   occurrence,
@@ -533,6 +749,7 @@ function ReviewChanges({
   pending,
 }: {
   definition: Parameters<typeof materialRecurringChanges>[1];
+  disabled: boolean;
   duplicateImports?: RecurringBillOccurrence['imports'];
   entry: Entry;
   occurrence: string;
@@ -581,6 +798,7 @@ function ReviewChanges({
         </View>
       ) : null}
       <Button
+        disabled={disabled}
         label={duplicateImports.length ? 'Confirm another assignment' : 'Confirm recurring link'}
         loading={pending}
         onPress={onConfirm}
@@ -589,7 +807,15 @@ function ReviewChanges({
   );
 }
 
-function SheetHeader({ onClose, title }: { onClose: () => void; title: string }) {
+function SheetHeader({
+  disabled,
+  onClose,
+  title,
+}: {
+  disabled: boolean;
+  onClose: () => void;
+  title: string;
+}) {
   const { colors } = useAppTheme();
   return (
     <View
@@ -598,6 +824,8 @@ function SheetHeader({ onClose, title }: { onClose: () => void; title: string })
       <AppText variant="title">{title}</AppText>
       <Pressable
         accessibilityLabel="Close recurring Bill workflow"
+        accessibilityState={{ disabled }}
+        disabled={disabled}
         onPress={onClose}
         style={styles.close}
       >

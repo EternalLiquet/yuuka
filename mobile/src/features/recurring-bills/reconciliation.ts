@@ -7,6 +7,41 @@ import type {
   RecurringBill,
   RecurringBillOccurrence,
 } from '@/api/contracts';
+import type { RecurringBillPayload } from '@/api/use-yuuka-api';
+
+type AttemptBase = {
+  baselineEntryVersion: number;
+  baselinePaycheckVersion: number;
+  entryId: string;
+  paycheckId: string;
+};
+
+export type ReconciliationAttempt =
+  | (AttemptBase & {
+      action: 'link';
+      baselineDefinitionId: string | null;
+      baselineOccurrenceDate: string | null;
+      confirmDuplicateOccurrence: boolean;
+      definitionId: string;
+      definitionVersion: number;
+      occurrenceDate: string;
+    })
+  | (AttemptBase & {
+      action: 'unlink';
+      previousDefinitionId: string;
+      previousOccurrenceDate: string;
+    })
+  | (AttemptBase & {
+      action: 'create';
+      baselineDefinitionId: string | null;
+      occurrenceDate: string;
+      reviewedDefinitionValues: RecurringBillPayload;
+    });
+
+export type ReconciliationResult =
+  | { entry: Entry; kind: 'succeeded' }
+  | { entry: Entry; kind: 'not-applied' }
+  | { entry: Entry | null; kind: 'different-state' };
 
 export type RecurringSnapshot = Pick<
   RecurringBill,
@@ -38,6 +73,66 @@ export type RefreshedReconciliationSelection =
       message: string;
       occurrence: RecurringBillOccurrence;
     };
+
+export function classifyReconciliationResult(
+  paycheck: Paycheck,
+  attempt: ReconciliationAttempt,
+): ReconciliationResult {
+  const entry = paycheck.entries.find((item) => item.id === attempt.entryId) ?? null;
+  if (!entry) return { entry: null, kind: 'different-state' };
+
+  const definitionId = entry.sourceRecurringBillDefinitionId;
+  const occurrenceDate = entry.sourceRecurringOccurrenceDate;
+  if (attempt.action === 'link') {
+    if (definitionId === attempt.definitionId && occurrenceDate === attempt.occurrenceDate) {
+      return { entry, kind: 'succeeded' };
+    }
+    return definitionId === attempt.baselineDefinitionId &&
+      occurrenceDate === attempt.baselineOccurrenceDate
+      ? { entry, kind: 'not-applied' }
+      : { entry, kind: 'different-state' };
+  }
+
+  if (attempt.action === 'unlink') {
+    if (definitionId == null && occurrenceDate == null) return { entry, kind: 'succeeded' };
+    return definitionId === attempt.previousDefinitionId &&
+      occurrenceDate === attempt.previousOccurrenceDate
+      ? { entry, kind: 'not-applied' }
+      : { entry, kind: 'different-state' };
+  }
+
+  if (definitionId == null && occurrenceDate == null) {
+    return { entry, kind: 'not-applied' };
+  }
+  if (
+    definitionId !== attempt.baselineDefinitionId &&
+    occurrenceDate === attempt.occurrenceDate &&
+    matchesCreatedSnapshot(entry, attempt.reviewedDefinitionValues, attempt.occurrenceDate)
+  ) {
+    return { entry, kind: 'succeeded' };
+  }
+  return { entry, kind: 'different-state' };
+}
+
+function matchesCreatedSnapshot(
+  entry: Entry,
+  values: RecurringBillPayload,
+  occurrenceDate: string,
+) {
+  return (
+    entry.name === values.name.trim() &&
+    entry.amountMinor === values.typicalAmountMinor &&
+    entry.paymentMethod === (values.paymentMethod ?? 'AUTOPAY') &&
+    entry.dueDate === occurrenceDate &&
+    entry.accountName === normalizeOptional(values.accountName) &&
+    entry.payee === normalizeOptional(values.payee) &&
+    entry.notes === normalizeOptional(values.notes)
+  );
+}
+
+function normalizeOptional(value?: string | null) {
+  return value == null || !value.trim() ? null : value.trim();
+}
 
 export function refreshedReconciliationSelection(
   definitions: RecurringBill[],

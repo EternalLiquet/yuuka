@@ -6,7 +6,10 @@ describe('committed backend contract', () => {
     readFileSync(resolve(__dirname, '../../../docs/openapi.json'), 'utf8'),
   ) as {
     components?: {
-      schemas?: Record<string, { properties?: Record<string, { type?: string | string[] }> }>;
+      schemas?: Record<
+        string,
+        { properties?: Record<string, { type?: string | string[] }>; required?: string[] }
+      >;
     };
     paths: Record<string, Record<string, unknown>>;
   };
@@ -87,5 +90,14 @@ describe('committed backend contract', () => {
       contract.components?.schemas?.SpendingBucketInsightsResponse?.properties?.selectedBucketName
         ?.type,
     ).toEqual(['string', 'null']);
+  });
+
+  it('requires every recurring reconciliation optimistic-lock version', () => {
+    expect(contract.components?.schemas?.LinkRecurringBillRequest?.required).toEqual(
+      expect.arrayContaining(['entryVersion', 'paycheckVersion', 'definitionVersion']),
+    );
+    expect(contract.components?.schemas?.CreateRecurringBillFromEntryRequest?.required).toEqual(
+      expect.arrayContaining(['entryVersion', 'paycheckVersion']),
+    );
   });
 });

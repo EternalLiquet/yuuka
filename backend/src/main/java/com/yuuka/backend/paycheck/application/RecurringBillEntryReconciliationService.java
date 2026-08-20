@@ -3,6 +3,7 @@ package com.yuuka.backend.paycheck.application;
 import com.yuuka.backend.audit.application.AuditService;
 import com.yuuka.backend.auth.application.OwnerLocalDateService;
 import com.yuuka.backend.common.api.BusinessRuleException;
+import com.yuuka.backend.common.api.ConflictException;
 import com.yuuka.backend.common.api.ResourceNotFoundException;
 import com.yuuka.backend.payback.application.PaybackService;
 import com.yuuka.backend.paycheck.api.dto.EntryResponse;
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -77,7 +79,7 @@ public class RecurringBillEntryReconciliationService {
   @Transactional
   public PaycheckResponse link(UUID ownerId, UUID entryId, LinkRecurringBillRequest request) {
     LockedEntry locked =
-        lockEntry(ownerId, entryId, request.entryVersion(), request.paycheckVersion());
+        lockEntry(ownerId, entryId, request.entryVersion(), request.paycheckVersion(), true);
     RecurringBillDefinition definition =
         definitions
             .findByIdAndOwnerIdForUpdate(request.definitionId(), ownerId)
@@ -99,7 +101,7 @@ public class RecurringBillEntryReconciliationService {
   public PaycheckResponse createFromEntry(
       UUID ownerId, UUID entryId, CreateRecurringBillFromEntryRequest request) {
     LockedEntry locked =
-        lockEntry(ownerId, entryId, request.entryVersion(), request.paycheckVersion());
+        lockEntry(ownerId, entryId, request.entryVersion(), request.paycheckVersion(), true);
     if (locked.entry().getSourceRecurringBillDefinitionId() != null) {
       throw new BusinessRuleException(
           "Remove the existing recurring Bill link before creating a new definition.");
@@ -143,7 +145,7 @@ public class RecurringBillEntryReconciliationService {
   @Transactional
   public PaycheckResponse unlink(
       UUID ownerId, UUID entryId, long entryVersion, long paycheckVersion) {
-    LockedEntry locked = lockEntry(ownerId, entryId, entryVersion, paycheckVersion);
+    LockedEntry locked = lockEntry(ownerId, entryId, entryVersion, paycheckVersion, false);
     PaycheckEntry entry = locked.entry();
     EntryResponse before = responseAssembler.toEntryResponse(entry);
     RecurringSource previous = RecurringSource.from(entry);
@@ -221,14 +223,23 @@ public class RecurringBillEntryReconciliationService {
   }
 
   private LockedEntry lockEntry(
-      UUID ownerId, UUID entryId, long entryVersion, long paycheckVersion) {
-    PaycheckEntry candidate =
+      UUID ownerId,
+      UUID entryId,
+      long entryVersion,
+      long paycheckVersion,
+      boolean lockAssignedPayback) {
+    PaycheckEntry discoveredEntry =
         entries
             .findByIdAndOwnerIdAndDeletedAtIsNull(entryId, ownerId)
             .orElseThrow(ResourceNotFoundException::new);
+    EntryLockCandidate candidate =
+        new EntryLockCandidate(discoveredEntry.getPaycheckId(), discoveredEntry.getPaybackId());
+    if (lockAssignedPayback && candidate.paybackId() != null) {
+      paybackService.lockForRecurringReconciliation(ownerId, candidate.paybackId());
+    }
     Paycheck paycheck =
         paychecks
-            .findByIdAndOwnerIdForUpdate(candidate.getPaycheckId(), ownerId)
+            .findByIdAndOwnerIdForUpdate(candidate.paycheckId(), ownerId)
             .orElseThrow(ResourceNotFoundException::new);
     PaycheckEntry entry =
         entries
@@ -237,6 +248,11 @@ public class RecurringBillEntryReconciliationService {
     validations.requireActive(paycheck);
     validations.assertVersion(paycheck.getVersion(), paycheckVersion);
     validations.assertVersion(entry.getVersion(), entryVersion);
+    if (!entry.getPaycheckId().equals(candidate.paycheckId())
+        || !Objects.equals(entry.getPaybackId(), candidate.paybackId())) {
+      throw new ConflictException(
+          "This record changed since it was loaded. Refresh and try again.");
+    }
     if (entry.getEntryType() != EntryType.BILL) {
       throw new BusinessRuleException("Only Bills can be linked to recurring Bills.");
     }
@@ -320,6 +336,8 @@ public class RecurringBillEntryReconciliationService {
 
   private record LockedEntry(
       Paycheck paycheck, PaycheckEntry entry, List<PaycheckEntry> liveEntries) {}
+
+  private record EntryLockCandidate(UUID paycheckId, UUID paybackId) {}
 
   private record RecurringSource(UUID definitionId, LocalDate occurrenceDate) {
     private static RecurringSource from(PaycheckEntry entry) {

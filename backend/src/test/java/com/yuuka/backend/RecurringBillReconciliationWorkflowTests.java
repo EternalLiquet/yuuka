@@ -135,6 +135,46 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void requiresOptimisticLockVersionsAtTheRequestBoundary() throws Exception {
+    String token = register("recurring-required-versions@yuuka.local");
+    JsonNode definition = createDefinition(token, "Rent", 9000, 21, "AUTOPAY", null, null, null);
+    JsonNode paycheck = createPaycheck(token, "Required versions", 10000, "2026-08-15");
+    JsonNode entry = addBill(token, paycheck, "Legacy", 5000, "2026-08-18", "AUTOPAY");
+
+    mockMvc
+        .perform(
+            put("/api/v1/entries/{id}/recurring-bill-link", entry.path("id").asText())
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        Map.of(
+                            "definitionId",
+                            definition.path("id").asText(),
+                            "occurrenceDate",
+                            "2026-08-21",
+                            "confirmDuplicateOccurrence",
+                            false))))
+        .andExpect(status().isBadRequest());
+
+    mockMvc
+        .perform(
+            post("/api/v1/entries/{id}/recurring-bill-definition", entry.path("id").asText())
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"Rent",
+                      "typicalAmountMinor":9000,
+                      "dueDay":21,
+                      "occurrenceDate":"2026-08-21"
+                    }
+                    """))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void updatesTheActivePaybackRepaymentWhenLinkingAPostedBill() throws Exception {
     String token = register("recurring-posted-payback@yuuka.local");
     JsonNode payback = createPayback(token, "Protected cash", 10000, 10000);

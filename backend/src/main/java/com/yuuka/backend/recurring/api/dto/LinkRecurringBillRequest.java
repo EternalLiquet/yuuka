@@ -6,9 +6,9 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 public record LinkRecurringBillRequest(
-    @PositiveOrZero long entryVersion,
-    @PositiveOrZero long paycheckVersion,
+    @NotNull @PositiveOrZero Long entryVersion,
+    @NotNull @PositiveOrZero Long paycheckVersion,
     @NotNull UUID definitionId,
-    @PositiveOrZero long definitionVersion,
+    @NotNull @PositiveOrZero Long definitionVersion,
     @NotNull LocalDate occurrenceDate,
     boolean confirmDuplicateOccurrence) {}

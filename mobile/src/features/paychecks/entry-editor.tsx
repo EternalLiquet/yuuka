@@ -73,7 +73,7 @@ export function EntryEditor({
   const { settings } = useSettings();
   const {
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isDirty, isSubmitting },
     handleSubmit,
     reset,
     setError,
@@ -234,14 +234,19 @@ export function EntryEditor({
                   </Pressable>
                 )}
               />
-              {entry && paycheck && onRecurringChanged ? (
-                <RecurringBillSection
-                  entry={entry}
-                  onChanged={onRecurringChanged}
-                  paycheck={paycheck}
-                />
-              ) : null}
             </>
+          ) : null}
+          {entry?.entryType === 'BILL' && paycheck && onRecurringChanged ? (
+            <RecurringBillSection
+              disabledReason={
+                isDirty || entryType !== 'BILL'
+                  ? 'Save or discard your entry changes before changing its recurring Bill relationship.'
+                  : null
+              }
+              entry={entry}
+              onChanged={onRecurringChanged}
+              paycheck={paycheck}
+            />
           ) : null}
           {entryType === 'SINKING_FUND' ? (
             <>

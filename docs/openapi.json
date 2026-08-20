@@ -3932,7 +3932,7 @@
             "type" : "boolean"
           }
         },
-        "required" : [ "definitionId", "occurrenceDate" ]
+        "required" : [ "definitionId", "definitionVersion", "entryVersion", "occurrenceDate", "paycheckVersion" ]
       },
       "CreateRecurringBillFromEntryRequest" : {
         "type" : "object",
@@ -3984,7 +3984,7 @@
             "format" : "date"
           }
         },
-        "required" : [ "name", "occurrenceDate", "typicalAmountMinor" ]
+        "required" : [ "entryVersion", "name", "occurrenceDate", "paycheckVersion", "typicalAmountMinor" ]
       },
       "RecurringBillImportItemRequest" : {
         "type" : "object",
