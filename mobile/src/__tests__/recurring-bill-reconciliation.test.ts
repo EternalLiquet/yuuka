@@ -3,10 +3,12 @@ import {
   materialRecurringChanges,
   nearbyOccurrenceMonths,
   occurrenceForMonth,
+  refreshRecurringReconciliationQueries,
   timelineRange,
 } from '@/features/recurring-bills/reconciliation';
 
-import type { Entry } from '@/api/contracts';
+import { QueryClient } from '@tanstack/react-query';
+import type { Entry, Paycheck } from '@/api/contracts';
 
 describe('recurring Bill reconciliation helpers', () => {
   it('derives clamped monthly occurrences and a nearby five-month range', () => {
@@ -52,6 +54,29 @@ describe('recurring Bill reconciliation helpers', () => {
     );
     expect(allocationChangeMessage(1499, 1399, money)).toBe('Returns $1.00 to unallocated money');
     expect(allocationChangeMessage(1399, 1399, money)).toBe('Allocation does not change');
+  });
+
+  it('refreshes every affected query family after reconciliation', async () => {
+    const client = new QueryClient();
+    const invalidate = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
+    const updated = {
+      entries: [],
+      id: '22222222-2222-4222-8222-222222222222',
+    } as unknown as Paycheck;
+
+    await refreshRecurringReconciliationQueries(client, updated.id, updated);
+
+    expect(client.getQueryData(['paycheck', updated.id])).toBe(updated);
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+      ['paycheck', updated.id],
+      ['paychecks'],
+      ['dashboard'],
+      ['recurring-bills'],
+      ['recurring-bill'],
+      ['search', 'entries'],
+      ['paybacks'],
+      ['payback'],
+    ]);
   });
 });
 

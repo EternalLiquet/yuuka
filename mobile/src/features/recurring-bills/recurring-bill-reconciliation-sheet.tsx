@@ -216,7 +216,7 @@ function RecurringBillReconciliationSheet({
       try {
         const refreshedPaycheck = await api.paycheck(paycheck.id);
         queryClient.setQueryData(['paycheck', paycheck.id], refreshedPaycheck);
-        if (definition && occurrence) {
+        if (definition && selectedOccurrence) {
           const [refreshedDefinitions, refreshedTimeline] = await Promise.all([
             api.recurringBills('ACTIVE'),
             api.recurringBillTimeline(range.from, range.through),
@@ -227,9 +227,9 @@ function RecurringBillReconciliationSheet({
           setOccurrence(
             refreshedTimeline.items.find(
               (item) =>
-                item.definitionId === occurrence.definitionId &&
-                item.occurrenceDate === occurrence.occurrenceDate,
-            ) ?? occurrence,
+                item.definitionId === selectedOccurrence.definitionId &&
+                item.occurrenceDate === selectedOccurrence.occurrenceDate,
+            ) ?? selectedOccurrence,
           );
         }
       } catch {
@@ -302,7 +302,10 @@ function RecurringBillReconciliationSheet({
               entry={entry}
               error={timeline.error}
               loading={timeline.isPending}
-              onContinue={() => setStep('review-link')}
+              onContinue={() => {
+                if (selectedOccurrence) setOccurrence(selectedOccurrence);
+                setStep('review-link');
+              }}
               onRetry={() => timeline.refetch()}
               onSelect={setOccurrence}
               values={(timeline.data?.items ?? []).filter(

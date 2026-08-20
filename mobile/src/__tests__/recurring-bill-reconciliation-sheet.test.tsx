@@ -125,7 +125,10 @@ describe('RecurringBillSection', () => {
     expect(mockPush).toHaveBeenCalledWith(`/recurring-bills/${definition().id}`);
     fireEvent.press(view.getByLabelText('Remove link'));
     expect(await view.findByText(/current name, amount/)).toBeTruthy();
-    expect(view.getByLabelText('Confirm remove link')).toBeTruthy();
+    fireEvent.press(view.getByLabelText('Confirm remove link'));
+    await waitFor(() =>
+      expect(mockApi.unlinkRecurringBill).toHaveBeenCalledWith(linked.id, linked.version, 3),
+    );
   });
 });
 

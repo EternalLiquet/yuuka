@@ -1,4 +1,6 @@
-import type { Entry, EntryPaymentMethod, RecurringBill } from '@/api/contracts';
+import type { QueryClient } from '@tanstack/react-query';
+
+import type { Entry, EntryPaymentMethod, Paycheck, RecurringBill } from '@/api/contracts';
 
 export type RecurringSnapshot = Pick<
   RecurringBill,
@@ -10,6 +12,26 @@ export type MaterialChange = {
   before: string;
   field: string;
 };
+
+export async function refreshRecurringReconciliationQueries(
+  queryClient: QueryClient,
+  paycheckId: string,
+  updated: Paycheck,
+) {
+  queryClient.setQueryData(['paycheck', paycheckId], updated);
+  await Promise.all(
+    [
+      ['paycheck', paycheckId],
+      ['paychecks'],
+      ['dashboard'],
+      ['recurring-bills'],
+      ['recurring-bill'],
+      ['search', 'entries'],
+      ['paybacks'],
+      ['payback'],
+    ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+  );
+}
 
 export function occurrenceForMonth(monthDate: string, dueDay: number) {
   const [year, month] = monthDate.split('-').map(Number);

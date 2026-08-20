@@ -45,6 +45,7 @@ import { PaycheckEditor } from '@/features/paychecks/paycheck-editor';
 import { StatusSheet } from '@/features/paychecks/status-sheet';
 import { StatusHistorySheet } from '@/features/paychecks/status-history-sheet';
 import { ImportRecurringBillsSheet } from '@/features/recurring-bills/import-recurring-bills-sheet';
+import { refreshRecurringReconciliationQueries } from '@/features/recurring-bills/reconciliation';
 import { useMinimumVisibleDuration } from '@/hooks/use-minimum-visible-duration';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
@@ -148,17 +149,7 @@ export default function PaycheckDetailScreen() {
     ]);
   };
   const invalidateRecurringReconciliation = async (updated: Paycheck) => {
-    queryClient.setQueryData(['paycheck', id], updated);
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['paycheck', id] }),
-      queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
-      queryClient.invalidateQueries({ queryKey: ['recurring-bills'] }),
-      queryClient.invalidateQueries({ queryKey: ['recurring-bill'] }),
-      queryClient.invalidateQueries({ queryKey: ['search', 'entries'] }),
-      queryClient.invalidateQueries({ queryKey: ['paybacks'] }),
-      queryClient.invalidateQueries({ queryKey: ['payback'] }),
-    ]);
+    await refreshRecurringReconciliationQueries(queryClient, id, updated);
   };
 
   const statusMutation = useMutation({

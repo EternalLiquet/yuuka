@@ -121,7 +121,49 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
                 .content("{\"version\":%d}".formatted(definition.path("version").asLong())),
             200);
     link(token, current, currentEntry, inactive, "2026-08-21", false, 422);
+
+    JsonNode deleted = createDefinition(token, "Deleted", 1000, 21, "AUTOPAY", null, null, null);
+    requestJson(
+        delete(
+                "/api/v1/recurring-bills/{id}?version={version}",
+                deleted.path("id").asText(),
+                deleted.path("version").asLong())
+            .header("Authorization", bearer(token)),
+        204);
+    link(token, current, currentEntry, deleted, "2026-08-21", false, 404);
     assertThat(entryRow(entry.path("id").asText()).get("name")).isEqualTo("Rent");
+  }
+
+  @Test
+  void updatesTheActivePaybackRepaymentWhenLinkingAPostedBill() throws Exception {
+    String token = register("recurring-posted-payback@yuuka.local");
+    JsonNode payback = createPayback(token, "Protected cash", 10000, 10000);
+    JsonNode definition =
+        createDefinition(token, "Final repayment", 6000, 21, "AUTOPAY", null, null, null);
+    JsonNode paycheck = createPaycheck(token, "Repayment", 10000, "2026-08-15");
+    JsonNode entry =
+        addBill(
+            token,
+            paycheck,
+            "Draft repayment",
+            4000,
+            "2026-08-18",
+            "MANUAL",
+            payback.path("id").asText());
+    entry = changeStatus(token, entry, "POSTED");
+    assertThat(getPayback(token, payback.path("id").asText()).path("remainingMinor").asLong())
+        .isEqualTo(6000);
+    paycheck = getPaycheck(token, paycheck.path("id").asText());
+
+    JsonNode linked = link(token, paycheck, entry, definition, "2026-08-21", false, 200);
+    JsonNode linkedEntry = linked.path("entries").get(0);
+
+    assertThat(linkedEntry.path("id").asText()).isEqualTo(entry.path("id").asText());
+    assertThat(linkedEntry.path("status").asText()).isEqualTo("POSTED");
+    assertThat(linkedEntry.path("paybackId").asText()).isEqualTo(payback.path("id").asText());
+    assertThat(getPayback(token, payback.path("id").asText()).path("remainingMinor").asLong())
+        .isEqualTo(4000);
+    assertThat(statusHistoryCount(entry.path("id").asText())).isEqualTo(1);
   }
 
   @Test
@@ -159,6 +201,7 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
   @Test
   void createsDefinitionFromBillAndRollsBackDefinitionWhenNormalizationFails() throws Exception {
     String token = register("recurring-create-from-entry@yuuka.local");
+    String other = register("recurring-create-from-entry-other@yuuka.local");
     JsonNode paycheck = createPaycheck(token, "Create source", 20000, "2026-08-15");
     JsonNode entry = addBill(token, paycheck, "Old", 5000, null, "MANUAL");
     paycheck = getPaycheck(token, paycheck.path("id").asText());
@@ -174,6 +217,24 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
     request.put("payee", "Vendor");
     request.put("notes", "Final definition");
     request.put("occurrenceDate", "2026-08-31");
+    long definitionsBeforeConflict = definitionCount(token);
+    request.put("entryVersion", entry.path("version").asLong() + 1);
+    requestJson(
+        post("/api/v1/entries/{id}/recurring-bill-definition", entry.path("id").asText())
+            .header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)),
+        409);
+    assertThat(definitionCount(token)).isEqualTo(definitionsBeforeConflict);
+    request.put("entryVersion", entry.path("version").asLong());
+    requestJson(
+        post("/api/v1/entries/{id}/recurring-bill-definition", entry.path("id").asText())
+            .header("Authorization", bearer(other))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)),
+        404);
+    assertThat(definitionCount(other)).isZero();
+
     JsonNode created =
         requestJson(
             post("/api/v1/entries/{id}/recurring-bill-definition", entry.path("id").asText())
@@ -340,6 +401,18 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
       String dueDate,
       String paymentMethod)
       throws Exception {
+    return addBill(token, paycheck, name, amount, dueDate, paymentMethod, null);
+  }
+
+  private JsonNode addBill(
+      String token,
+      JsonNode paycheck,
+      String name,
+      long amount,
+      String dueDate,
+      String paymentMethod,
+      String paybackId)
+      throws Exception {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("entryType", "BILL");
     body.put("name", name);
@@ -349,12 +422,37 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
     body.put("accountName", "Old account");
     body.put("payee", "Old payee");
     body.put("notes", "Old notes");
+    body.put("paybackId", paybackId);
     return requestJson(
         post("/api/v1/paychecks/{id}/entries", paycheck.path("id").asText())
             .header("Authorization", bearer(token))
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(body)),
         201);
+  }
+
+  private JsonNode createPayback(
+      String token, String name, long originalAmount, long openingRemaining) throws Exception {
+    return requestJson(
+        post("/api/v1/paybacks")
+            .header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {
+                  "name":"%s",
+                  "originalAmountMinor":%d,
+                  "openingRemainingAmountMinor":%d,
+                  "borrowedDate":"2026-08-01"
+                }
+                """
+                    .formatted(name, originalAmount, openingRemaining)),
+        201);
+  }
+
+  private JsonNode getPayback(String token, String paybackId) throws Exception {
+    return requestJson(
+        get("/api/v1/paybacks/{id}", paybackId).header("Authorization", bearer(token)), 200);
   }
 
   private JsonNode changeStatus(String token, JsonNode entry, String status) throws Exception {
