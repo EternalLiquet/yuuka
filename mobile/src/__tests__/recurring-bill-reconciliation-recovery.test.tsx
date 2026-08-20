@@ -36,7 +36,51 @@ jest.mock('@/theme/use-app-theme', () => ({
 }));
 
 describe('recurring Bill reconciliation recovery', () => {
-  afterEach(async () => cleanup());
+  afterEach(() => cleanup());
+  beforeEach(() => jest.resetAllMocks());
+
+  it('reviews the same occurrence snapshot and version that it submits', async () => {
+    const source = entry();
+    const currentPaycheck = paycheck(source);
+    const timelineOccurrence = {
+      ...occurrence(3),
+      name: 'Netflix Plus',
+      typicalAmountMinor: 1599,
+    };
+    const updatedPaycheck = paycheck(
+      {
+        ...source,
+        amountMinor: 1599,
+        name: 'Netflix Plus',
+        sourceRecurringBillDefinitionId: timelineOccurrence.definitionId,
+        sourceRecurringOccurrenceDate: timelineOccurrence.occurrenceDate,
+        version: 1,
+      },
+      { version: 4 },
+    );
+    mockApi.recurringBills.mockResolvedValue({ items: [definition(2)] });
+    mockApi.recurringBillTimeline.mockResolvedValue(timeline(timelineOccurrence));
+    mockApi.linkRecurringBill.mockResolvedValue(updatedPaycheck);
+    const onChanged = jest.fn().mockResolvedValue(undefined);
+    const view = await renderSection(source, currentPaycheck, onChanged);
+
+    fireEvent.press(view.getByLabelText('Link to recurring Bill'));
+    fireEvent.press(await view.findByLabelText('Choose Netflix'));
+    fireEvent.press(await view.findByLabelText('Review changes'));
+
+    expect(await view.findByText('Link to Netflix Plus')).toBeTruthy();
+    expect(view.getByText('$13.99 → $15.99')).toBeTruthy();
+    fireEvent.press(view.getByLabelText('Confirm recurring link'));
+
+    await waitFor(() =>
+      expect(mockApi.linkRecurringBill).toHaveBeenCalledWith(
+        source.id,
+        expect.objectContaining({ definitionVersion: 3 }),
+      ),
+    );
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(updatedPaycheck));
+    await waitFor(() => expect(view.getByLabelText('Link to recurring Bill')).toBeTruthy());
+  });
 
   it('refreshes an auto-suggested occurrence after a stale failure and prevents duplicate submits', async () => {
     const queryClient = new QueryClient({
@@ -72,14 +116,7 @@ describe('recurring Bill reconciliation recovery', () => {
       .mockRejectedValueOnce(new Error('The recurring Bill changed.'))
       .mockResolvedValue(updatedPaycheck);
 
-    const view = await render(
-      <RecurringBillSection entry={source} onChanged={onChanged} paycheck={currentPaycheck} />,
-      {
-        wrapper: ({ children }: PropsWithChildren) => (
-          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-        ),
-      },
-    );
+    const view = await renderSection(source, currentPaycheck, onChanged, queryClient);
 
     fireEvent.press(view.getByLabelText('Link to recurring Bill'));
     fireEvent.press(await view.findByLabelText('Choose Netflix'));
@@ -104,8 +141,30 @@ describe('recurring Bill reconciliation recovery', () => {
       expect.objectContaining({ definitionVersion: 3 }),
     );
     await waitFor(() => expect(onChanged).toHaveBeenCalledWith(updatedPaycheck));
+    await waitFor(() => expect(view.getByLabelText('Link to recurring Bill')).toBeTruthy());
   });
 });
+
+async function renderSection(
+  source: Entry,
+  currentPaycheck: Paycheck,
+  onChanged: jest.Mock,
+  queryClient = new QueryClient({
+    defaultOptions: {
+      mutations: { gcTime: Infinity, retry: false },
+      queries: { gcTime: Infinity, retry: false },
+    },
+  }),
+) {
+  return render(
+    <RecurringBillSection entry={source} onChanged={onChanged} paycheck={currentPaycheck} />,
+    {
+      wrapper: ({ children }: PropsWithChildren) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    },
+  );
+}
 
 function definition(version: number): RecurringBill {
   return {

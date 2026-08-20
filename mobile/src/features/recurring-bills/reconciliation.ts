@@ -1,6 +1,12 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import type { Entry, EntryPaymentMethod, Paycheck, RecurringBill } from '@/api/contracts';
+import type {
+  Entry,
+  EntryPaymentMethod,
+  Paycheck,
+  RecurringBill,
+  RecurringBillOccurrence,
+} from '@/api/contracts';
 
 export type RecurringSnapshot = Pick<
   RecurringBill,
@@ -12,6 +18,60 @@ export type MaterialChange = {
   before: string;
   field: string;
 };
+
+export type RefreshedReconciliationSelection =
+  | {
+      definition: null;
+      kind: 'definition-unavailable';
+      message: string;
+      occurrence: null;
+    }
+  | {
+      definition: RecurringBill;
+      kind: 'occurrence-unavailable';
+      message: string;
+      occurrence: null;
+    }
+  | {
+      definition: RecurringBill;
+      kind: 'ready';
+      message: string;
+      occurrence: RecurringBillOccurrence;
+    };
+
+export function refreshedReconciliationSelection(
+  definitions: RecurringBill[],
+  occurrences: RecurringBillOccurrence[],
+  definitionId: string,
+  occurrenceDate: string,
+): RefreshedReconciliationSelection {
+  const definition = definitions.find((item) => item.id === definitionId);
+  if (!definition) {
+    return {
+      definition: null,
+      kind: 'definition-unavailable',
+      message: 'That recurring Bill is no longer Active. Choose another recurring Bill.',
+      occurrence: null,
+    };
+  }
+  const occurrence = occurrences.find(
+    (item) => item.definitionId === definitionId && item.occurrenceDate === occurrenceDate,
+  );
+  if (!occurrence) {
+    return {
+      definition,
+      kind: 'occurrence-unavailable',
+      message: 'That occurrence is no longer available. Choose another occurrence.',
+      occurrence: null,
+    };
+  }
+  return {
+    definition,
+    kind: 'ready',
+    message: 'Current data was refreshed. Review the updated values before retrying.',
+    occurrence,
+  };
+}
 
 export async function refreshRecurringReconciliationQueries(
   queryClient: QueryClient,

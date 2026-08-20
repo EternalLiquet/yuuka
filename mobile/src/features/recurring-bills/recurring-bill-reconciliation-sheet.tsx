@@ -22,6 +22,7 @@ import {
   materialRecurringChanges,
   nearbyOccurrenceMonths,
   occurrenceForMonth,
+  refreshedReconciliationSelection,
   timelineRange,
 } from './reconciliation';
 
@@ -144,6 +145,7 @@ function RecurringBillReconciliationSheet({
   const [createdValues, setCreatedValues] = useState<RecurringBillPayload | null>(null);
   const [createdOccurrence, setCreatedOccurrence] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [recoveryMessage, setRecoveryMessage] = useState('');
   const anchor = entry.dueDate ?? paycheck.incomeDate;
   const range = useMemo(() => timelineRange(anchor), [anchor]);
   const definitions = useQuery({
@@ -180,12 +182,11 @@ function RecurringBillReconciliationSheet({
           occurrenceDate: createdOccurrence,
         });
       }
-      if (!definition || !selectedOccurrence)
-        throw new Error('Choose a recurring Bill occurrence.');
+      if (!selectedOccurrence) throw new Error('Choose a recurring Bill occurrence.');
       return api.linkRecurringBill(entry.id, {
         entryVersion: entry.version,
         paycheckVersion: paycheck.version,
-        definitionId: definition.id,
+        definitionId: selectedOccurrence.definitionId,
         definitionVersion: selectedOccurrence.definitionVersion,
         occurrenceDate: selectedOccurrence.occurrenceDate,
         confirmDuplicateOccurrence: selectedOccurrence.imports.some(
@@ -199,15 +200,20 @@ function RecurringBillReconciliationSheet({
     if (inFlight.current) return;
     inFlight.current = true;
     setError('');
+    setRecoveryMessage('');
     try {
       const updated = await mutation.mutateAsync(action);
       queryClient.setQueryData(['paycheck', paycheck.id], updated);
       await onChanged(updated);
       onClose();
     } catch (mutationError) {
-      setError(
-        displayError(mutationError, settings.currencyCode, 'The recurring link was not saved.'),
+      const mutationMessage = displayError(
+        mutationError,
+        settings.currencyCode,
+        'The recurring link was not saved.',
       );
+      setError(mutationMessage);
+      setRecoveryMessage('Refreshing current data before another attempt.');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['paycheck', paycheck.id] }),
         queryClient.invalidateQueries({ queryKey: ['recurring-bills'] }),
@@ -221,19 +227,36 @@ function RecurringBillReconciliationSheet({
             api.recurringBills('ACTIVE'),
             api.recurringBillTimeline(range.from, range.through),
           ]);
-          setDefinition(
-            refreshedDefinitions.items.find((item) => item.id === definition.id) ?? definition,
+          queryClient.setQueryData(
+            ['recurring-bills', 'definitions', 'active'],
+            refreshedDefinitions,
           );
-          setOccurrence(
-            refreshedTimeline.items.find(
-              (item) =>
-                item.definitionId === selectedOccurrence.definitionId &&
-                item.occurrenceDate === selectedOccurrence.occurrenceDate,
-            ) ?? selectedOccurrence,
+          queryClient.setQueryData(
+            ['recurring-bills', 'reconciliation-options', anchor],
+            refreshedTimeline,
           );
+          const refreshedSelection = refreshedReconciliationSelection(
+            refreshedDefinitions.items,
+            refreshedTimeline.items,
+            selectedOccurrence.definitionId,
+            selectedOccurrence.occurrenceDate,
+          );
+          setDefinition(refreshedSelection.definition);
+          setOccurrence(refreshedSelection.occurrence);
+          setRecoveryMessage(refreshedSelection.message);
+          if (refreshedSelection.kind === 'definition-unavailable') {
+            setStep('definitions');
+            return;
+          }
+          if (refreshedSelection.kind === 'occurrence-unavailable') {
+            setStep('occurrence');
+            return;
+          }
         }
       } catch {
-        // The original mutation error remains actionable; retry controls keep current selections.
+        setRecoveryMessage(
+          'Current data could not be refreshed. Retry when the connection is available.',
+        );
       }
     } finally {
       inFlight.current = false;
@@ -247,6 +270,7 @@ function RecurringBillReconciliationSheet({
     setCreatedValues(null);
     setCreatedOccurrence(null);
     setError('');
+    setRecoveryMessage('');
     onClose();
   }
 
@@ -315,7 +339,7 @@ function RecurringBillReconciliationSheet({
           ) : null}
           {step === 'review-link' && definition && selectedOccurrence ? (
             <ReviewChanges
-              definition={definition}
+              definition={selectedOccurrence}
               entry={entry}
               occurrence={selectedOccurrence.occurrenceDate}
               duplicateImports={selectedOccurrence.imports.filter(
@@ -374,9 +398,11 @@ function RecurringBillReconciliationSheet({
               <AppText style={{ color: colors.danger }} variant="error">
                 {error}
               </AppText>
-              <AppText style={{ color: colors.muted }} variant="caption">
-                Current data is refreshing. Your selections remain available for review.
-              </AppText>
+              {recoveryMessage ? (
+                <AppText style={{ color: colors.muted }} variant="caption">
+                  {recoveryMessage}
+                </AppText>
+              ) : null}
             </View>
           ) : null}
         </ScrollView>

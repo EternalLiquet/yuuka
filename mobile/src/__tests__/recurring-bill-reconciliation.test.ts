@@ -3,6 +3,7 @@ import {
   materialRecurringChanges,
   nearbyOccurrenceMonths,
   occurrenceForMonth,
+  refreshedReconciliationSelection,
   refreshRecurringReconciliationQueries,
   timelineRange,
 } from '@/features/recurring-bills/reconciliation';
@@ -78,6 +79,44 @@ describe('recurring Bill reconciliation helpers', () => {
       ['payback'],
     ]);
   });
+
+  it('clears unavailable definitions and occurrences during stale recovery', () => {
+    const currentDefinition = recurringDefinition();
+    const currentOccurrence = recurringOccurrence();
+
+    expect(
+      refreshedReconciliationSelection(
+        [],
+        [currentOccurrence],
+        currentDefinition.id,
+        currentOccurrence.occurrenceDate,
+      ),
+    ).toMatchObject({ definition: null, kind: 'definition-unavailable', occurrence: null });
+    expect(
+      refreshedReconciliationSelection(
+        [currentDefinition],
+        [],
+        currentDefinition.id,
+        currentOccurrence.occurrenceDate,
+      ),
+    ).toMatchObject({
+      definition: currentDefinition,
+      kind: 'occurrence-unavailable',
+      occurrence: null,
+    });
+    expect(
+      refreshedReconciliationSelection(
+        [currentDefinition],
+        [currentOccurrence],
+        currentDefinition.id,
+        currentOccurrence.occurrenceDate,
+      ),
+    ).toMatchObject({
+      definition: currentDefinition,
+      kind: 'ready',
+      occurrence: currentOccurrence,
+    });
+  });
 });
 
 function money(value: number) {
@@ -111,5 +150,39 @@ function entry(): Entry {
     targetMinor: null,
     updatedAt: '2026-08-01T12:00:00Z',
     version: 0,
+  };
+}
+
+function recurringDefinition() {
+  return {
+    accountName: 'Visa',
+    active: true,
+    createdAt: '2026-08-01T12:00:00Z',
+    dueDay: 21,
+    id: '33333333-3333-4333-8333-333333333333',
+    name: 'Netflix',
+    notes: 'Streaming',
+    payee: 'Netflix Inc',
+    paymentMethod: 'AUTOPAY' as const,
+    recurrenceType: 'MONTHLY' as const,
+    typicalAmountMinor: 1499,
+    updatedAt: '2026-08-01T12:00:00Z',
+    version: 3,
+  };
+}
+
+function recurringOccurrence() {
+  return {
+    accountName: 'Visa',
+    definitionId: recurringDefinition().id,
+    definitionVersion: 3,
+    importCount: 0,
+    imports: [],
+    name: 'Netflix',
+    notes: 'Streaming',
+    occurrenceDate: '2026-08-21',
+    payee: 'Netflix Inc',
+    paymentMethod: 'AUTOPAY' as const,
+    typicalAmountMinor: 1499,
   };
 }
