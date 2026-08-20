@@ -29,6 +29,8 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/recurring-bills",
           "/api/v1/recurring-bills/timeline",
           "/api/v1/recurring-bills/{definitionId}",
+          "/api/v1/entries/{entryId}/recurring-bill-link",
+          "/api/v1/entries/{entryId}/recurring-bill-definition",
           "/api/v1/expense-ledgers",
           "/api/v1/expense-ledgers/{ledgerId}",
           "/api/v1/expense-ledgers/{ledgerId}/items",

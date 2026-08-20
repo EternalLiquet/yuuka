@@ -111,6 +111,16 @@ until it is explicitly closed again.
 
 Two stale edits to the same version must not silently overwrite. The stale request receives `409 Conflict`.
 
+### Existing-Bill recurring reconciliation
+
+An eligible existing Bill can be linked or relinked to an exact Active recurring definition and
+monthly occurrence without replacing its entry identity, status, order, or immutable history.
+Recurring-owned snapshot fields and allocation update atomically, stale versions and
+over-allocation fail without partial writes, existing occurrence assignments require explicit
+duplicate confirmation, and unlink changes only recurring provenance. Creating a definition from
+the Bill creates and links in one transaction. Duplicate Paycheck omits linked recurring Bills,
+reports the count, and leaves occurrence selection to Import recurring Bills.
+
 ### Security
 
 One user cannot read or mutate another user’s records through direct API requests.

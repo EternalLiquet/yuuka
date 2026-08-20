@@ -36,15 +36,18 @@ export function draftEntriesFromPaycheck(paycheck: Paycheck): {
   clearedPaybackCount: number;
   entries: TemplateApplicationDraftEntry[];
   omittedLeftoverCount: number;
+  omittedRecurringBillCount: number;
 } {
   const liveEntries = [...paycheck.entries].sort((left, right) => left.position - right.position);
-  const duplicateEntries = liveEntries.filter((entry) => !isGeneratedLeftover(entry));
+  const withoutLeftover = liveEntries.filter((entry) => !isGeneratedLeftover(entry));
+  const duplicateEntries = withoutLeftover.filter((entry) => !hasRecurringProvenance(entry));
   return {
     clearedPaybackCount: duplicateEntries.filter((entry) => entry.paybackId != null).length,
     entries: duplicateEntries.map((entry) =>
       draftEntryFromPaycheckEntry(entry, paycheck.incomeDate),
     ),
-    omittedLeftoverCount: liveEntries.length - duplicateEntries.length,
+    omittedLeftoverCount: liveEntries.length - withoutLeftover.length,
+    omittedRecurringBillCount: withoutLeftover.length - duplicateEntries.length,
   };
 }
 
@@ -152,6 +155,14 @@ export function applicationEntriesFromDraft(
 
 function isGeneratedLeftover(entry: Entry) {
   return entry.entryType === 'BILL' && entry.name.trim().toUpperCase() === 'LEFTOVER';
+}
+
+function hasRecurringProvenance(entry: Entry) {
+  return Boolean(
+    entry.entryType === 'BILL' &&
+    entry.sourceRecurringBillDefinitionId &&
+    entry.sourceRecurringOccurrenceDate,
+  );
 }
 
 function daysBetween(start: string, end: string) {

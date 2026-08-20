@@ -56,6 +56,7 @@ export default function DuplicatePaycheckScreen() {
   const [draftEntries, setDraftEntries] = useState<TemplateApplicationDraftEntry[]>([]);
   const [clearedPaybackCount, setClearedPaybackCount] = useState(0);
   const [omittedLeftoverCount, setOmittedLeftoverCount] = useState(0);
+  const [omittedRecurringBillCount, setOmittedRecurringBillCount] = useState(0);
   const [editingDraftEntry, setEditingDraftEntry] = useState<TemplateApplicationDraftEntry | null>(
     null,
   );
@@ -102,6 +103,7 @@ export default function DuplicatePaycheckScreen() {
     setDraftEntries(draft.entries);
     setClearedPaybackCount(draft.clearedPaybackCount);
     setOmittedLeftoverCount(draft.omittedLeftoverCount);
+    setOmittedRecurringBillCount(draft.omittedRecurringBillCount);
     setSourceInitialized(true);
   }, [query.data, query.isFetchedAfterMount, query.isSuccess, reset]);
 
@@ -258,6 +260,7 @@ export default function DuplicatePaycheckScreen() {
               draftEntries={draftEntries}
               incomeDate={incomeDate}
               omittedLeftoverCount={omittedLeftoverCount}
+              omittedRecurringBillCount={omittedRecurringBillCount}
               onAdd={() => {
                 setEditingDraftEntry(null);
                 setDraftEditorVisible(true);
@@ -360,6 +363,7 @@ function DraftSummary({
   draftEntries,
   incomeDate,
   omittedLeftoverCount,
+  omittedRecurringBillCount,
   onAdd,
   onEdit,
   onImport,
@@ -373,6 +377,7 @@ function DraftSummary({
   draftEntries: TemplateApplicationDraftEntry[];
   incomeDate: string;
   omittedLeftoverCount: number;
+  omittedRecurringBillCount: number;
   onAdd: () => void;
   onEdit: (entry: TemplateApplicationDraftEntry) => void;
   onImport: () => void;
@@ -406,6 +411,13 @@ function DraftSummary({
         <AppText style={{ color: colors.muted }} variant="caption">
           {omittedLeftoverCount} LEFTOVER entr{omittedLeftoverCount === 1 ? 'y was' : 'ies were'}{' '}
           excluded.
+        </AppText>
+      ) : null}
+      {omittedRecurringBillCount > 0 ? (
+        <AppText style={{ color: colors.muted }} variant="caption">
+          {`${omittedRecurringBillCount} recurring Bill${
+            omittedRecurringBillCount === 1 ? ' was' : 's were'
+          } not copied. Add the occurrences that belong in this paycheck using Import recurring Bills.`}
         </AppText>
       ) : null}
       <View style={styles.actions}>

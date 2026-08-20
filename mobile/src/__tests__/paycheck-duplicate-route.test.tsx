@@ -132,7 +132,18 @@ describe('duplicate paycheck route', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockParams = { id: sourcePaycheck().id };
-    mockApi.paycheck.mockResolvedValue(sourcePaycheck());
+    const authoritativeSource = sourcePaycheck();
+    authoritativeSource.entries.push(
+      entry({
+        amountMinor: 0,
+        id: '11111111-1111-4111-8111-111111111777',
+        name: 'Linked Electric',
+        position: 4,
+        sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+        sourceRecurringOccurrenceDate: '2026-07-21',
+      }),
+    );
+    mockApi.paycheck.mockResolvedValue(authoritativeSource);
     mockApi.createPaycheckFromDraft.mockResolvedValue(createdPaycheck);
   });
 
@@ -289,7 +300,18 @@ describe('duplicate paycheck route', () => {
     });
     queryClient.setQueryData(['paycheck', sourceId], stalePaycheck);
     queryClient.setQueryData(['paycheck', 'duplicate-source', sourceId], stalePaycheck);
-    mockApi.paycheck.mockResolvedValue(sourcePaycheck());
+    const authoritativePaycheck = sourcePaycheck();
+    authoritativePaycheck.entries.push(
+      entry({
+        amountMinor: 0,
+        id: '11111111-1111-4111-8111-111111111777',
+        name: 'Linked Electric',
+        position: 4,
+        sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+        sourceRecurringOccurrenceDate: '2026-07-21',
+      }),
+    );
+    mockApi.paycheck.mockResolvedValue(authoritativePaycheck);
     const view = await renderRoute(queryClient);
 
     await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
@@ -301,6 +323,13 @@ describe('duplicate paycheck route', () => {
     expect(await view.findByText('Draft entries')).toBeTruthy();
     expect(view.getByText('1 Payback assignment was not copied.')).toBeTruthy();
     expect(view.getByText('1 LEFTOVER entry was excluded.')).toBeTruthy();
+    expect(
+      view.getByText(
+        '1 recurring Bill was not copied. Add the occurrences that belong in this paycheck using Import recurring Bills.',
+      ),
+    ).toBeTruthy();
+    expect(view.getByLabelText('Import recurring Bills')).toBeTruthy();
+    expect(view.queryByText('Linked Electric')).toBeNull();
     expect(view.queryByText('Stale submit bill')).toBeNull();
 
     await act(async () => {

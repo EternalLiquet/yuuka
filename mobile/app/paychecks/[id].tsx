@@ -105,7 +105,7 @@ export default function PaycheckDetailScreen() {
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<'ALL' | EntryPaymentMethod>('ALL');
   const [sort, setSort] = useState<EntrySort>('custom');
   const [direction, setDirection] = useState<'asc' | 'desc'>('asc');
-  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [entryEditorVisible, setEntryEditorVisible] = useState(false);
   const [statusEntry, setStatusEntry] = useState<Entry | null>(null);
   const [historyEntry, setHistoryEntry] = useState<Entry | null>(null);
@@ -121,6 +121,10 @@ export default function PaycheckDetailScreen() {
   const highlightRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userInteractedWithListRef = useRef(false);
   const query = useQuery({ queryKey: ['paycheck', id], queryFn: () => api.paycheck(id) });
+  const editingEntry = useMemo(
+    () => query.data?.entries.find((entry) => entry.id === editingEntryId) ?? null,
+    [editingEntryId, query.data?.entries],
+  );
   const paybacksQuery = useQuery({
     queryKey: ['paybacks', 'entry-editor'],
     queryFn: api.paybacks,
@@ -141,6 +145,19 @@ export default function PaycheckDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['sinking-funds'] }),
       queryClient.invalidateQueries({ queryKey: ['sinking-fund'] }),
       queryClient.invalidateQueries({ queryKey: ['spending-buckets'] }),
+    ]);
+  };
+  const invalidateRecurringReconciliation = async (updated: Paycheck) => {
+    queryClient.setQueryData(['paycheck', id], updated);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['paycheck', id] }),
+      queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      queryClient.invalidateQueries({ queryKey: ['recurring-bills'] }),
+      queryClient.invalidateQueries({ queryKey: ['recurring-bill'] }),
+      queryClient.invalidateQueries({ queryKey: ['search', 'entries'] }),
+      queryClient.invalidateQueries({ queryKey: ['paybacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['payback'] }),
     ]);
   };
 
@@ -446,7 +463,7 @@ export default function PaycheckDetailScreen() {
               refreshing={query.isFetching && Boolean(query.data)}
               stale={query.isError}
               onAdd={() => {
-                setEditingEntry(null);
+                setEditingEntryId(null);
                 setEntryEditorVisible(true);
               }}
               onEdit={() => setPaycheckEditorVisible(true)}
@@ -507,7 +524,7 @@ export default function PaycheckDetailScreen() {
                 isLast={index === displayedEntries.length - 1}
                 position={index + 1}
                 onEdit={() => {
-                  setEditingEntry(params.item);
+                  setEditingEntryId(params.item.id);
                   setEntryEditorVisible(true);
                 }}
                 onMoveDown={() => moveEntry(index, 1)}
@@ -556,6 +573,7 @@ export default function PaycheckDetailScreen() {
         }
         onRetryPaybacks={() => paybacksQuery.refetch()}
         onRetrySinkingFunds={() => sinkingFundsQuery.refetch()}
+        onRecurringChanged={invalidateRecurringReconciliation}
         onSubmit={(payload) =>
           entryMutation
             .mutateAsync({ type: editingEntry ? 'update' : 'add', entry: editingEntry, payload })
@@ -572,6 +590,7 @@ export default function PaycheckDetailScreen() {
             : null
         }
         paybacksLoading={paybacksQuery.isPending}
+        paycheck={paycheck}
         sinkingFunds={sinkingFundsQuery.data?.items ?? []}
         sinkingFundsError={
           sinkingFundsQuery.isError

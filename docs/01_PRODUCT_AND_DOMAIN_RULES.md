@@ -96,7 +96,9 @@ The income date uses the normal new-paycheck default and must be reviewed before
 created. Duplicate names are allowed and Yuuka does not prepend `Copy of`.
 
 The entry draft copies live source entries in saved custom order, excluding generated `LEFTOVER`
-entries. It copies entry type, name, amount, notes, Bill payment method/account/payee/due-date
+entries and Bills carrying both recurring-definition and occurrence provenance. The draft reports
+the recurring omissions and keeps Import recurring Bills available so the user explicitly chooses
+the occurrences funded by the new paycheck. It copies entry type, name, amount, notes, Bill payment method/account/payee/due-date
 relationship, and unlinked Planned Savings target fields. It does not copy entry IDs, versions,
 statuses, status history, timestamps, audit history, Spending Bucket purchases or spent totals,
 Payback assignments, Planned Savings assignments, Payback repayment history, Planned Savings
@@ -125,6 +127,14 @@ deactivation, or deletion do not mutate imported entries. Duplicate imports are 
 into an existing paycheck validate the full batch and allocation transactionally; a failure creates
 no entries. Importing into a local scratch, template, or duplicate draft remains local until the
 paycheck is created.
+
+An existing live Bill in an Active paycheck may also be reconciled to an Active definition and a
+valid monthly occurrence. Linking changes that same entry's recurring-owned snapshot fields and
+provenance while preserving its ID, order, status, immutable history, Payback assignment, and other
+compatible provenance. Existing assignments for the occurrence are disclosed but duplicates remain
+allowed after explicit confirmation. Removing a link clears only recurring provenance. Creating a
+definition from an existing Bill and normalizing/linking the Bill is one transaction; afterward the
+definition and Bill remain independent snapshots.
 
 The owner controls the suggestion window in days, from 1 through 31, with a default of 7. Suggested
 occurrences are derived relative to the paycheck income date. Selection is always explicit and the

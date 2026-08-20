@@ -93,6 +93,7 @@ describe('template application draft helpers', () => {
     const draft = draftEntriesFromPaycheck(paycheck());
 
     expect(draft.omittedLeftoverCount).toBe(1);
+    expect(draft.omittedRecurringBillCount).toBe(0);
     expect(draft.clearedPaybackCount).toBe(1);
     expect(draft.entries.map((entry) => entry.name)).toEqual(['Rent', 'Groceries', 'Insurance']);
     expect(draft.entries[0]).toEqual(
@@ -111,6 +112,28 @@ describe('template application draft helpers', () => {
       }),
     );
     expect(draftTotalMinor(draft.entries)).toBe(119000);
+  });
+
+  it('omits linked recurring Bills while preserving unlinked entry order', () => {
+    const source = paycheck();
+    source.entries.splice(
+      1,
+      0,
+      paycheckEntry({
+        id: 'entry-recurring',
+        name: 'Electric',
+        position: 1,
+        sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+        sourceRecurringOccurrenceDate: '2026-07-21',
+      }),
+    );
+
+    const draft = draftEntriesFromPaycheck(source);
+
+    expect(draft.omittedRecurringBillCount).toBe(1);
+    expect(draft.omittedLeftoverCount).toBe(1);
+    expect(draft.entries.map((entry) => entry.name)).toEqual(['Rent', 'Groceries', 'Insurance']);
+    expect(draft.entries.some((entry) => entry.sourceRecurringBillDefinitionId)).toBe(false);
   });
 });
 

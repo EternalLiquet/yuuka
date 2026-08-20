@@ -5,7 +5,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { displayError } from '@/api/display-error';
-import { Entry, EntryPaymentMethod, Payback, SinkingFund } from '@/api/contracts';
+import { Entry, EntryPaymentMethod, Payback, Paycheck, SinkingFund } from '@/api/contracts';
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { SegmentedControl } from '@/components/segmented-control';
@@ -13,6 +13,7 @@ import { TextField } from '@/components/text-field';
 import { minorToInput, parseMoneyToMinor } from '@/domain/money';
 import { useSettings } from '@/settings/settings-provider';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { RecurringBillSection } from '@/features/recurring-bills/recurring-bill-reconciliation-sheet';
 
 import { EntryFormValues, entryFormSchema } from './form-schemas';
 
@@ -32,6 +33,8 @@ export function EntryEditor({
   paybacksLoading,
   onRetryPaybacks,
   onRetrySinkingFunds,
+  onRecurringChanged,
+  paycheck,
   visible,
   sinkingFunds = [],
   sinkingFundsError,
@@ -56,6 +59,8 @@ export function EntryEditor({
   }) => Promise<void>;
   onRetryPaybacks?: () => void;
   onRetrySinkingFunds?: () => void;
+  onRecurringChanged?: (paycheck: Paycheck) => Promise<void>;
+  paycheck?: Paycheck;
   paybacks?: Payback[];
   paybacksError?: string | null;
   paybacksLoading?: boolean;
@@ -229,6 +234,13 @@ export function EntryEditor({
                   </Pressable>
                 )}
               />
+              {entry && paycheck && onRecurringChanged ? (
+                <RecurringBillSection
+                  entry={entry}
+                  onChanged={onRecurringChanged}
+                  paycheck={paycheck}
+                />
+              ) : null}
             </>
           ) : null}
           {entryType === 'SINKING_FUND' ? (
