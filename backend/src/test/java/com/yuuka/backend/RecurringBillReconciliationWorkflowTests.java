@@ -154,6 +154,7 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
     assertThat(getPayback(token, payback.path("id").asText()).path("remainingMinor").asLong())
         .isEqualTo(6000);
     paycheck = getPaycheck(token, paycheck.path("id").asText());
+    long historyBefore = statusHistoryCount(entry.path("id").asText());
 
     JsonNode linked = link(token, paycheck, entry, definition, "2026-08-21", false, 200);
     JsonNode linkedEntry = linked.path("entries").get(0);
@@ -163,7 +164,7 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
     assertThat(linkedEntry.path("paybackId").asText()).isEqualTo(payback.path("id").asText());
     assertThat(getPayback(token, payback.path("id").asText()).path("remainingMinor").asLong())
         .isEqualTo(4000);
-    assertThat(statusHistoryCount(entry.path("id").asText())).isEqualTo(1);
+    assertThat(statusHistoryCount(entry.path("id").asText())).isEqualTo(historyBefore);
   }
 
   @Test
