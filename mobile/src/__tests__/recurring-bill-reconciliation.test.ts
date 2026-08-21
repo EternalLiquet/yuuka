@@ -2,8 +2,11 @@ import {
   allocationChangeMessage,
   classifyReconciliationResult,
   materialRecurringChanges,
+  matchesReviewedRecurringDefinition,
   nearbyOccurrenceMonths,
+  normalizeRecurringEntrySnapshot,
   occurrenceForMonth,
+  recurringEntrySnapshot,
   refreshedReconciliationSelection,
   refreshRecurringReconciliationQueries,
   timelineRange,
@@ -123,6 +126,13 @@ describe('recurring Bill reconciliation helpers', () => {
     const source = entry();
     const linked = {
       ...source,
+      accountName: 'Visa',
+      amountMinor: 1499,
+      dueDate: '2026-08-21',
+      name: 'Netflix',
+      notes: 'Streaming',
+      payee: 'Netflix Inc',
+      paymentMethod: 'AUTOPAY' as const,
       sourceRecurringBillDefinitionId: recurringDefinition().id,
       sourceRecurringOccurrenceDate: '2026-08-21',
     };
@@ -139,10 +149,12 @@ describe('recurring Bill reconciliation helpers', () => {
         action: 'link',
         baselineDefinitionId: null,
         baselineOccurrenceDate: null,
+        baselineSnapshot: normalizeRecurringEntrySnapshot(source),
         confirmDuplicateOccurrence: false,
         definitionId: recurringDefinition().id,
         definitionVersion: 3,
         occurrenceDate: '2026-08-21',
+        reviewedSnapshot: recurringEntrySnapshot(recurringDefinition(), '2026-08-21'),
       }),
     ).toMatchObject({ kind: 'succeeded' });
     expect(
@@ -180,7 +192,7 @@ describe('recurring Bill reconciliation helpers', () => {
           },
         },
       ),
-    ).toMatchObject({ kind: 'succeeded' });
+    ).toMatchObject({ kind: 'create-candidate' });
   });
 
   it('does not treat a different concurrent recurring relationship as the attempted result', () => {
@@ -205,24 +217,27 @@ describe('recurring Bill reconciliation helpers', () => {
     expect(result.kind).toBe('different-state');
   });
 
-  it('distinguishes an unchanged baseline link from a different concurrent link', () => {
+  it('requires the exact reviewed snapshot when changing the same definition occurrence', () => {
     const source = {
       ...entry(),
       sourceRecurringBillDefinitionId: recurringDefinition().id,
       sourceRecurringOccurrenceDate: '2026-08-21',
     };
+    const reviewedSnapshot = recurringEntrySnapshot(recurringDefinition(), '2026-08-21');
     const attempt = {
       action: 'link' as const,
       baselineDefinitionId: source.sourceRecurringBillDefinitionId,
       baselineEntryVersion: 0,
       baselineOccurrenceDate: source.sourceRecurringOccurrenceDate,
       baselinePaycheckVersion: 3,
+      baselineSnapshot: normalizeRecurringEntrySnapshot(source),
       confirmDuplicateOccurrence: false,
-      definitionId: '55555555-5555-4555-8555-555555555555',
+      definitionId: recurringDefinition().id,
       definitionVersion: 4,
       entryId: source.id,
-      occurrenceDate: '2026-09-15',
+      occurrenceDate: '2026-08-21',
       paycheckId: source.paycheckId,
+      reviewedSnapshot,
     };
 
     expect(classifyReconciliationResult(paycheck(source), attempt).kind).toBe('not-applied');
@@ -230,12 +245,42 @@ describe('recurring Bill reconciliation helpers', () => {
       classifyReconciliationResult(
         paycheck({
           ...source,
-          sourceRecurringBillDefinitionId: '66666666-6666-4666-8666-666666666666',
-          sourceRecurringOccurrenceDate: '2026-10-01',
+          accountName: reviewedSnapshot.accountName,
+          amountMinor: reviewedSnapshot.amountMinor,
+          dueDate: reviewedSnapshot.dueDate,
+          name: reviewedSnapshot.name,
+          notes: reviewedSnapshot.notes,
+          payee: reviewedSnapshot.payee,
+          paymentMethod: reviewedSnapshot.paymentMethod,
+        }),
+        attempt,
+      ).kind,
+    ).toBe('succeeded');
+    expect(
+      classifyReconciliationResult(
+        paycheck({
+          ...source,
+          amountMinor: 1599,
         }),
         attempt,
       ).kind,
     ).toBe('different-state');
+  });
+
+  it('compares a created definition due day independently from its clamped occurrence', () => {
+    const reviewed = {
+      accountName: ' Visa ',
+      dueDay: 31,
+      name: ' Netflix ',
+      notes: ' Streaming ',
+      payee: ' Netflix Inc ',
+      typicalAmountMinor: 1499,
+    };
+    const candidate = { ...recurringDefinition(), dueDay: 31 };
+
+    expect(matchesReviewedRecurringDefinition(candidate, reviewed)).toBe(true);
+    expect(matchesReviewedRecurringDefinition({ ...candidate, dueDay: 28 }, reviewed)).toBe(false);
+    expect(occurrenceForMonth('2027-02-01', reviewed.dueDay)).toBe('2027-02-28');
   });
 });
 

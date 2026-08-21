@@ -319,6 +319,122 @@ describe('recurring Bill reconciliation recovery', () => {
     expect(view.queryByText(/different recurring information/)).toBeNull();
   });
 
+  it('does not accept an unchanged same-occurrence snapshot and retries with refreshed versions', async () => {
+    const source = linkedEntry();
+    const current = paycheck(source);
+    const refreshedEntry = { ...source, version: 7 };
+    const refreshed = paycheck(refreshedEntry, { version: 11 });
+    const updated = paycheck(
+      {
+        ...refreshedEntry,
+        amountMinor: 1499,
+        dueDate: '2026-08-21',
+        name: 'Netflix',
+        paymentMethod: 'AUTOPAY',
+        version: 8,
+      },
+      { version: 12 },
+    );
+    const onChanged = jest.fn().mockResolvedValue(undefined);
+    mockApi.recurringBill.mockResolvedValue(definition(3));
+    mockApi.recurringBills.mockResolvedValue({ items: [definition(3)] });
+    mockApi.recurringBillTimeline.mockResolvedValue(timeline(occurrence(3)));
+    mockApi.linkRecurringBill
+      .mockRejectedValueOnce(new Error('Change failed.'))
+      .mockResolvedValueOnce(updated);
+    mockApi.paycheck.mockResolvedValue(refreshed);
+    const view = await renderSection(source, current, onChanged);
+
+    await fireEvent.press(await view.findByLabelText('Change link'));
+    await fireEvent.press(await view.findByLabelText('Choose Netflix'));
+    await fireEvent.press(await view.findByLabelText('Review changes'));
+    await fireEvent.press(await view.findByLabelText('Confirm recurring link'));
+
+    expect(await view.findByText('Change failed.')).toBeTruthy();
+    expect(view.getByText('$13.99 → $14.99')).toBeTruthy();
+    expect(view.getByText('2026-08-18 → 2026-08-21')).toBeTruthy();
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(view.getByTestId('recurring-reconciliation-modal')).toBeTruthy();
+
+    await fireEvent.press(view.getByLabelText('Confirm recurring link'));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(updated));
+    expect(mockApi.linkRecurringBill).toHaveBeenLastCalledWith(
+      source.id,
+      expect.objectContaining({ entryVersion: 7, paycheckVersion: 11 }),
+    );
+  });
+
+  it('keeps a create outcome unknown when the candidate definition cannot be fetched', async () => {
+    const source = entry();
+    const candidate = paycheck(
+      {
+        ...source,
+        sourceRecurringBillDefinitionId: '55555555-5555-4555-8555-555555555555',
+        sourceRecurringOccurrenceDate: source.dueDate,
+        version: 1,
+      },
+      { version: 4 },
+    );
+    mockApi.createRecurringBillFromEntry.mockRejectedValue(new Error('Response was lost.'));
+    mockApi.paycheck.mockResolvedValue(candidate);
+    mockApi.recurringBill.mockRejectedValue(new Error('Definition unavailable.'));
+    const onChanged = jest.fn().mockResolvedValue(undefined);
+    const view = await renderSection(source, paycheck(source), onChanged);
+
+    await openCreateReview(view);
+    await fireEvent.press(view.getByLabelText('Confirm recurring link'));
+
+    expect(await view.findByLabelText('Check result')).toBeTruthy();
+    expect(view.getByLabelText('Confirm recurring link').props.accessibilityState.disabled).toBe(
+      true,
+    );
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(mockApi.createRecurringBillFromEntry).toHaveBeenCalledTimes(1);
+
+    await fireEvent.press(view.getByLabelText('Check result'));
+    await waitFor(() => expect(mockApi.recurringBill).toHaveBeenCalledTimes(2));
+    expect(mockApi.createRecurringBillFromEntry).toHaveBeenCalledTimes(1);
+    expect(view.getByLabelText('Check result')).toBeTruthy();
+  });
+
+  it('rejects a candidate create definition with a different reviewed due day', async () => {
+    const source = entry();
+    const candidateDefinitionId = '55555555-5555-4555-8555-555555555555';
+    const candidate = paycheck(
+      {
+        ...source,
+        sourceRecurringBillDefinitionId: candidateDefinitionId,
+        sourceRecurringOccurrenceDate: source.dueDate,
+        version: 1,
+      },
+      { version: 4 },
+    );
+    mockApi.createRecurringBillFromEntry.mockRejectedValue(new Error('Response was lost.'));
+    mockApi.paycheck.mockResolvedValue(candidate);
+    mockApi.recurringBill.mockResolvedValue({
+      ...definition(3),
+      accountName: source.accountName,
+      dueDay: 28,
+      id: candidateDefinitionId,
+      name: source.name,
+      notes: source.notes,
+      payee: source.payee,
+      paymentMethod: source.paymentMethod!,
+      typicalAmountMinor: source.amountMinor,
+    });
+    const onChanged = jest.fn().mockResolvedValue(undefined);
+    const view = await renderSection(source, paycheck(source), onChanged);
+
+    await openCreateReview(view);
+    await fireEvent.press(view.getByLabelText('Confirm recurring link'));
+
+    expect(await view.findByText(/different recurring information/)).toBeTruthy();
+    expect(view.queryByTestId('recurring-reconciliation-modal')).toBeNull();
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(mockApi.createRecurringBillFromEntry).toHaveBeenCalledTimes(1);
+  });
+
   it('exits stale recovery without mutating a different concurrent relationship', async () => {
     const source = entry();
     const different = paycheck({
@@ -452,7 +568,21 @@ async function expectLostResponse(action: 'link' | 'unlink' | 'create') {
       : action === 'unlink'
         ? mockApi.unlinkRecurringBill
         : mockApi.createRecurringBillFromEntry;
-  mockApi.recurringBill.mockResolvedValue(definition(3));
+  mockApi.recurringBill.mockResolvedValue(
+    action === 'create'
+      ? {
+          ...definition(3),
+          accountName: source.accountName,
+          dueDay: Number(source.dueDate!.slice(-2)),
+          id: authoritativeEntry.sourceRecurringBillDefinitionId!,
+          name: source.name,
+          notes: source.notes,
+          payee: source.payee,
+          paymentMethod: source.paymentMethod!,
+          typicalAmountMinor: source.amountMinor,
+        }
+      : definition(3),
+  );
   mockApi.recurringBills.mockResolvedValue({ items: [definition(3)] });
   mockApi.recurringBillTimeline.mockResolvedValue(timeline(occurrence(3)));
   mutation.mockRejectedValue(new Error('Response was lost.'));

@@ -21,10 +21,12 @@ export type ReconciliationAttempt =
       action: 'link';
       baselineDefinitionId: string | null;
       baselineOccurrenceDate: string | null;
+      baselineSnapshot: NormalizedRecurringEntrySnapshot;
       confirmDuplicateOccurrence: boolean;
       definitionId: string;
       definitionVersion: number;
       occurrenceDate: string;
+      reviewedSnapshot: NormalizedRecurringEntrySnapshot;
     })
   | (AttemptBase & {
       action: 'unlink';
@@ -40,8 +42,19 @@ export type ReconciliationAttempt =
 
 export type ReconciliationResult =
   | { entry: Entry; kind: 'succeeded' }
+  | { entry: Entry; kind: 'create-candidate' }
   | { entry: Entry; kind: 'not-applied' }
   | { entry: Entry | null; kind: 'different-state' };
+
+export type NormalizedRecurringEntrySnapshot = {
+  accountName: string | null;
+  amountMinor: number;
+  dueDate: string | null;
+  name: string;
+  notes: string | null;
+  payee: string | null;
+  paymentMethod: EntryPaymentMethod;
+};
 
 export type RecurringSnapshot = Pick<
   RecurringBill,
@@ -84,11 +97,16 @@ export function classifyReconciliationResult(
   const definitionId = entry.sourceRecurringBillDefinitionId;
   const occurrenceDate = entry.sourceRecurringOccurrenceDate;
   if (attempt.action === 'link') {
-    if (definitionId === attempt.definitionId && occurrenceDate === attempt.occurrenceDate) {
+    if (
+      definitionId === attempt.definitionId &&
+      occurrenceDate === attempt.occurrenceDate &&
+      matchesRecurringEntrySnapshot(entry, attempt.reviewedSnapshot)
+    ) {
       return { entry, kind: 'succeeded' };
     }
     return definitionId === attempt.baselineDefinitionId &&
-      occurrenceDate === attempt.baselineOccurrenceDate
+      occurrenceDate === attempt.baselineOccurrenceDate &&
+      matchesRecurringEntrySnapshot(entry, attempt.baselineSnapshot)
       ? { entry, kind: 'not-applied' }
       : { entry, kind: 'different-state' };
   }
@@ -107,30 +125,80 @@ export function classifyReconciliationResult(
   if (
     definitionId !== attempt.baselineDefinitionId &&
     occurrenceDate === attempt.occurrenceDate &&
-    matchesCreatedSnapshot(entry, attempt.reviewedDefinitionValues, attempt.occurrenceDate)
+    matchesRecurringEntrySnapshot(
+      entry,
+      recurringEntrySnapshot(attempt.reviewedDefinitionValues, attempt.occurrenceDate),
+    )
   ) {
-    return { entry, kind: 'succeeded' };
+    return { entry, kind: 'create-candidate' };
   }
   return { entry, kind: 'different-state' };
 }
 
-function matchesCreatedSnapshot(
-  entry: Entry,
-  values: RecurringBillPayload,
+export function normalizeRecurringEntrySnapshot(
+  values: Pick<
+    Entry,
+    'accountName' | 'amountMinor' | 'dueDate' | 'name' | 'notes' | 'payee' | 'paymentMethod'
+  >,
+): NormalizedRecurringEntrySnapshot {
+  return {
+    accountName: normalizeOptional(values.accountName),
+    amountMinor: values.amountMinor,
+    dueDate: values.dueDate ?? null,
+    name: values.name.trim(),
+    notes: normalizeOptional(values.notes),
+    payee: normalizeOptional(values.payee),
+    paymentMethod: values.paymentMethod ?? 'AUTOPAY',
+  };
+}
+
+export function recurringEntrySnapshot(
+  values: RecurringSnapshot | RecurringBillPayload,
   occurrenceDate: string,
+): NormalizedRecurringEntrySnapshot {
+  return {
+    accountName: normalizeOptional(values.accountName),
+    amountMinor: values.typicalAmountMinor,
+    dueDate: occurrenceDate,
+    name: values.name.trim(),
+    notes: normalizeOptional(values.notes),
+    payee: normalizeOptional(values.payee),
+    paymentMethod: values.paymentMethod ?? 'AUTOPAY',
+  };
+}
+
+export function matchesRecurringEntrySnapshot(
+  entry: Entry,
+  snapshot: NormalizedRecurringEntrySnapshot,
 ) {
+  const current = normalizeRecurringEntrySnapshot(entry);
   return (
-    entry.name === values.name.trim() &&
-    entry.amountMinor === values.typicalAmountMinor &&
-    entry.paymentMethod === (values.paymentMethod ?? 'AUTOPAY') &&
-    entry.dueDate === occurrenceDate &&
-    entry.accountName === normalizeOptional(values.accountName) &&
-    entry.payee === normalizeOptional(values.payee) &&
-    entry.notes === normalizeOptional(values.notes)
+    current.name === snapshot.name &&
+    current.amountMinor === snapshot.amountMinor &&
+    current.paymentMethod === snapshot.paymentMethod &&
+    current.dueDate === snapshot.dueDate &&
+    current.accountName === snapshot.accountName &&
+    current.payee === snapshot.payee &&
+    current.notes === snapshot.notes
   );
 }
 
-function normalizeOptional(value?: string | null) {
+export function matchesReviewedRecurringDefinition(
+  definition: RecurringBill,
+  values: RecurringBillPayload,
+) {
+  return (
+    definition.name.trim() === values.name.trim() &&
+    definition.typicalAmountMinor === values.typicalAmountMinor &&
+    definition.paymentMethod === (values.paymentMethod ?? 'AUTOPAY') &&
+    definition.dueDay === values.dueDay &&
+    normalizeOptional(definition.accountName) === normalizeOptional(values.accountName) &&
+    normalizeOptional(definition.payee) === normalizeOptional(values.payee) &&
+    normalizeOptional(definition.notes) === normalizeOptional(values.notes)
+  );
+}
+
+export function normalizeOptional(value?: string | null) {
   return value == null || !value.trim() ? null : value.trim();
 }
 

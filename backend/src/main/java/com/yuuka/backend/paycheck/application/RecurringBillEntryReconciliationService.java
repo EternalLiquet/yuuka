@@ -79,7 +79,7 @@ public class RecurringBillEntryReconciliationService {
   @Transactional
   public PaycheckResponse link(UUID ownerId, UUID entryId, LinkRecurringBillRequest request) {
     LockedEntry locked =
-        lockEntry(ownerId, entryId, request.entryVersion(), request.paycheckVersion(), true);
+        lockEntry(ownerId, entryId, request.entryVersion(), request.paycheckVersion());
     RecurringBillDefinition definition =
         definitions
             .findByIdAndOwnerIdForUpdate(request.definitionId(), ownerId)
@@ -101,7 +101,7 @@ public class RecurringBillEntryReconciliationService {
   public PaycheckResponse createFromEntry(
       UUID ownerId, UUID entryId, CreateRecurringBillFromEntryRequest request) {
     LockedEntry locked =
-        lockEntry(ownerId, entryId, request.entryVersion(), request.paycheckVersion(), true);
+        lockEntry(ownerId, entryId, request.entryVersion(), request.paycheckVersion());
     if (locked.entry().getSourceRecurringBillDefinitionId() != null) {
       throw new BusinessRuleException(
           "Remove the existing recurring Bill link before creating a new definition.");
@@ -145,7 +145,7 @@ public class RecurringBillEntryReconciliationService {
   @Transactional
   public PaycheckResponse unlink(
       UUID ownerId, UUID entryId, long entryVersion, long paycheckVersion) {
-    LockedEntry locked = lockEntry(ownerId, entryId, entryVersion, paycheckVersion, false);
+    LockedEntry locked = lockEntry(ownerId, entryId, entryVersion, paycheckVersion);
     PaycheckEntry entry = locked.entry();
     EntryResponse before = responseAssembler.toEntryResponse(entry);
     RecurringSource previous = RecurringSource.from(entry);
@@ -223,18 +223,14 @@ public class RecurringBillEntryReconciliationService {
   }
 
   private LockedEntry lockEntry(
-      UUID ownerId,
-      UUID entryId,
-      long entryVersion,
-      long paycheckVersion,
-      boolean lockAssignedPayback) {
+      UUID ownerId, UUID entryId, long entryVersion, long paycheckVersion) {
     PaycheckEntry discoveredEntry =
         entries
             .findByIdAndOwnerIdAndDeletedAtIsNull(entryId, ownerId)
             .orElseThrow(ResourceNotFoundException::new);
     EntryLockCandidate candidate =
         new EntryLockCandidate(discoveredEntry.getPaycheckId(), discoveredEntry.getPaybackId());
-    if (lockAssignedPayback && candidate.paybackId() != null) {
+    if (candidate.paybackId() != null) {
       paybackService.lockForRecurringReconciliation(ownerId, candidate.paybackId());
     }
     Paycheck paycheck =
@@ -245,14 +241,14 @@ public class RecurringBillEntryReconciliationService {
         entries
             .findLiveByIdAndOwnerIdForUpdate(entryId, ownerId)
             .orElseThrow(ResourceNotFoundException::new);
-    validations.requireActive(paycheck);
-    validations.assertVersion(paycheck.getVersion(), paycheckVersion);
-    validations.assertVersion(entry.getVersion(), entryVersion);
     if (!entry.getPaycheckId().equals(candidate.paycheckId())
         || !Objects.equals(entry.getPaybackId(), candidate.paybackId())) {
       throw new ConflictException(
           "This record changed since it was loaded. Refresh and try again.");
     }
+    validations.assertVersion(paycheck.getVersion(), paycheckVersion);
+    validations.assertVersion(entry.getVersion(), entryVersion);
+    validations.requireActive(paycheck);
     if (entry.getEntryType() != EntryType.BILL) {
       throw new BusinessRuleException("Only Bills can be linked to recurring Bills.");
     }

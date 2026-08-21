@@ -21,8 +21,11 @@ import {
   allocationChangeMessage,
   classifyReconciliationResult,
   materialRecurringChanges,
+  matchesReviewedRecurringDefinition,
   nearbyOccurrenceMonths,
+  normalizeRecurringEntrySnapshot,
   occurrenceForMonth,
+  recurringEntrySnapshot,
   refreshedReconciliationSelection,
   type ReconciliationAttempt,
   timelineRange,
@@ -263,12 +266,16 @@ function RecurringBillReconciliationSheet({
         action,
         baselineDefinitionId: effectiveEntry.sourceRecurringBillDefinitionId,
         baselineOccurrenceDate: effectiveEntry.sourceRecurringOccurrenceDate,
+        baselineSnapshot: Object.freeze(normalizeRecurringEntrySnapshot(effectiveEntry)),
         confirmDuplicateOccurrence: selectedOccurrence.imports.some(
           (item) => item.entryId !== effectiveEntry.id,
         ),
         definitionId: selectedOccurrence.definitionId,
         definitionVersion: selectedOccurrence.definitionVersion,
         occurrenceDate: selectedOccurrence.occurrenceDate,
+        reviewedSnapshot: Object.freeze(
+          recurringEntrySnapshot(selectedOccurrence, selectedOccurrence.occurrenceDate),
+        ),
       });
     }
     if (action === 'create') {
@@ -348,7 +355,19 @@ function RecurringBillReconciliationSheet({
   async function reconcile(attempt: ReconciliationAttempt, refreshed: Paycheck) {
     queryClient.setQueryData(['paycheck', refreshed.id], refreshed);
     setAuthoritativePaycheck(refreshed);
-    const result = classifyReconciliationResult(refreshed, attempt);
+    let result = classifyReconciliationResult(refreshed, attempt);
+    if (result.kind === 'create-candidate') {
+      if (attempt.action !== 'create') throw new Error('Unexpected reconciliation result.');
+      const definitionId = result.entry.sourceRecurringBillDefinitionId;
+      if (!definitionId) throw new Error('The created recurring Bill could not be identified.');
+      const createdDefinition = await api.recurringBill(definitionId);
+      result = matchesReviewedRecurringDefinition(
+        createdDefinition,
+        attempt.reviewedDefinitionValues,
+      )
+        ? { entry: result.entry, kind: 'succeeded' }
+        : { entry: result.entry, kind: 'different-state' };
+    }
     if (result.kind === 'succeeded') {
       setOutcomeUnknown(false);
       await finishSuccess(refreshed);
