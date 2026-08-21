@@ -57,3 +57,38 @@ fi
 assert_log $'verify-backend:fast\nverify-mobile:fast'
 
 echo "Verification entry-point orchestration tests passed."
+
+resolver="$source_scripts/resolve-release-labels.sh"
+
+assert_release_bump() {
+  local labels="$1"
+  local expected="$2"
+  local actual
+  actual="$(printf '%s' "$labels" | "$resolver")"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "Unexpected release bump: expected $expected, got $actual" >&2
+    exit 1
+  fi
+}
+
+assert_release_bump "" "none"
+assert_release_bump "documentation" "none"
+assert_release_bump "release:patch" "patch"
+assert_release_bump $'maintenance\nrelease:minor\n' "minor"
+assert_release_bump "release:major" "major"
+assert_release_bump $'release:patch\nrelease:patch\n' "patch"
+
+set +e
+multiple_output="$(printf '%s\n' release:patch release:minor | "$resolver" 2>&1)"
+multiple_status=$?
+set -e
+if [[ "$multiple_status" -ne 64 ]]; then
+  echo "Expected multiple release labels to exit 64, got $multiple_status" >&2
+  exit 1
+fi
+if [[ "$multiple_output" != *"Multiple release labels are not allowed"* ]]; then
+  echo "Expected a clear multiple-label error, got: $multiple_output" >&2
+  exit 1
+fi
+
+echo "Release-label resolution tests passed."

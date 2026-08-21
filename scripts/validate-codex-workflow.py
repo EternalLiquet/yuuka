@@ -22,6 +22,7 @@ EXPECTED_SANDBOX = {
     "yuuka_verifier": "workspace-write",
     "yuuka_reviewer": "read-only",
 }
+RELEASE_BUMPS = ("patch", "minor", "major")
 
 
 def fail(message: str) -> None:
@@ -79,12 +80,65 @@ def parse_agent(skill_name: str, agent_name: str) -> None:
         fail(f"{agent_name} must inherit the active model configuration")
 
 
+def require_fragment(content: str, fragment: str, description: str) -> None:
+    if fragment not in content:
+        fail(description)
+
+
 def validate_ci_wiring() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     for component in ("backend", "mobile", "infrastructure"):
         expected = f"./scripts/verify-{component}.sh full"
-        if expected not in workflow:
-            fail(f"CI does not invoke {expected}")
+        require_fragment(workflow, expected, f"CI does not invoke {expected}")
+
+    require_fragment(workflow, "workflow_call:", "CI is not reusable by manual release workflows")
+    require_fragment(workflow, "release_bump:", "CI does not define the manual release bump input")
+    require_fragment(workflow, "release-decision:", "CI does not contain a release decision job")
+    require_fragment(
+        workflow,
+        "./scripts/resolve-release-labels.sh",
+        "CI does not resolve opt-in pull-request release labels",
+    )
+    require_fragment(
+        workflow,
+        "needs.release-decision.outputs.bump != 'none'",
+        "CI release publication is not gated by an explicit release decision",
+    )
+
+    cancellable_pr_only = "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"
+    if workflow.count(cancellable_pr_only) != 3:
+        fail("CI must cancel stale component jobs only for pull-request runs")
+
+    isolated_non_pr = "github.event_name == 'pull_request' && github.ref || github.run_id"
+    if workflow.count(isolated_non_pr) != 3:
+        fail("CI must isolate master and manual component runs from concurrency replacement")
+
+    for bump in RELEASE_BUMPS:
+        wrapper_path = REPO_ROOT / ".github" / "workflows" / f"release-{bump}.yml"
+        if not wrapper_path.is_file():
+            fail(f"missing {wrapper_path.relative_to(REPO_ROOT)}")
+        wrapper = wrapper_path.read_text(encoding="utf-8")
+        require_fragment(wrapper, "workflow_dispatch:", f"{wrapper_path.name} is not manual-only")
+        require_fragment(
+            wrapper,
+            "uses: ./.github/workflows/ci.yml",
+            f"{wrapper_path.name} does not reuse CI verification",
+        )
+        require_fragment(
+            wrapper,
+            f"release_bump: {bump}",
+            f"{wrapper_path.name} requests the wrong semantic-version bump",
+        )
+        require_fragment(
+            wrapper,
+            "contents: write",
+            f"{wrapper_path.name} cannot publish release tags and assets",
+        )
+        require_fragment(
+            wrapper,
+            "pull-requests: read",
+            f"{wrapper_path.name} cannot satisfy the shared release-decision permissions",
+        )
 
 
 def validate_executables() -> None:
