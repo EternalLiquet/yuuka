@@ -3,6 +3,14 @@ set -euo pipefail
 
 target="${1:-HEAD}"
 target_commit="$(git rev-parse "${target}^{commit}")"
+target_tag="$(git tag --points-at "$target_commit" --list 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+
+if [[ -n "$target_tag" ]]; then
+  echo "Target $target_commit already has release tag $target_tag; idempotent rerun may reuse it." >&2
+  printf '%s\n' "already-tagged"
+  exit 0
+fi
+
 latest="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
 
 if [[ -z "$latest" ]]; then
@@ -12,12 +20,6 @@ if [[ -z "$latest" ]]; then
 fi
 
 latest_commit="$(git rev-list -n 1 "$latest")"
-
-if [[ "$latest_commit" == "$target_commit" ]]; then
-  echo "Latest release $latest already references target $target_commit; idempotent rerun may proceed." >&2
-  printf '%s\n' "same-commit"
-  exit 0
-fi
 
 if git merge-base --is-ancestor "$latest_commit" "$target_commit"; then
   echo "Latest release $latest ($latest_commit) is an ancestor of target $target_commit." >&2

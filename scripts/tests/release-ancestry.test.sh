@@ -27,12 +27,31 @@ assert_result() {
   local target="$2"
   local expected="$3"
   local actual
-  actual="$(git -C "$repo" -c advice.detachedHead=false rev-parse "$target" >/dev/null && cd "$repo" && "$resolver" "$target")"
+  actual="$(cd "$repo" && "$resolver" "$target")"
   if [[ "$actual" != "$expected" ]]; then
     echo "Expected release ancestry result $expected, got $actual" >&2
     exit 1
   fi
 }
+
+first_repo="$fixture_root/first"
+new_repo "$first_repo"
+a="$(commit_file "$first_repo" A)"
+assert_result "$first_repo" "$a" "first-release"
+
+latest_repo="$fixture_root/latest-tagged"
+new_repo "$latest_repo"
+a="$(commit_file "$latest_repo" A)"
+git -C "$latest_repo" tag v1.0.0 "$a"
+assert_result "$latest_repo" "$a" "already-tagged"
+
+historical_repo="$fixture_root/historical-tagged"
+new_repo "$historical_repo"
+a="$(commit_file "$historical_repo" A)"
+git -C "$historical_repo" tag v1.0.0 "$a"
+b="$(commit_file "$historical_repo" B)"
+git -C "$historical_repo" tag v1.0.1 "$b"
+assert_result "$historical_repo" "$a" "already-tagged"
 
 forward_repo="$fixture_root/forward"
 new_repo "$forward_repo"
@@ -40,13 +59,6 @@ a="$(commit_file "$forward_repo" A)"
 git -C "$forward_repo" tag v1.0.0 "$a"
 b="$(commit_file "$forward_repo" B)"
 assert_result "$forward_repo" "$b" "forward"
-
-same_repo="$fixture_root/same"
-new_repo "$same_repo"
-commit_file "$same_repo" A >/dev/null
-b="$(commit_file "$same_repo" B)"
-git -C "$same_repo" tag v1.0.1 "$b"
-assert_result "$same_repo" "$b" "same-commit"
 
 stale_repo="$fixture_root/stale"
 new_repo "$stale_repo"
@@ -86,5 +98,13 @@ if [[ "$divergent_output" != *"Divergent release target"* ]]; then
   echo "Expected clear divergent-release error, got: $divergent_output" >&2
   exit 1
 fi
+
+malformed_repo="$fixture_root/malformed"
+new_repo "$malformed_repo"
+a="$(commit_file "$malformed_repo" A)"
+for tag in v1.0 v1.0.0-rc1 release-v1.0.0 v1.0.0.1 v01.0.x; do
+  git -C "$malformed_repo" tag "$tag" "$a"
+done
+assert_result "$malformed_repo" "$a" "first-release"
 
 echo "Release ancestry regression tests passed."

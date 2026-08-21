@@ -111,29 +111,36 @@ assert_validator_rejects_mutation() {
   local status
 
   cp -a "$validator_fixture" "$case_root"
-  python3 - "$case_root/.github/workflows/ci.yml" "$mutation" <<'PY'
+  python3 - "$case_root" "$mutation" <<'PY'
 from pathlib import Path
 import sys
 
-path = Path(sys.argv[1])
+case_root = Path(sys.argv[1])
 mutation = sys.argv[2]
-workflow = path.read_text(encoding="utf-8")
 
-if mutation == "missing-publication-queue":
-    old = """    concurrency:\n      group: yuuka-release-master\n      cancel-in-progress: false\n      queue: max\n"""
-    new = """    concurrency:\n      group: yuuka-release-master\n      cancel-in-progress: false\n"""
-elif mutation == "missing-release-pipeline-queue":
-    old = """concurrency:\n  group: ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/master') || inputs.release_bump != '') && 'yuuka-release-pipeline' || format('yuuka-ci-run-{0}', github.run_id) }}\n  cancel-in-progress: false\n  queue: max\n\n"""
+if mutation == "missing-ancestry-test-invocation":
+    path = case_root / "scripts" / "validate-codex-workflow.sh"
+    content = path.read_text(encoding="utf-8")
+    old = '"$script_dir/tests/release-ancestry.test.sh"\n'
     new = ""
-elif mutation == "prefiltered-release-input":
-    old = """    if: >-\n      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||\n      inputs.release_bump != ''\n"""
-    new = """    if: >-\n      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||\n      inputs.release_bump == 'patch' ||\n      inputs.release_bump == 'minor' ||\n      inputs.release_bump == 'major'\n"""
 else:
-    raise SystemExit(f"unsupported mutation: {mutation}")
+    path = case_root / ".github" / "workflows" / "ci.yml"
+    content = path.read_text(encoding="utf-8")
+    if mutation == "missing-publication-queue":
+        old = """    concurrency:\n      group: yuuka-release-master\n      cancel-in-progress: false\n      queue: max\n"""
+        new = """    concurrency:\n      group: yuuka-release-master\n      cancel-in-progress: false\n"""
+    elif mutation == "missing-release-pipeline-queue":
+        old = """concurrency:\n  group: ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/master') || inputs.release_bump != '') && 'yuuka-release-pipeline' || format('yuuka-ci-run-{0}', github.run_id) }}\n  cancel-in-progress: false\n  queue: max\n\n"""
+        new = ""
+    elif mutation == "prefiltered-release-input":
+        old = """    if: >-\n      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||\n      inputs.release_bump != ''\n"""
+        new = """    if: >-\n      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||\n      inputs.release_bump == 'patch' ||\n      inputs.release_bump == 'minor' ||\n      inputs.release_bump == 'major'\n"""
+    else:
+        raise SystemExit(f"unsupported mutation: {mutation}")
 
-if workflow.count(old) != 1:
+if content.count(old) != 1:
     raise SystemExit(f"expected exactly one mutation target for {mutation}")
-path.write_text(workflow.replace(old, new, 1), encoding="utf-8")
+path.write_text(content.replace(old, new, 1), encoding="utf-8")
 PY
 
   set +e
@@ -160,5 +167,8 @@ assert_validator_rejects_mutation \
 assert_validator_rejects_mutation \
   "prefiltered-release-input" \
   "every nonempty release_bump"
+assert_validator_rejects_mutation \
+  "missing-ancestry-test-invocation" \
+  "canonical Codex workflow validation does not execute release ancestry regression tests"
 
 echo "Release workflow validator regression tests passed."

@@ -127,6 +127,15 @@ def extract_top_level_mapping(workflow: str, key: str) -> tuple[str, ...]:
     return tuple(line.strip() for line in match.group("body").splitlines())
 
 
+def validate_canonical_entrypoint() -> None:
+    entrypoint = (REPO_ROOT / "scripts" / "validate-codex-workflow.sh").read_text(encoding="utf-8")
+    require_fragment(
+        entrypoint,
+        '"$script_dir/tests/release-ancestry.test.sh"',
+        "canonical Codex workflow validation does not execute release ancestry regression tests",
+    )
+
+
 def validate_ci_wiring() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     for component in ("backend", "mobile", "infrastructure"):
@@ -259,6 +268,7 @@ def main() -> None:
         parse_skill(skill_name)
     for skill_name, agent_name in EXPECTED_SKILLS.items():
         parse_agent(skill_name, agent_name)
+    validate_canonical_entrypoint()
     validate_ci_wiring()
     validate_executables()
     print("Codex workflow metadata and CI wiring are valid.")
