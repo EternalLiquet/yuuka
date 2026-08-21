@@ -10,7 +10,7 @@ trap 'rm -rf "$fixture_root"' EXIT
 cp "$source_scripts/verify-fast.sh" "$fixture_root/verify-fast.sh"
 cp "$source_scripts/verify-full.sh" "$fixture_root/verify-full.sh"
 
-cat > "$fixture_root/component-stub.sh" <<'EOF'
+cat > "$fixture_root/component-stub.sh" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 component="$(basename "$0" .sh)"
@@ -18,7 +18,7 @@ printf '%s:%s\n' "$component" "$1" >> "$YUUKA_VERIFY_TEST_LOG"
 if [[ "${YUUKA_VERIFY_TEST_FAIL:-}" == "$component" ]]; then
   exit 23
 fi
-EOF
+STUB
 
 for component in backend mobile infrastructure; do
   cp "$fixture_root/component-stub.sh" "$fixture_root/verify-$component.sh"
@@ -119,9 +119,12 @@ path = Path(sys.argv[1])
 mutation = sys.argv[2]
 workflow = path.read_text(encoding="utf-8")
 
-if mutation == "missing-release-queue":
+if mutation == "missing-publication-queue":
     old = """    concurrency:\n      group: yuuka-release-master\n      cancel-in-progress: false\n      queue: max\n"""
     new = """    concurrency:\n      group: yuuka-release-master\n      cancel-in-progress: false\n"""
+elif mutation == "missing-release-pipeline-queue":
+    old = """concurrency:\n  group: ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/master') || inputs.release_bump != '') && 'yuuka-release-pipeline' || format('yuuka-ci-run-{0}', github.run_id) }}\n  cancel-in-progress: false\n  queue: max\n\n"""
+    new = ""
 elif mutation == "prefiltered-release-input":
     old = """    if: >-\n      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||\n      inputs.release_bump != ''\n"""
     new = """    if: >-\n      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||\n      inputs.release_bump == 'patch' ||\n      inputs.release_bump == 'minor' ||\n      inputs.release_bump == 'major'\n"""
@@ -149,8 +152,11 @@ PY
 }
 
 assert_validator_rejects_mutation \
-  "missing-release-queue" \
-  "complete shared serialized queue"
+  "missing-publication-queue" \
+  "complete shared serialized publication queue"
+assert_validator_rejects_mutation \
+  "missing-release-pipeline-queue" \
+  "workflow-level concurrency"
 assert_validator_rejects_mutation \
   "prefiltered-release-input" \
   "every nonempty release_bump"

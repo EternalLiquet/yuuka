@@ -18,6 +18,11 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/master') || inputs.release_bump != '') && 'yuuka-release-pipeline' || format('yuuka-ci-run-{0}', github.run_id) }}
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   backend:
     name: Backend
@@ -194,8 +199,9 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --tags --force
+          ./scripts/check-release-ancestry.sh "$GITHUB_SHA"
 
-          existing="$(git tag --points-at HEAD --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1 || true)"
+          existing="$(git tag --points-at HEAD --list 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
           if [[ -n "$existing" ]]; then
             echo "Current commit already has release tag $existing"
             echo "tag=$existing" >> "$GITHUB_OUTPUT"
@@ -216,7 +222,7 @@ jobs:
           esac
           echo "Release bump is $bump"
 
-          latest="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1 || true)"
+          latest="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
           if [[ -z "$latest" ]]; then
             next="v1.0.0"
           else

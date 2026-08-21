@@ -23,6 +23,8 @@ EXPECTED_SANDBOX = {
     "yuuka_reviewer": "read-only",
 }
 RELEASE_BUMPS = ("patch", "minor", "major")
+RELEASE_PIPELINE_GROUP = "yuuka-release-pipeline"
+PUBLICATION_GROUP = "yuuka-release-master"
 
 
 def fail(message: str) -> None:
@@ -115,6 +117,16 @@ def extract_simple_mapping(job: str, key: str) -> tuple[str, ...]:
     return tuple(line.strip() for line in match.group("body").splitlines())
 
 
+def extract_top_level_mapping(workflow: str, key: str) -> tuple[str, ...]:
+    match = re.search(
+        rf"(?m)^{re.escape(key)}:\n(?P<body>(?:^  [^\n]*(?:\n|\Z))+)",
+        workflow,
+    )
+    if match is None:
+        fail(f"CI does not define the workflow-level {key} mapping")
+    return tuple(line.strip() for line in match.group("body").splitlines())
+
+
 def validate_ci_wiring() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     for component in ("backend", "mobile", "infrastructure"):
@@ -134,6 +146,25 @@ def validate_ci_wiring() -> None:
         "needs.release-decision.outputs.bump != 'none'",
         "CI release publication is not gated by an explicit release decision",
     )
+
+    expected_pipeline_group = (
+        "group: ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/master') || "
+        "inputs.release_bump != '') && 'yuuka-release-pipeline' || "
+        "format('yuuka-ci-run-{0}', github.run_id) }}"
+    )
+    expected_workflow_concurrency = (
+        expected_pipeline_group,
+        "cancel-in-progress: false",
+        "queue: max",
+    )
+    actual_workflow_concurrency = extract_top_level_mapping(workflow, "concurrency")
+    if actual_workflow_concurrency != expected_workflow_concurrency:
+        fail(
+            "CI workflow-level concurrency must serialize master pushes and nonempty reusable "
+            "release inputs in yuuka-release-pipeline while isolating PR and ordinary manual validation"
+        )
+    if RELEASE_PIPELINE_GROUP == PUBLICATION_GROUP:
+        fail("CI release pipeline and publication concurrency groups must be distinct")
 
     cancellable_pr_only = "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"
     if workflow.count(cancellable_pr_only) != 3:
@@ -167,16 +198,23 @@ def validate_ci_wiring() -> None:
 
     release_job = extract_job(workflow, "release")
     expected_release_concurrency = (
-        "group: yuuka-release-master",
+        f"group: {PUBLICATION_GROUP}",
         "cancel-in-progress: false",
         "queue: max",
     )
     actual_release_concurrency = extract_simple_mapping(release_job, "concurrency")
     if actual_release_concurrency != expected_release_concurrency:
         fail(
-            "CI release concurrency must use the complete shared serialized queue: "
-            "group yuuka-release-master, cancel-in-progress false, queue max"
+            "CI release concurrency must use the complete shared serialized publication queue: "
+            f"group {PUBLICATION_GROUP}, cancel-in-progress false, queue max"
         )
+    if any(RELEASE_PIPELINE_GROUP in line for line in actual_release_concurrency):
+        fail("CI publication queue must use a group distinct from the workflow-level release pipeline")
+    require_fragment(
+        release_job,
+        './scripts/check-release-ancestry.sh "$GITHUB_SHA"',
+        "CI release version step does not invoke the fail-closed release ancestry guard",
+    )
 
     for bump in RELEASE_BUMPS:
         wrapper_path = REPO_ROOT / ".github" / "workflows" / f"release-{bump}.yml"
