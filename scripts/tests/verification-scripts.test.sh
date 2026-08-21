@@ -3,6 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source_scripts="$(cd -- "$script_dir/.." && pwd)"
+repo_root="$(cd -- "$source_scripts/.." && pwd)"
 fixture_root="$(mktemp -d)"
 trap 'rm -rf "$fixture_root"' EXIT
 
@@ -92,3 +93,66 @@ if [[ "$multiple_output" != *"Multiple release labels are not allowed"* ]]; then
 fi
 
 echo "Release-label resolution tests passed."
+
+validator_fixture="$fixture_root/validator-repo"
+mkdir -p "$validator_fixture/.github" "$validator_fixture/scripts"
+cp -a "$repo_root/.agents" "$validator_fixture/.agents"
+cp -a "$repo_root/.codex" "$validator_fixture/.codex"
+cp -a "$repo_root/.github/workflows" "$validator_fixture/.github/workflows"
+cp -a "$source_scripts/." "$validator_fixture/scripts/"
+
+python3 "$validator_fixture/scripts/validate-codex-workflow.py" >/dev/null
+
+assert_validator_rejects_mutation() {
+  local mutation="$1"
+  local expected_message="$2"
+  local case_root="$fixture_root/validator-$mutation"
+  local output
+  local status
+
+  cp -a "$validator_fixture" "$case_root"
+  python3 - "$case_root/.github/workflows/ci.yml" "$mutation" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+mutation = sys.argv[2]
+workflow = path.read_text(encoding="utf-8")
+
+if mutation == "missing-release-queue":
+    old = """    concurrency:\n      group: yuuka-release-master\n      cancel-in-progress: false\n      queue: max\n"""
+    new = """    concurrency:\n      group: yuuka-release-master\n      cancel-in-progress: false\n"""
+elif mutation == "prefiltered-release-input":
+    old = """    if: >-\n      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||\n      inputs.release_bump != ''\n"""
+    new = """    if: >-\n      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||\n      inputs.release_bump == 'patch' ||\n      inputs.release_bump == 'minor' ||\n      inputs.release_bump == 'major'\n"""
+else:
+    raise SystemExit(f"unsupported mutation: {mutation}")
+
+if workflow.count(old) != 1:
+    raise SystemExit(f"expected exactly one mutation target for {mutation}")
+path.write_text(workflow.replace(old, new, 1), encoding="utf-8")
+PY
+
+  set +e
+  output="$(python3 "$case_root/scripts/validate-codex-workflow.py" 2>&1)"
+  status=$?
+  set -e
+
+  if [[ "$status" -eq 0 ]]; then
+    echo "Expected workflow validator to reject $mutation" >&2
+    exit 1
+  fi
+  if [[ "$output" != *"$expected_message"* ]]; then
+    echo "Unexpected validator output for $mutation: $output" >&2
+    exit 1
+  fi
+}
+
+assert_validator_rejects_mutation \
+  "missing-release-queue" \
+  "complete shared serialized queue"
+assert_validator_rejects_mutation \
+  "prefiltered-release-input" \
+  "every nonempty release_bump"
+
+echo "Release workflow validator regression tests passed."

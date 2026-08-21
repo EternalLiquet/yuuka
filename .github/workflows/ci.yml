@@ -109,9 +109,7 @@ jobs:
       - infrastructure
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
-      inputs.release_bump == 'patch' ||
-      inputs.release_bump == 'minor' ||
-      inputs.release_bump == 'major'
+      inputs.release_bump != ''
     permissions:
       contents: read
       pull-requests: read
@@ -176,6 +174,7 @@ jobs:
     concurrency:
       group: yuuka-release-master
       cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@v7.0.1
         with:

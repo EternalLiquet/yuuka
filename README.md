@@ -93,8 +93,10 @@ remain nightly/manual because they require a hosted emulator. A successful `mast
 a GitHub Release only when its merged pull request has exactly one of `release:major`,
 `release:minor`, or `release:patch`. Unlabeled pull requests and direct pushes remain unreleased, and
 multiple release labels fail the release decision. The manual `Release Patch`, `Release Minor`, and
-`Release Major` workflows rerun all three full CI jobs against `master` before publishing. The
-running backend reports its packaged version at `/health/live`.
+`Release Major` workflows rerun all three full CI jobs against `master` before publishing.
+Publication attempts share one queue, run sequentially, do not cancel the running release, and do
+not replace an existing pending request. The running backend reports its packaged version at
+`/health/live`.
 
 See [testing](docs/testing.md) for checks and reports, and the
 [Codex development loop](docs/codex-development-loop.md) for role handoffs and PR boundaries.

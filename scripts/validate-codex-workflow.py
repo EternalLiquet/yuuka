@@ -85,6 +85,36 @@ def require_fragment(content: str, fragment: str, description: str) -> None:
         fail(description)
 
 
+def extract_job(workflow: str, job_name: str) -> str:
+    match = re.search(
+        rf"(?ms)^  {re.escape(job_name)}:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+        workflow,
+    )
+    if match is None:
+        fail(f"CI does not contain the {job_name} job")
+    return match.group("body")
+
+
+def extract_folded_scalar(job: str, key: str) -> str:
+    match = re.search(
+        rf"(?m)^    {re.escape(key)}: >-\n(?P<body>(?:^      [^\n]*(?:\n|\Z))+)",
+        job,
+    )
+    if match is None:
+        fail(f"CI {key} is not expressed as the expected folded scalar")
+    return " ".join(line.strip() for line in match.group("body").splitlines())
+
+
+def extract_simple_mapping(job: str, key: str) -> tuple[str, ...]:
+    match = re.search(
+        rf"(?m)^    {re.escape(key)}:\n(?P<body>(?:^      [^\n]*(?:\n|\Z))+)",
+        job,
+    )
+    if match is None:
+        fail(f"CI does not define the {key} mapping in the expected job")
+    return tuple(line.strip() for line in match.group("body").splitlines())
+
+
 def validate_ci_wiring() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     for component in ("backend", "mobile", "infrastructure"):
@@ -112,6 +142,41 @@ def validate_ci_wiring() -> None:
     isolated_non_pr = "github.event_name == 'pull_request' && github.ref || github.run_id"
     if workflow.count(isolated_non_pr) != 3:
         fail("CI must isolate master and manual component runs from concurrency replacement")
+
+    release_decision_job = extract_job(workflow, "release-decision")
+    expected_release_condition = (
+        "(github.event_name == 'push' && github.ref == 'refs/heads/master') || "
+        "inputs.release_bump != ''"
+    )
+    actual_release_condition = extract_folded_scalar(release_decision_job, "if")
+    if actual_release_condition != expected_release_condition:
+        fail(
+            "CI release decision must run for master pushes and every nonempty release_bump "
+            "so unsupported inputs reach shell validation"
+        )
+    require_fragment(
+        release_decision_job,
+        'if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then',
+        "CI manual releases do not fail closed outside master",
+    )
+    require_fragment(
+        release_decision_job,
+        "Unsupported manual release bump: $REQUESTED_BUMP",
+        "CI does not reject unsupported nonempty manual release bumps in the shell decision",
+    )
+
+    release_job = extract_job(workflow, "release")
+    expected_release_concurrency = (
+        "group: yuuka-release-master",
+        "cancel-in-progress: false",
+        "queue: max",
+    )
+    actual_release_concurrency = extract_simple_mapping(release_job, "concurrency")
+    if actual_release_concurrency != expected_release_concurrency:
+        fail(
+            "CI release concurrency must use the complete shared serialized queue: "
+            "group yuuka-release-master, cancel-in-progress false, queue max"
+        )
 
     for bump in RELEASE_BUMPS:
         wrapper_path = REPO_ROOT / ".github" / "workflows" / f"release-{bump}.yml"
