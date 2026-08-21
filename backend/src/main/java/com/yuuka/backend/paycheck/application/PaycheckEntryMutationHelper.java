@@ -7,6 +7,7 @@ import com.yuuka.backend.paycheck.api.dto.UpdateEntryRequest;
 import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
 import com.yuuka.backend.paycheck.domain.EntryType;
 import com.yuuka.backend.paycheck.domain.PaycheckEntry;
+import com.yuuka.backend.recurring.domain.RecurringBillDefinition;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -108,6 +109,24 @@ class PaycheckEntryMutationHelper {
             : null,
         request.paybackId(),
         sinkingValue(request.entryType(), request.sinkingFundId()));
+  }
+
+  void normalizeRecurringBill(
+      PaycheckEntry entry, RecurringBillDefinition definition, LocalDate occurrenceDate) {
+    entry.update(
+        EntryType.BILL,
+        definition.getName(),
+        definition.getTypicalAmountMinor(),
+        definition.getPaymentMethod(),
+        occurrenceDate,
+        definition.getAccountName(),
+        definition.getPayee(),
+        definition.getNotes(),
+        null,
+        null,
+        entry.getPaybackId(),
+        null);
+    entry.setRecurringSource(definition.getId(), occurrenceDate);
   }
 
   private String normalizeOptional(String value) {

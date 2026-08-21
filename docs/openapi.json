@@ -767,6 +767,121 @@
         }
       }
     },
+    "/api/v1/entries/{entryId}/recurring-bill-link" : {
+      "put" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "linkEntry",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LinkRecurringBillRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "unlinkEntry",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "entryVersion",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "paycheckVersion",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/entries/{entryId}/recurring-bill-definition" : {
+      "post" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "createFromEntry",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateRecurringBillFromEntryRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/paychecks/{paycheckId}/recurring-bill-imports" : {
       "post" : {
         "tags" : [ "recurring-bill-controller" ],
@@ -3789,6 +3904,87 @@
             "format" : "int64"
           }
         }
+      },
+      "LinkRecurringBillRequest" : {
+        "type" : "object",
+        "properties" : {
+          "entryVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "paycheckVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "definitionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "definitionVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "occurrenceDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "confirmDuplicateOccurrence" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "definitionId", "definitionVersion", "entryVersion", "occurrenceDate", "paycheckVersion" ]
+      },
+      "CreateRecurringBillFromEntryRequest" : {
+        "type" : "object",
+        "properties" : {
+          "entryVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "paycheckVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "typicalAmountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "paymentMethod" : {
+            "type" : "string",
+            "enum" : [ "AUTOPAY", "MANUAL" ]
+          },
+          "dueDay" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 31,
+            "minimum" : 1
+          },
+          "accountName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "payee" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          },
+          "occurrenceDate" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        },
+        "required" : [ "entryVersion", "name", "occurrenceDate", "paycheckVersion", "typicalAmountMinor" ]
       },
       "RecurringBillImportItemRequest" : {
         "type" : "object",

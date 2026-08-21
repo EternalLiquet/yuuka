@@ -77,6 +77,15 @@ export type RecurringBillImportPayload = {
   updateTypicalAmount: boolean;
 };
 
+export type LinkRecurringBillPayload = {
+  confirmDuplicateOccurrence: boolean;
+  definitionId: string;
+  definitionVersion: number;
+  entryVersion: number;
+  occurrenceDate: string;
+  paycheckVersion: number;
+};
+
 export type TemplateEntryPayload = {
   accountName?: string | null;
   defaultAmountMinor: number;
@@ -159,6 +168,23 @@ export function useYuukaApi() {
           { paycheckVersion, items },
           paycheckSchema,
         ),
+      linkRecurringBill: (entryId: string, body: LinkRecurringBillPayload) =>
+        send(`/entries/${entryId}/recurring-bill-link`, 'PUT', body, paycheckSchema),
+      unlinkRecurringBill: (entryId: string, entryVersion: number, paycheckVersion: number) =>
+        send(
+          `/entries/${entryId}/recurring-bill-link?entryVersion=${entryVersion}&paycheckVersion=${paycheckVersion}`,
+          'DELETE',
+          undefined,
+          paycheckSchema,
+        ),
+      createRecurringBillFromEntry: (
+        entryId: string,
+        body: RecurringBillPayload & {
+          entryVersion: number;
+          occurrenceDate: string;
+          paycheckVersion: number;
+        },
+      ) => send(`/entries/${entryId}/recurring-bill-definition`, 'POST', body, paycheckSchema),
       activePaychecks: () => get('/paychecks/active?size=100', pageSchema(paycheckSchema)),
       dashboardSummary: () => get('/dashboard/summary', dashboardSummarySchema),
       rollingSpendingBucketPerformance: (days: 30 | 90 = 30) =>

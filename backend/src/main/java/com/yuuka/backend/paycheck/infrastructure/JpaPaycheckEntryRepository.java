@@ -90,6 +90,10 @@ public interface JpaPaycheckEntryRepository extends JpaRepository<PaycheckEntry,
       @Param("from") java.time.LocalDate from,
       @Param("through") java.time.LocalDate through);
 
+  List<PaycheckEntry>
+      findAllByOwnerIdAndSourceRecurringBillDefinitionIdAndSourceRecurringOccurrenceDateAndDeletedAtIsNullOrderByPaycheckIdAscPositionAscIdAsc(
+          UUID ownerId, UUID definitionId, java.time.LocalDate occurrenceDate);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       "select entry from PaycheckEntry entry "

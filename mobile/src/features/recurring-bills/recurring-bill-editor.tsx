@@ -29,10 +29,12 @@ type FormValues = z.infer<typeof formSchema>;
 
 export function RecurringBillEditor({
   definition,
+  initialValues,
   onSubmit,
   submitLabel,
 }: {
   definition?: RecurringBill;
+  initialValues?: Partial<RecurringBillPayload>;
   onSubmit: (payload: RecurringBillPayload & { version?: number }) => Promise<void>;
   submitLabel: string;
 }) {
@@ -44,7 +46,7 @@ export function RecurringBillEditor({
     setError,
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: defaults(definition),
+    defaultValues: defaults(definition, initialValues),
   });
 
   async function submit(values: FormValues) {
@@ -167,15 +169,21 @@ function Field({
   );
 }
 
-function defaults(definition?: RecurringBill): FormValues {
+function defaults(
+  definition?: RecurringBill,
+  initialValues?: Partial<RecurringBillPayload>,
+): FormValues {
   return {
-    accountName: definition?.accountName ?? '',
-    amount: definition ? minorToInput(definition.typicalAmountMinor) : '',
-    dueDay: String(definition?.dueDay ?? ''),
-    manualPay: definition?.paymentMethod === 'MANUAL',
-    name: definition?.name ?? '',
-    notes: definition?.notes ?? '',
-    payee: definition?.payee ?? '',
+    accountName: definition?.accountName ?? initialValues?.accountName ?? '',
+    amount:
+      definition || initialValues?.typicalAmountMinor != null
+        ? minorToInput(definition?.typicalAmountMinor ?? initialValues!.typicalAmountMinor!)
+        : '',
+    dueDay: String(definition?.dueDay ?? initialValues?.dueDay ?? ''),
+    manualPay: (definition?.paymentMethod ?? initialValues?.paymentMethod) === 'MANUAL',
+    name: definition?.name ?? initialValues?.name ?? '',
+    notes: definition?.notes ?? initialValues?.notes ?? '',
+    payee: definition?.payee ?? initialValues?.payee ?? '',
   };
 }
 

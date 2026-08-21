@@ -224,12 +224,25 @@ containing paycheck.
 - `POST /recurring-bills/{definitionId}/deactivate`
 - `DELETE /recurring-bills/{definitionId}?version=...`
 - `POST /paychecks/{paycheckId}/recurring-bill-imports`
+- `PUT /entries/{entryId}/recurring-bill-link`
+- `DELETE /entries/{entryId}/recurring-bill-link?entryVersion=...&paycheckVersion=...`
+- `POST /entries/{entryId}/recurring-bill-definition`
 
 Timeline ranges are inclusive and bounded to 366 days. They return dynamically derived active
 monthly occurrences together with import counts/status for the requested period. Existing-paycheck
 imports require the current paycheck version, validate every selected occurrence and the aggregate
 allocation, and either create the complete ordered Bill snapshot batch or roll back. Draft creation
 requests may carry nullable recurring-definition and occurrence provenance for Bill entries.
+The entry reconciliation operations are owner-scoped and version-guarded. Link/change loads the
+current definition server-side, validates its exact monthly occurrence and resulting allocation,
+then returns the authoritative paycheck. Duplicate occurrence assignments require an explicit
+confirmation flag but are not prohibited. Create-from-entry atomically creates the definition and
+normalizes/links the existing Bill; unlink clears only the two recurring provenance fields. Link
+and create requests require non-negative `entryVersion` and `paycheckVersion`; link also requires
+`definitionVersion`. When a Bill is assigned to a Payback, reconciliation locks that owner-scoped
+Payback before the paycheck, entry, and recurring definition, then revalidates the discovered
+Payback assignment and all submitted versions inside the same transaction. A changed assignment or
+version receives the normal stale-write conflict instead of continuing against different state.
 
 ### Search
 

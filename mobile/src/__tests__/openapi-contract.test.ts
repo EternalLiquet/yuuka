@@ -6,7 +6,10 @@ describe('committed backend contract', () => {
     readFileSync(resolve(__dirname, '../../../docs/openapi.json'), 'utf8'),
   ) as {
     components?: {
-      schemas?: Record<string, { properties?: Record<string, { type?: string | string[] }> }>;
+      schemas?: Record<
+        string,
+        { properties?: Record<string, { type?: string | string[] }>; required?: string[] }
+      >;
     };
     paths: Record<string, Record<string, unknown>>;
   };
@@ -28,6 +31,9 @@ describe('committed backend contract', () => {
     ['/api/v1/paychecks/{paycheckId}/entries', 'post'],
     ['/api/v1/entries/{entryId}/status', 'post'],
     ['/api/v1/entries/{entryId}/status-history', 'get'],
+    ['/api/v1/entries/{entryId}/recurring-bill-link', 'put'],
+    ['/api/v1/entries/{entryId}/recurring-bill-link', 'delete'],
+    ['/api/v1/entries/{entryId}/recurring-bill-definition', 'post'],
     ['/api/v1/entries/{entryId}/bucket-transactions', 'post'],
     ['/api/v1/paybacks', 'get'],
     ['/api/v1/paybacks', 'post'],
@@ -84,5 +90,14 @@ describe('committed backend contract', () => {
       contract.components?.schemas?.SpendingBucketInsightsResponse?.properties?.selectedBucketName
         ?.type,
     ).toEqual(['string', 'null']);
+  });
+
+  it('requires every recurring reconciliation optimistic-lock version', () => {
+    expect(contract.components?.schemas?.LinkRecurringBillRequest?.required).toEqual(
+      expect.arrayContaining(['entryVersion', 'paycheckVersion', 'definitionVersion']),
+    );
+    expect(contract.components?.schemas?.CreateRecurringBillFromEntryRequest?.required).toEqual(
+      expect.arrayContaining(['entryVersion', 'paycheckVersion']),
+    );
   });
 });

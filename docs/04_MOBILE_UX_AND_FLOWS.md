@@ -206,11 +206,12 @@ template.
 6. Create paycheck and open the new paycheck detail.
 
 The duplicate draft loads the authoritative paycheck detail before initialization. It copies live
-entries in saved order, excludes generated `LEFTOVER`, clears Payback assignments with an
+entries in saved order, excludes generated `LEFTOVER` and linked recurring Bills, clears Payback assignments with an
 informational count, and does not copy statuses, history, bucket purchases, spent values, IDs, or
 versions. Bills preserve Autopay or Manual Pay and shift due dates by the source due-date offset
 from the source paycheck income date to the new income date. Planned Savings target dates remain
-exact.
+exact. The draft reports linked recurring omissions and keeps Import recurring Bills prominent;
+duplication never selects or imports an occurrence automatically.
 Failed creation keeps the local draft available for retry, and repeated taps are guarded so one
 successful request creates one paycheck.
 
@@ -334,6 +335,26 @@ occurrence date near that income date. Nothing is preselected. Selecting uses th
 and editing that selection offers This paycheck only or Update typical amount. Draft imports remain
 editable local snapshots. Existing-paycheck imports submit the full selection as one transactional
 request and retain the user's selection if validation or allocation fails.
+
+The existing Bill editor contains a compact Recurring Bill section. Unlinked Bills can link to an
+Active definition or create a definition from their current fields. The flow suggests the
+definition occurrence in the Bill's current due-date month; a Bill without a due date requires an
+explicit month, and create-from-Bill also requires an explicit due day. Before confirmation it
+shows only material snapshot changes, allocation impact, and any other live assignments for the
+same occurrence. Link/change updates the existing Bill; remove clears only recurring provenance.
+Successful mutations remain in paycheck context, refresh paycheck/dashboard/timeline coverage,
+and expose View recurring Bill for linked entries. Recurring actions are available only for the
+persisted Bill state and are disabled while the entry editor has unsaved changes, including name,
+amount, payment method, notes, type, or Payback selection changes. The user must save or discard the
+entry edits before changing its recurring relationship.
+
+Each confirmation uses an immutable action-specific snapshot. A failed response is checked against
+the authoritative paycheck before Yuuka offers another write. Confirmed link, unlink, and create
+results close successfully without repeating the mutation; an absent result retains the latest
+entry/paycheck versions and returns to that action's fresh review. If both the mutation and that
+check fail, the result is marked unknown: confirmation, Close, and Android back dismissal remain
+blocked while `Check result` performs a read-only check. A different concurrent relationship exits
+the stale review and requires a newly chosen action.
 
 ## Settings
 

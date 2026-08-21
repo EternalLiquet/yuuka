@@ -391,6 +391,10 @@ public class PaybackService {
         .orElseThrow(ResourceNotFoundException::new);
   }
 
+  public void lockForRecurringReconciliation(UUID ownerId, UUID paybackId) {
+    requirePaybackForUpdate(ownerId, paybackId);
+  }
+
   private Payback requirePaybackForUpdate(UUID ownerId, UUID paybackId) {
     return paybacks
         .findByIdAndOwnerIdForUpdate(paybackId, ownerId)

@@ -3,7 +3,10 @@ package com.yuuka.backend.recurring.api;
 import com.yuuka.backend.common.security.AuthenticatedOwner;
 import com.yuuka.backend.paycheck.api.dto.PaycheckResponse;
 import com.yuuka.backend.paycheck.api.dto.VersionRequest;
+import com.yuuka.backend.paycheck.application.RecurringBillEntryReconciliationService;
+import com.yuuka.backend.recurring.api.dto.CreateRecurringBillFromEntryRequest;
 import com.yuuka.backend.recurring.api.dto.CreateRecurringBillRequest;
+import com.yuuka.backend.recurring.api.dto.LinkRecurringBillRequest;
 import com.yuuka.backend.recurring.api.dto.RecurringBillImportRequest;
 import com.yuuka.backend.recurring.api.dto.RecurringBillListResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillResponse;
@@ -33,9 +36,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class RecurringBillController {
   private final RecurringBillService recurringBills;
+  private final RecurringBillEntryReconciliationService reconciliation;
 
-  public RecurringBillController(RecurringBillService recurringBills) {
+  public RecurringBillController(
+      RecurringBillService recurringBills, RecurringBillEntryReconciliationService reconciliation) {
     this.recurringBills = recurringBills;
+    this.reconciliation = reconciliation;
   }
 
   @GetMapping("/recurring-bills")
@@ -106,5 +112,31 @@ public class RecurringBillController {
       @PathVariable UUID paycheckId,
       @Valid @RequestBody RecurringBillImportRequest request) {
     return recurringBills.importIntoPaycheck(AuthenticatedOwner.id(jwt), paycheckId, request);
+  }
+
+  @PutMapping("/entries/{entryId}/recurring-bill-link")
+  public PaycheckResponse linkEntry(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID entryId,
+      @Valid @RequestBody LinkRecurringBillRequest request) {
+    return reconciliation.link(AuthenticatedOwner.id(jwt), entryId, request);
+  }
+
+  @DeleteMapping("/entries/{entryId}/recurring-bill-link")
+  public PaycheckResponse unlinkEntry(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID entryId,
+      @RequestParam long entryVersion,
+      @RequestParam long paycheckVersion) {
+    return reconciliation.unlink(
+        AuthenticatedOwner.id(jwt), entryId, entryVersion, paycheckVersion);
+  }
+
+  @PostMapping("/entries/{entryId}/recurring-bill-definition")
+  public PaycheckResponse createFromEntry(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID entryId,
+      @Valid @RequestBody CreateRecurringBillFromEntryRequest request) {
+    return reconciliation.createFromEntry(AuthenticatedOwner.id(jwt), entryId, request);
   }
 }
