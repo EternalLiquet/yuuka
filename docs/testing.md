@@ -135,7 +135,8 @@ that keep the E2E suite deterministic.
 
 ## GitHub Actions
 
-CI runs on pull requests targeting `master`, pushes to `master`, and manual dispatches.
+CI runs on pull requests targeting `master`, pushes to `master`, manual validation dispatches, and
+calls from the three manual release workflows.
 
 Required validation jobs:
 
@@ -144,9 +145,17 @@ Required validation jobs:
 - Infrastructure: `./scripts/verify-infrastructure.sh full`, including workflow validation,
   production-preflight tests, quiet Compose validation, and the hardened backend image build.
 
-Pull-request and branch validation jobs use cancellable concurrency so newer commits replace stale
-runs. The release job is separate, waits for all required validation jobs, runs only after a
-successful push to `master`, and does not run for pull requests.
+Pull-request validation uses cancellable concurrency so newer commits replace stale PR runs.
+`master` pushes and manual release runs use isolated component groups, so a later run cannot cancel
+or replace an earlier release request before its decision completes. After all three jobs pass on a
+`master` push, the release-decision job inspects the associated merged pull request. It publishes
+only when exactly one supported release label is present. No release job runs for an unlabeled pull
+request, a direct push, a pull-request validation run, or an ordinary manual CI validation run.
+
+`Release Patch`, `Release Minor`, and `Release Major` are manual-only caller workflows. Each must be
+dispatched from `master`, invokes the same reusable CI workflow, and reaches publication only after
+the same Backend, Mobile, and Infrastructure jobs pass. The shared release concurrency group
+serializes automated and manual publication attempts.
 
 The mobile production audit runs `npm run test:audit-policy` and `npm run audit:production`. The
 policy fails closed for new high or critical advisories, expired exceptions, dependency-tree
@@ -173,19 +182,25 @@ for ordinary GitHub Actions CI.
 
 ## Release Versioning
 
-Successful `master` builds publish semantic-version tags in the form `vMAJOR.MINOR.PATCH`. The
-first automated release is `v1.0.0` if no valid version tag exists. Later releases inspect the pull
-request associated with the pushed commit for release labels. `release:major` increments the major
-number and resets minor and patch to zero, `release:minor` increments the minor number and resets
-patch to zero, and `release:patch` increments only the patch number. If more than one release label
-is present, the largest requested bump wins. Pull requests without a release label and direct pushes
-to `master` default to patch bumps.
+Published releases use semantic-version tags in the form `vMAJOR.MINOR.PATCH`. The first release is
+`v1.0.0` if no valid version tag exists. For automatic publication, the pull request associated with
+the successful `master` push must carry exactly one supported label: `release:major` increments the
+major number and resets minor and patch to zero, `release:minor` increments the minor number and
+resets patch to zero, and `release:patch` increments only the patch number. Pull requests without a
+release label and direct pushes do not publish. More than one distinct release label fails the
+release decision instead of guessing which bump should win.
+
+The manual `Release Patch`, `Release Minor`, and `Release Major` workflows provide explicit fallback
+buttons for releasing the current `master` commit. They run full CI before selecting the requested
+bump, reject dispatches from another branch, and use the same packaging and publication path as an
+automatic labeled release.
 
 The release job fetches full history and tags, checks whether the current commit is already tagged,
 and refuses to force-overwrite tags. Rerunning a workflow for an already tagged commit reuses that
 tag instead of creating a second version. The job also creates or refreshes the matching GitHub
 Release with the backend jar, committed OpenAPI snapshot, commit SHA, generation timestamp, and a
-short commit-derived changelog.
+short commit-derived changelog. Changes merged since the previous tag are therefore included in the
+next published release even when their individual pull requests were intentionally unlabeled.
 
 The version source of truth is:
 

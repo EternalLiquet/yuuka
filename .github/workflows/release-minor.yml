@@ -1,0 +1,14 @@
+name: Release Minor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  release:
+    uses: ./.github/workflows/ci.yml
+    with:
+      release_bump: minor
