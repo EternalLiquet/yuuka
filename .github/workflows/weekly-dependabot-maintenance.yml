@@ -54,13 +54,19 @@ jobs:
             --state open \
             --base master \
             --limit 100 \
-            --json number,title,createdAt,updatedAt,headRefName,headRefOid,headRepository,baseRefName,isDraft,mergeStateStatus,mergeable,files \
+            --json number,title,createdAt,updatedAt,headRefName,headRefOid,headRepository,baseRefName,isCrossRepository,isDraft,mergeStateStatus,mergeable,files \
+            --jq '[.[] | select(.isDraft == false and .isCrossRepository == false)]' \
             > .dependabot-maintenance/open-prs.json
 
           python3 scripts/order-dependabot-prs.py \
             .dependabot-maintenance/open-prs.json \
+            > .dependabot-maintenance/ordered-prs-all.json
+
+          jq '.[0:25]' \
+            .dependabot-maintenance/ordered-prs-all.json \
             > .dependabot-maintenance/ordered-prs.json
 
+          total="$(jq 'length' .dependabot-maintenance/ordered-prs-all.json)"
           count="$(jq 'length' .dependabot-maintenance/ordered-prs.json)"
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
@@ -70,7 +76,8 @@ jobs:
             if [[ "$count" == "0" ]]; then
               echo "No eligible open Dependabot pull requests were found."
             else
-              echo "Found $count eligible pull request(s). Initial conflict-aware order:"
+              echo "Found $total eligible pull request(s); this run will process at most $count."
+              echo "Initial conflict-aware order:"
               echo
               jq -r '.[] | "- #\(.number) — \(.title) (overlapping peers: \(.conflictScore.overlappingPeers), shared paths: \(.conflictScore.overlappingPaths), risk rank: \(.conflictScore.riskRank))"' \
                 .dependabot-maintenance/ordered-prs.json
@@ -90,12 +97,12 @@ jobs:
         if: steps.candidates.outputs.count != '0'
         env:
           GH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ githu.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
 
-         {
+          {
             cat .github/prompts/weekly-dependabot-maintenance.md
             echo
             echo "## Runtime context"
@@ -110,4 +117,8 @@ jobs:
             echo '```'
           } > .dependabot-maintenance/copilot-prompt.md
 
-          copilot --yolo -p "$(cat .dependabot-maintenance/copilot-prompt.md)"
+          copilot \
+            --autopilot \
+            --yolo \
+            --max-autopilot-continues 50 \
+            -p "$(cat .dependabot-maintenance/copilot-prompt.md)"
