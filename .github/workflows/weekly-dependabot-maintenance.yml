@@ -1,0 +1,113 @@
+name: Weekly Dependabot maintenance
+
+on:
+  schedule:
+    # Dependabot's weekly default is Monday at a randomized time. Tuesday at
+    # 14:37 UTC gives all configured ecosystems time to publish their PRs and
+    # avoids the busiest start-of-hour Actions window.
+    - cron: "37 14 * * 2"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  checks: read
+  contents: write
+  copilot-requests: write
+  issues: write
+  pull-requests: write
+  statuses: read
+
+concurrency:
+  group: yuuka-weekly-dependabot-maintenance
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  maintain:
+    name: Review and resolve Dependabot PRs
+    if: github.repository == 'EternalLiquet/yuuka'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Validate Dependabot ordering helper
+        run: python3 -m unittest discover -s scripts/tests -p 'test_order_dependabot_prs.py' -v
+
+      - name: Collect and order open Dependabot PRs
+        id: candidates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .dependabot-maintenance
+          printf '\n/.dependabot-maintenance/\n' >> .git/info/exclude
+          cp scripts/order-dependabot-prs.py /tmp/order-dependabot-prs.py
+
+          gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --app dependabot \
+            --state open \
+            --base master \
+            --limit 100 \
+            --json number,title,createdAt,updatedAt,headRefName,headRefOid,headRepository,baseRefName,isDraft,mergeStateStatus,mergeable,files \
+            > .dependabot-maintenance/open-prs.json
+
+          python3 scripts/order-dependabot-prs.py \
+            .dependabot-maintenance/open-prs.json \
+            > .dependabot-maintenance/ordered-prs.json
+
+          count="$(jq 'length' .dependabot-maintenance/ordered-prs.json)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Weekly Dependabot maintenance"
+            echo
+            if [[ "$count" == "0" ]]; then
+              echo "No eligible open Dependabot pull requests were found."
+            else
+              echo "Found $count eligible pull request(s). Initial conflict-aware order:"
+              echo
+              jq -r '.[] | "- #\(.number) — \(.title) (overlapping peers: \(.conflictScore.overlappingPeers), shared paths: \(.conflictScore.overlappingPaths), risk rank: \(.conflictScore.riskRank))"' \
+                .dependabot-maintenance/ordered-prs.json
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v7.0.0
+        if: steps.candidates.outputs.count != '0'
+        with:
+          node-version: "22.13.0"
+
+      - name: Install GitHub Copilot CLI
+        if: steps.candidates.outputs.count != '0'
+        run: npm install --global @github/copilot
+
+      - name: Review, repair, merge, or close Dependabot PRs
+        if: steps.candidates.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ githu.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+         {
+            cat .github/prompts/weekly-dependabot-maintenance.md
+            echo
+            echo "## Runtime context"
+            echo
+            echo "Repository: $GITHUB_REPOSITORY"
+            echo "Workflow run: $GITHUB_RUN_ID"
+            echo "Default branch head at start: $(git rev-parse HEAD)"
+            echo
+            echo "Initial ordered candidate snapshot:"
+            echo '```json'
+            cat .dependabot-maintenance/ordered-prs.json
+            echo '```'
+          } > .dependabot-maintenance/copilot-prompt.md
+
+          copilot --yolo -p "$(cat .dependabot-maintenance/copilot-prompt.md)"

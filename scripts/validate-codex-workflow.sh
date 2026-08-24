@@ -9,6 +9,7 @@ while IFS= read -r -d '' script; do
 done < <(find "$script_dir" -type f -name '*.sh' -print0)
 
 python3 "$script_dir/validate-codex-workflow.py"
+python3 -m unittest discover -s "$script_dir/tests" -p 'test_order_dependabot_prs.py' -v
 "$script_dir/tests/verification-scripts.test.sh"
 "$script_dir/tests/release-ancestry.test.sh"
 git -C "$repo_root" diff --check HEAD --
