@@ -20,6 +20,7 @@ import com.yuuka.backend.recurring.api.dto.RecurringBillImportRequest;
 import com.yuuka.backend.recurring.api.dto.RecurringBillResponse;
 import com.yuuka.backend.recurring.api.dto.UpdateRecurringBillRequest;
 import com.yuuka.backend.recurring.application.RecurringBillService;
+import com.yuuka.backend.recurring.domain.RecurringBillAmountMode;
 import com.yuuka.backend.support.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.util.List;
@@ -83,6 +84,7 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
                     """
                     {
                       "name":"Electric updated",
+                      "amountMode":"FIXED",
                       "typicalAmountMinor":14600,
                       "paymentMethod":"MANUAL",
                       "dueDay":30,
@@ -154,6 +156,121 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
                 .header("Authorization", bearer(token)))
         .andExpect(status().isUnprocessableEntity());
     assertThat(zebra.path("dueDay").asInt()).isEqualTo(31);
+  }
+
+  @Test
+  void storesVariableOccurrenceAmountsSparselyWithOwnershipAndOptimisticLocking() throws Exception {
+    String ownerToken = register("variable-recurring-owner@yuuka.local");
+    String otherToken = register("variable-recurring-other@yuuka.local");
+    mockMvc
+        .perform(
+            post("/api/v1/recurring-bills")
+                .header("Authorization", bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"name":"Invalid Fixed","amountMode":"FIXED","dueDay":18}
+                    """))
+        .andExpect(status().isUnprocessableEntity());
+    JsonNode definition = createVariableDefinition(ownerToken, "Electric", 31);
+    String definitionId = definition.path("id").asText();
+
+    assertThat(definition.path("amountMode").asText()).isEqualTo("VARIABLE");
+    assertThat(definition.path("typicalAmountMinor").isNull()).isTrue();
+    mockMvc
+        .perform(
+            get("/api/v1/recurring-bills/timeline?from=2028-02-29&through=2028-02-29")
+                .header("Authorization", bearer(ownerToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].amountMode").value("VARIABLE"))
+        .andExpect(jsonPath("$.items[0].amountMinor").value((Object) null))
+        .andExpect(jsonPath("$.items[0].amountEntered").value(false));
+
+    mockMvc
+        .perform(
+            put(
+                    "/api/v1/recurring-bills/{id}/occurrences/{date}/amount",
+                    definitionId,
+                    "2028-02-29")
+                .header("Authorization", bearer(otherToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amountMinor\":0}"))
+        .andExpect(status().isNotFound());
+    JsonNode saved =
+        requestJson(
+            put(
+                    "/api/v1/recurring-bills/{id}/occurrences/{date}/amount",
+                    definitionId,
+                    "2028-02-29")
+                .header("Authorization", bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amountMinor\":0}"),
+            200);
+    assertThat(saved.path("version").asLong()).isZero();
+
+    mockMvc
+        .perform(
+            put(
+                    "/api/v1/recurring-bills/{id}/occurrences/{date}/amount",
+                    definitionId,
+                    "2028-02-29")
+                .header("Authorization", bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amountMinor\":11822}"))
+        .andExpect(status().isConflict());
+    requestJson(
+        put("/api/v1/recurring-bills/{id}/occurrences/{date}/amount", definitionId, "2028-02-29")
+            .header("Authorization", bearer(ownerToken))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"amountMinor\":11822,\"version\":0}"),
+        200);
+
+    mockMvc
+        .perform(
+            get("/api/v1/recurring-bills/timeline?from=2028-02-29&through=2028-02-29")
+                .header("Authorization", bearer(ownerToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].amountMinor").value(11822))
+        .andExpect(jsonPath("$.items[0].amountEntered").value(true))
+        .andExpect(jsonPath("$.items[0].occurrenceAmountVersion").value(1));
+
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select count(*) from recurring_bill_occurrence_amounts where definition_id = ?",
+                Long.class,
+                UUID.fromString(definitionId)))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void importsVariableAmountsForOnePaycheckOrSavesTheExactOccurrence() throws Exception {
+    String token = register("variable-recurring-import@yuuka.local");
+    JsonNode definition = createVariableDefinition(token, "Gas", 18);
+    JsonNode paycheck = createPaycheck(token, "September", 50000, "2026-09-15");
+
+    JsonNode oneTime =
+        importVariableBill(token, paycheck, definition, "2026-09-18", 11822, false, null, 200);
+    assertThat(oneTime.path("entries").get(0).path("amountMinor").asLong()).isEqualTo(11822);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select count(*) from recurring_bill_occurrence_amounts", Long.class))
+        .isZero();
+
+    JsonNode savedImport =
+        importVariableBill(token, oneTime, definition, "2026-10-18", 14237, true, null, 200);
+    assertThat(savedImport.path("entries").size()).isEqualTo(2);
+    mockMvc
+        .perform(
+            get("/api/v1/recurring-bills/timeline?from=2026-09-18&through=2026-10-18")
+                .header("Authorization", bearer(token)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].amountMinor").value((Object) null))
+        .andExpect(jsonPath("$.items[1].amountMinor").value(14237));
+
+    JsonNode nextPaycheck = createPaycheck(token, "October", 50000, "2026-10-15");
+    JsonNode reused =
+        importVariableBill(token, nextPaycheck, definition, "2026-10-18", 14237, false, null, 200);
+    assertThat(reused.path("entries").get(0).path("amountMinor").asLong()).isEqualTo(14237);
   }
 
   @Test
@@ -350,6 +467,7 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
     UpdateRecurringBillRequest updateRequest =
         new UpdateRecurringBillRequest(
             "Changed after snapshot",
+            RecurringBillAmountMode.FIXED,
             13000L,
             EntryPaymentMethod.MANUAL,
             22,
@@ -554,12 +672,55 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
                 objectMapper.writeValueAsString(
                     Map.of(
                         "name", name,
+                        "amountMode", "FIXED",
                         "typicalAmountMinor", amountMinor,
                         "paymentMethod", paymentMethod,
                         "dueDay", dueDay,
                         "accountName", "Utility account",
                         "payee", name + " payee"))),
         201);
+  }
+
+  private JsonNode createVariableDefinition(String token, String name, int dueDay)
+      throws Exception {
+    return requestJson(
+        post("/api/v1/recurring-bills")
+            .header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                """
+                {
+                  "name":"%s",
+                  "amountMode":"VARIABLE",
+                  "paymentMethod":"AUTOPAY",
+                  "dueDay":%d
+                }
+                """
+                    .formatted(name, dueDay)),
+        201);
+  }
+
+  private JsonNode importVariableBill(
+      String token,
+      JsonNode paycheck,
+      JsonNode definition,
+      String occurrenceDate,
+      long amountMinor,
+      boolean saveOccurrenceAmount,
+      Long occurrenceAmountVersion,
+      int expectedStatus)
+      throws Exception {
+    Map<String, Object> item = new java.util.LinkedHashMap<>();
+    item.put("definitionId", definition.path("id").asText());
+    item.put("definitionVersion", definition.path("version").asLong());
+    item.put("occurrenceDate", occurrenceDate);
+    item.put("amountMinor", amountMinor);
+    item.put("updateTypicalAmount", false);
+    item.put("saveOccurrenceAmount", saveOccurrenceAmount);
+    if (occurrenceAmountVersion != null) {
+      item.put("occurrenceAmountVersion", occurrenceAmountVersion);
+    }
+    return importBatch(token, paycheck, List.of(item), expectedStatus);
   }
 
   private JsonNode createPaycheck(String token, String name, long amountMinor, String incomeDate)
@@ -649,7 +810,9 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
                 definition.path("version").asLong(),
                 LocalDate.parse(occurrenceDate),
                 amountMinor,
-                updateTypicalAmount)));
+                updateTypicalAmount,
+                false,
+                null)));
   }
 
   private long entryCount(JsonNode paycheck) {

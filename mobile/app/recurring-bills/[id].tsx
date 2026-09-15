@@ -102,12 +102,20 @@ export default function RecurringBillDetailScreen() {
       <ScrollScreen contentContainerStyle={styles.content}>
         <View style={styles.heading}>
           <AppText variant="title">{definition.name}</AppText>
-          <AppText variant="money">
-            {formatMoney(definition.typicalAmountMinor, settings.currencyCode)}
-          </AppText>
-          <AppText style={{ color: colors.muted }} variant="caption">
-            Typical amount
-          </AppText>
+          {definition.amountMode === 'FIXED' ? (
+            <>
+              <AppText variant="money">
+                {formatMoney(definition.typicalAmountMinor!, settings.currencyCode)}
+              </AppText>
+              <AppText style={{ color: colors.muted }} variant="caption">
+                Typical amount
+              </AppText>
+            </>
+          ) : (
+            <AppText style={{ color: colors.muted }} variant="caption">
+              Variable amount · Enter each month when known
+            </AppText>
+          )}
         </View>
         <Detail
           label="Due-day rule"

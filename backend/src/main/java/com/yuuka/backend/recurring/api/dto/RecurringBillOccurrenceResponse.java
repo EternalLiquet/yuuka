@@ -1,6 +1,8 @@
 package com.yuuka.backend.recurring.api.dto;
 
 import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
+import com.yuuka.backend.recurring.domain.RecurringBillAmountMode;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -10,7 +12,11 @@ public record RecurringBillOccurrenceResponse(
     long definitionVersion,
     LocalDate occurrenceDate,
     String name,
-    long typicalAmountMinor,
+    RecurringBillAmountMode amountMode,
+    @Schema(types = {"integer", "null"}) Long typicalAmountMinor,
+    @Schema(types = {"integer", "null"}) Long amountMinor,
+    boolean amountEntered,
+    @Schema(types = {"integer", "null"}) Long occurrenceAmountVersion,
     EntryPaymentMethod paymentMethod,
     String accountName,
     String payee,

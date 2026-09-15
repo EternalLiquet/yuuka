@@ -50,10 +50,11 @@ export function QuickAssignRecurringBillSheet({
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [amountMinor, setAmountMinor] = useState(occurrence?.typicalAmountMinor ?? 0);
+  const [amountMinor, setAmountMinor] = useState<number | null>(occurrence?.amountMinor ?? null);
   const [amountInput, setAmountInput] = useState('');
   const [editingAmount, setEditingAmount] = useState(false);
   const [updateTypicalAmount, setUpdateTypicalAmount] = useState(false);
+  const [saveOccurrenceAmount, setSaveOccurrenceAmount] = useState(false);
   const [amountError, setAmountError] = useState('');
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<'idle' | 'importing' | 'checking'>('idle');
@@ -85,7 +86,10 @@ export function QuickAssignRecurringBillSheet({
   }, [authoritativePaycheck, paychecks.data?.items]);
   const selected = effectivePaychecks.find((item) => item.id === selectedId) ?? null;
   const canFit = Boolean(
-    selected && selected.state === 'ACTIVE' && selected.unallocatedMinor >= amountMinor,
+    selected &&
+    amountMinor != null &&
+    selected.state === 'ACTIVE' &&
+    selected.unallocatedMinor >= amountMinor,
   );
   const interactionsLocked = progress !== 'idle' || outcomeUnknown;
   const recoveryActionsLocked = interactionsLocked || completed;
@@ -94,7 +98,11 @@ export function QuickAssignRecurringBillSheet({
     (!lastOccurrence ||
       occurrence.definitionVersion > lastOccurrence.definitionVersion ||
       (occurrence.definitionVersion === lastOccurrence.definitionVersion &&
-        occurrence.imports.length >= lastOccurrence.imports.length))
+        ((occurrence.occurrenceAmountVersion ?? -1) >
+          (lastOccurrence.occurrenceAmountVersion ?? -1) ||
+          ((occurrence.occurrenceAmountVersion ?? -1) ===
+            (lastOccurrence.occurrenceAmountVersion ?? -1) &&
+            occurrence.imports.length >= lastOccurrence.imports.length))))
       ? occurrence
       : lastOccurrence;
   const liveOccurrenceUnavailable =
@@ -131,15 +139,16 @@ export function QuickAssignRecurringBillSheet({
 
   function beginAmountEdit() {
     if (interactionsLocked) return;
-    setAmountInput(minorToInput(amountMinor));
+    setAmountInput(amountMinor == null ? '' : minorToInput(amountMinor));
     setAmountError('');
     setEditingAmount(true);
   }
 
-  function applyAmount(updateTypical: boolean) {
+  function applyAmount(saveDefinitionAmount: boolean) {
     try {
       setAmountMinor(parseMoneyToMinor(amountInput));
-      setUpdateTypicalAmount(updateTypical);
+      setUpdateTypicalAmount(displayOccurrence?.amountMode === 'FIXED' && saveDefinitionAmount);
+      setSaveOccurrenceAmount(displayOccurrence?.amountMode === 'VARIABLE' && saveDefinitionAmount);
       setEditingAmount(false);
       setAmountError('');
     } catch (valueError) {
@@ -228,6 +237,7 @@ export function QuickAssignRecurringBillSheet({
     if (
       !eligibleOccurrence ||
       !selected ||
+      amountMinor == null ||
       !canFit ||
       submission.current ||
       outcomeUnknown ||
@@ -256,6 +266,10 @@ export function QuickAssignRecurringBillSheet({
             definitionId: eligibleOccurrence.definitionId,
             definitionVersion: eligibleOccurrence.definitionVersion,
             occurrenceDate: eligibleOccurrence.occurrenceDate,
+            occurrenceAmountVersion: saveOccurrenceAmount
+              ? eligibleOccurrence.occurrenceAmountVersion
+              : null,
+            saveOccurrenceAmount,
             updateTypicalAmount,
           },
         ]);
@@ -367,20 +381,27 @@ export function QuickAssignRecurringBillSheet({
                 />
               </View>
             ) : null}
-            {effectivePaychecks.map((paycheck) => (
-              <PaycheckChoice
-                key={paycheck.id}
-                amountMinor={amountMinor}
-                interactionsDisabled={interactionsLocked}
-                onSelect={() => {
-                  setAuthoritativePaycheck(null);
-                  setSelectedId(paycheck.id);
-                }}
-                paycheck={paycheck}
-                selected={selectedId === paycheck.id}
-              />
-            ))}
-            {effectivePaychecks.length &&
+            {amountMinor == null ? (
+              <AppText style={{ color: colors.muted }} variant="caption">
+                Enter this occurrence&apos;s amount before choosing a paycheck.
+              </AppText>
+            ) : (
+              effectivePaychecks.map((paycheck) => (
+                <PaycheckChoice
+                  key={paycheck.id}
+                  amountMinor={amountMinor}
+                  interactionsDisabled={interactionsLocked}
+                  onSelect={() => {
+                    setAuthoritativePaycheck(null);
+                    setSelectedId(paycheck.id);
+                  }}
+                  paycheck={paycheck}
+                  selected={selectedId === paycheck.id}
+                />
+              ))
+            )}
+            {amountMinor != null &&
+            effectivePaychecks.length &&
             effectivePaychecks.some(
               (item) => item.state === 'ACTIVE' && item.unallocatedMinor >= amountMinor,
             ) ? (
@@ -391,7 +412,8 @@ export function QuickAssignRecurringBillSheet({
                 variant="ghost"
               />
             ) : null}
-            {effectivePaychecks.length &&
+            {amountMinor != null &&
+            effectivePaychecks.length &&
             !effectivePaychecks.some(
               (item) => item.state === 'ACTIVE' && item.unallocatedMinor >= amountMinor,
             ) ? (
@@ -453,6 +475,7 @@ export function QuickAssignRecurringBillSheet({
               disabled={
                 !selected ||
                 !canFit ||
+                amountMinor == null ||
                 outcomeUnknown ||
                 completed ||
                 !eligibleOccurrence ||
@@ -477,8 +500,11 @@ export function QuickAssignRecurringBillSheet({
           <View style={[styles.dialog, { backgroundColor: colors.surface }]}>
             <AppText variant="title">{displayOccurrence?.name}</AppText>
             <AppText style={{ color: colors.muted }} variant="caption">
-              Typical amount:{' '}
-              {formatMoney(displayOccurrence?.typicalAmountMinor ?? 0, settings.currencyCode)}
+              {displayOccurrence?.amountMode === 'FIXED'
+                ? `Typical amount: ${formatMoney(displayOccurrence.typicalAmountMinor!, settings.currencyCode)}`
+                : displayOccurrence?.amountMinor == null
+                  ? 'Amount not entered'
+                  : `Saved amount: ${formatMoney(displayOccurrence.amountMinor, settings.currencyCode)}`}
             </AppText>
             <TextField
               keyboardType="decimal-pad"
@@ -491,10 +517,18 @@ export function QuickAssignRecurringBillSheet({
                 {amountError}
               </AppText>
             ) : null}
-            <AppText variant="label">Update the recurring Bill&apos;s typical amount?</AppText>
-            <Button label="This paycheck only" onPress={() => applyAmount(false)} />
+            <AppText variant="label">
+              {displayOccurrence?.amountMode === 'FIXED'
+                ? 'Update the recurring Bill’s typical amount?'
+                : 'Save this amount for the occurrence?'}
+            </AppText>
+            <Button label="Use for this paycheck only" onPress={() => applyAmount(false)} />
             <Button
-              label="Update typical amount"
+              label={
+                displayOccurrence?.amountMode === 'FIXED'
+                  ? 'Update typical amount'
+                  : 'Save for this occurrence'
+              }
               onPress={() => applyAmount(true)}
               variant="secondary"
             />
@@ -513,7 +547,7 @@ function OccurrenceReview({
   onEditAmount,
 }: {
   item: RecurringBillOccurrence;
-  amountMinor: number;
+  amountMinor: number | null;
   disabled: boolean;
   onEditAmount: () => void;
 }) {
@@ -523,7 +557,13 @@ function OccurrenceReview({
     <View style={[styles.review, { borderColor: colors.border }]}>
       <View style={styles.reviewHeading}>
         <AppText variant="label">{item.name}</AppText>
-        <AppText variant="money">{formatMoney(amountMinor, settings.currencyCode)}</AppText>
+        {amountMinor == null ? (
+          <AppText style={{ color: colors.muted }} variant="caption">
+            Amount not entered
+          </AppText>
+        ) : (
+          <AppText variant="money">{formatMoney(amountMinor, settings.currencyCode)}</AppText>
+        )}
       </View>
       <AppText style={{ color: colors.muted }} variant="caption">
         Due {formatDate(item.occurrenceDate)} ·{' '}
@@ -538,7 +578,7 @@ function OccurrenceReview({
       <Button
         disabled={disabled}
         icon={Pencil}
-        label="Edit amount"
+        label={amountMinor == null ? 'Enter amount' : 'Edit amount'}
         onPress={onEditAmount}
         variant="secondary"
       />

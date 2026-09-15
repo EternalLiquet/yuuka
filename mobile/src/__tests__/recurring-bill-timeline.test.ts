@@ -16,6 +16,9 @@ function occurrence(
 ): RecurringBillOccurrence {
   return {
     accountName: null,
+    amountEntered: true,
+    amountMinor: 1000,
+    amountMode: 'FIXED',
     definitionId,
     definitionVersion: 0,
     importCount: 0,
@@ -23,6 +26,7 @@ function occurrence(
     name,
     notes: null,
     occurrenceDate,
+    occurrenceAmountVersion: null,
     payee: null,
     paymentMethod: 'AUTOPAY',
     typicalAmountMinor: 1000,

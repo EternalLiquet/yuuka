@@ -23,6 +23,9 @@ jest.mock('@/components/yuuka-mascot', () => {
 
 const occurrence: RecurringBillOccurrence = {
   accountName: 'Checking',
+  amountEntered: true,
+  amountMinor: 12000,
+  amountMode: 'FIXED',
   definitionId: '11111111-1111-4111-8111-111111111111',
   definitionVersion: 4,
   importCount: 0,
@@ -30,6 +33,7 @@ const occurrence: RecurringBillOccurrence = {
   name: 'Electric',
   notes: 'Budget account',
   occurrenceDate: '2026-08-09',
+  occurrenceAmountVersion: null,
   payee: 'Power Co',
   paymentMethod: 'AUTOPAY',
   typicalAmountMinor: 12000,
@@ -126,7 +130,7 @@ function importResult(createdEntryId: string) {
   };
 }
 
-async function setup() {
+async function setup(selectedOccurrence: RecurringBillOccurrence = occurrence) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
@@ -139,13 +143,13 @@ async function setup() {
   const onOpenImport = jest.fn();
   const onReviewImports = jest.fn();
   const onViewTimeline = jest.fn();
-  const refreshOccurrence = jest.fn().mockResolvedValue(occurrence);
+  const refreshOccurrence = jest.fn().mockResolvedValue(selectedOccurrence);
   const props = {
     assignmentIdentity: {
-      definitionId: occurrence.definitionId,
-      occurrenceDate: occurrence.occurrenceDate,
+      definitionId: selectedOccurrence.definitionId,
+      occurrenceDate: selectedOccurrence.occurrenceDate,
     },
-    occurrence,
+    occurrence: selectedOccurrence,
     occurrenceResolved: true,
     onClose,
     onCreatePaycheck,
@@ -227,7 +231,9 @@ describe('quick recurring Bill assignment', () => {
           amountMinor: 12000,
           definitionId: occurrence.definitionId,
           definitionVersion: 4,
+          occurrenceAmountVersion: null,
           occurrenceDate: '2026-08-09',
+          saveOccurrenceAmount: false,
           updateTypicalAmount: false,
         },
       ]),
@@ -238,11 +244,83 @@ describe('quick recurring Bill assignment', () => {
     );
   });
 
+  it('requires a Variable amount and can save it for only that occurrence', async () => {
+    const variable = {
+      ...occurrence,
+      amountEntered: false,
+      amountMinor: null,
+      amountMode: 'VARIABLE' as const,
+      occurrenceAmountVersion: null,
+      typicalAmountMinor: null,
+    };
+    const createdEntryId = '33333333-3333-4333-8333-333333333334';
+    mockApi.importRecurringBills.mockResolvedValue({
+      ...importResult(createdEntryId),
+      entries: [{ ...importResult(createdEntryId).entries[0], amountMinor: 11822 }],
+    });
+    const { view } = await setup(variable);
+
+    expect(await view.findByText('Amount not entered')).toBeTruthy();
+    expect(view.queryByLabelText(/First paycheck/)).toBeNull();
+    await fireEvent.press(view.getByLabelText('Enter amount'));
+    await fireEvent.changeText(view.getByLabelText('Amount for this paycheck'), '118.22');
+    await fireEvent.press(view.getByLabelText('Save for this occurrence'));
+    await fireEvent.press(await view.findByLabelText(/First paycheck/));
+    await fireEvent.press(view.getByLabelText('Confirm import'));
+
+    await waitFor(() =>
+      expect(mockApi.importRecurringBills).toHaveBeenCalledWith(first.id, 3, [
+        expect.objectContaining({
+          amountMinor: 11822,
+          occurrenceAmountVersion: null,
+          saveOccurrenceAmount: true,
+          updateTypicalAmount: false,
+        }),
+      ]),
+    );
+  });
+
+  it('reuses a saved Variable amount without sending a version for a one-time import', async () => {
+    const savedVariable = {
+      ...occurrence,
+      amountMinor: 11822,
+      amountMode: 'VARIABLE' as const,
+      occurrenceAmountVersion: 5,
+      typicalAmountMinor: null,
+    };
+    const createdEntryId = '33333333-3333-4333-8333-333333333335';
+    mockApi.importRecurringBills.mockResolvedValue({
+      ...importResult(createdEntryId),
+      entries: [{ ...importResult(createdEntryId).entries[0], amountMinor: 11822 }],
+    });
+    const { view } = await setup(savedVariable);
+
+    await act(async () => {
+      fireEvent.press(await view.findByLabelText(/First paycheck/));
+    });
+    await waitFor(() =>
+      expect(view.getByLabelText('Confirm import').props.accessibilityState.disabled).toBe(false),
+    );
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Confirm import'));
+    });
+
+    await waitFor(() =>
+      expect(mockApi.importRecurringBills).toHaveBeenCalledWith(first.id, 3, [
+        expect.objectContaining({
+          amountMinor: 11822,
+          occurrenceAmountVersion: null,
+          saveOccurrenceAmount: false,
+        }),
+      ]),
+    );
+  });
+
   it('keeps invalid amount feedback visible in the editor and does not import', async () => {
     const { view } = await setup();
     await fireEvent.press(await view.findByLabelText('Edit amount'));
     await fireEvent.changeText(view.getByLabelText('Amount for this paycheck'), '12.345');
-    await fireEvent.press(view.getByLabelText('This paycheck only'));
+    await fireEvent.press(view.getByLabelText('Use for this paycheck only'));
 
     expect(
       view.getByText('Enter a valid money amount with no more than two decimal places.'),
@@ -589,7 +667,9 @@ describe('quick recurring Bill assignment', () => {
           amountMinor: 13000,
           definitionId: occurrence.definitionId,
           definitionVersion: 5,
+          occurrenceAmountVersion: null,
           occurrenceDate: occurrence.occurrenceDate,
+          saveOccurrenceAmount: false,
           updateTypicalAmount: true,
         },
       ],

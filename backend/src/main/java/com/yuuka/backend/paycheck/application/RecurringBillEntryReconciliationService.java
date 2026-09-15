@@ -17,10 +17,14 @@ import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckRepository;
 import com.yuuka.backend.recurring.api.dto.CreateRecurringBillFromEntryRequest;
 import com.yuuka.backend.recurring.api.dto.LinkRecurringBillRequest;
+import com.yuuka.backend.recurring.api.dto.RecurringBillOccurrenceAmountResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillResponse;
 import com.yuuka.backend.recurring.domain.MonthlyOccurrencePolicy;
+import com.yuuka.backend.recurring.domain.RecurringBillAmountMode;
 import com.yuuka.backend.recurring.domain.RecurringBillDefinition;
+import com.yuuka.backend.recurring.domain.RecurringBillOccurrenceAmount;
 import com.yuuka.backend.recurring.infrastructure.JpaRecurringBillDefinitionRepository;
+import com.yuuka.backend.recurring.infrastructure.JpaRecurringBillOccurrenceAmountRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -37,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RecurringBillEntryReconciliationService {
   private final JpaRecurringBillDefinitionRepository definitions;
+  private final JpaRecurringBillOccurrenceAmountRepository occurrenceAmounts;
   private final JpaPaycheckRepository paychecks;
   private final JpaPaycheckEntryRepository entries;
   private final PaycheckResponseAssembler responseAssembler;
@@ -51,6 +56,7 @@ public class RecurringBillEntryReconciliationService {
 
   public RecurringBillEntryReconciliationService(
       JpaRecurringBillDefinitionRepository definitions,
+      JpaRecurringBillOccurrenceAmountRepository occurrenceAmounts,
       JpaPaycheckRepository paychecks,
       JpaPaycheckEntryRepository entries,
       PaycheckResponseAssembler responseAssembler,
@@ -63,6 +69,7 @@ public class RecurringBillEntryReconciliationService {
       AuditService auditService,
       Clock clock) {
     this.definitions = definitions;
+    this.occurrenceAmounts = occurrenceAmounts;
     this.paychecks = paychecks;
     this.entries = entries;
     this.responseAssembler = responseAssembler;
@@ -94,7 +101,9 @@ public class RecurringBillEntryReconciliationService {
         request.occurrenceDate(),
         request.confirmDuplicateOccurrence());
 
-    return normalizeAndLink(ownerId, locked, definition, request.occurrenceDate(), false, null);
+    long amountMinor = amountForLink(ownerId, locked.entry(), definition, request.occurrenceDate());
+    return normalizeAndLink(
+        ownerId, locked, definition, request.occurrenceDate(), amountMinor, false, null);
   }
 
   @Transactional
@@ -107,13 +116,19 @@ public class RecurringBillEntryReconciliationService {
           "Remove the existing recurring Bill link before creating a new definition.");
     }
     validateOccurrence(request.dueDay(), request.occurrenceDate());
-    assertAllocation(locked, request.typicalAmountMinor());
+    validateDefinitionAmount(request.amountMode(), request.typicalAmountMinor());
+    long amountMinor =
+        request.amountMode() == RecurringBillAmountMode.FIXED
+            ? request.typicalAmountMinor()
+            : locked.entry().getAmountMinor();
+    assertAllocation(locked, amountMinor);
 
     RecurringBillDefinition definition =
         definitions.saveAndFlush(
             new RecurringBillDefinition(
                 ownerId,
                 request.name().trim(),
+                request.amountMode(),
                 request.typicalAmountMinor(),
                 request.paymentMethod() == null
                     ? com.yuuka.backend.paycheck.domain.EntryPaymentMethod.AUTOPAY
@@ -123,6 +138,21 @@ public class RecurringBillEntryReconciliationService {
                 validations.normalizeOptional(request.payee()),
                 validations.normalizeOptional(request.notes())));
     RecurringBillResponse definitionAfter = RecurringBillResponse.from(definition);
+    if (request.amountMode() == RecurringBillAmountMode.VARIABLE) {
+      RecurringBillOccurrenceAmount occurrenceAmount =
+          occurrenceAmounts.saveAndFlush(
+              new RecurringBillOccurrenceAmount(
+                  ownerId, definition.getId(), request.occurrenceDate(), amountMinor));
+      auditService.append(
+          ownerId,
+          "RECURRING_BILL_OCCURRENCE_AMOUNT",
+          occurrenceAmount.getId(),
+          "CREATED_FROM_PAYCHECK_BILL",
+          null,
+          null,
+          RecurringBillOccurrenceAmountResponse.from(occurrenceAmount),
+          Map.of("paycheckId", locked.paycheck().getId(), "entryId", entryId));
+    }
     auditService.append(
         ownerId,
         "RECURRING_BILL_DEFINITION",
@@ -138,6 +168,7 @@ public class RecurringBillEntryReconciliationService {
         locked,
         definition,
         request.occurrenceDate(),
+        amountMinor,
         true,
         "RECURRING_BILL_CREATED_AND_LINKED");
   }
@@ -181,16 +212,17 @@ public class RecurringBillEntryReconciliationService {
       LockedEntry locked,
       RecurringBillDefinition definition,
       LocalDate occurrenceDate,
+      long amountMinor,
       boolean definitionCreated,
       String forcedAction) {
     PaycheckEntry entry = locked.entry();
-    assertAllocation(locked, definition.getTypicalAmountMinor());
+    assertAllocation(locked, amountMinor);
     EntryResponse before = responseAssembler.toEntryResponse(entry);
     RecurringSource previous = RecurringSource.from(entry);
     UUID previousPaybackId = entry.getPaybackId();
     long previousAmountMinor = entry.getAmountMinor();
     EntryStatus previousStatus = entry.getStatus();
-    entryMutations.normalizeRecurringBill(entry, definition, occurrenceDate);
+    entryMutations.normalizeRecurringBill(entry, definition, occurrenceDate, amountMinor);
     Instant recordedAt = clock.instant();
     paybackService.syncAfterEntryUpdate(
         ownerId, entry, previousPaybackId, previousAmountMinor, previousStatus, recordedAt);
@@ -277,6 +309,27 @@ public class RecurringBillEntryReconciliationService {
   private void requireActive(RecurringBillDefinition definition) {
     if (!definition.isActive()) {
       throw new BusinessRuleException("Activate the recurring Bill before linking it.");
+    }
+  }
+
+  private long amountForLink(
+      UUID ownerId,
+      PaycheckEntry entry,
+      RecurringBillDefinition definition,
+      LocalDate occurrenceDate) {
+    if (definition.getAmountMode() == RecurringBillAmountMode.FIXED) {
+      return definition.getTypicalAmountMinor();
+    }
+    return occurrenceAmounts
+        .findForUpdate(ownerId, definition.getId(), occurrenceDate)
+        .map(RecurringBillOccurrenceAmount::getAmountMinor)
+        .orElse(entry.getAmountMinor());
+  }
+
+  private void validateDefinitionAmount(
+      RecurringBillAmountMode amountMode, Long typicalAmountMinor) {
+    if (amountMode == RecurringBillAmountMode.FIXED && typicalAmountMinor == null) {
+      throw new BusinessRuleException("Enter a typical amount for a Fixed recurring Bill.");
     }
   }
 

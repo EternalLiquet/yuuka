@@ -46,6 +46,7 @@ describe('recurring Bill reconciliation recovery', () => {
     const currentPaycheck = paycheck(source);
     const timelineOccurrence = {
       ...occurrence(3),
+      amountMinor: 1599,
       name: 'Netflix Plus',
       typicalAmountMinor: 1599,
     };
@@ -643,6 +644,7 @@ function definition(version: number): RecurringBill {
   return {
     accountName: 'Visa',
     active: true,
+    amountMode: 'FIXED',
     createdAt: '2026-08-01T12:00:00Z',
     dueDay: 21,
     id: '33333333-3333-4333-8333-333333333333',
@@ -660,6 +662,9 @@ function definition(version: number): RecurringBill {
 function occurrence(definitionVersion: number): RecurringBillOccurrence {
   return {
     accountName: 'Visa',
+    amountEntered: true,
+    amountMinor: 1499,
+    amountMode: 'FIXED',
     definitionId: definition(definitionVersion).id,
     definitionVersion,
     importCount: 0,
@@ -667,6 +672,7 @@ function occurrence(definitionVersion: number): RecurringBillOccurrence {
     name: 'Netflix',
     notes: 'Streaming',
     occurrenceDate: '2026-08-21',
+    occurrenceAmountVersion: null,
     payee: 'Netflix Inc',
     paymentMethod: 'AUTOPAY',
     typicalAmountMinor: 1499,

@@ -114,11 +114,18 @@ reports how many were not copied.
 
 A recurring Bill definition is an owner-scoped planning source, not a paycheck entry and not an
 automatic payment. The first supported recurrence is monthly. A definition stores its name,
-typical amount, Bill payment method, due day, optional account/payee/notes, and active state.
+amount mode, Bill payment method, due day, optional account/payee/notes, and active state. Fixed
+definitions require a typical amount. Variable definitions have no effective typical amount;
+their amount is entered for each occurrence.
 
 Monthly occurrences are derived dynamically. If the configured due day does not exist in a month,
 the occurrence uses that month's final calendar day, including leap-year February. Occurrences are
 not persisted as jobs or materialized future records.
+
+Variable occurrence amounts are sparse owner-scoped records created only when the user enters an
+amount. Missing and zero are distinct states. They are version-guarded, remain associated with the
+exact occurrence date across definition edits or lifecycle changes, and never alter an already
+imported Bill snapshot.
 
 Importing an occurrence creates an ordinary independent `BILL` snapshot in a paycheck. The snapshot
 starts Not Paid, reserves its full amount, preserves the selected occurrence date and optional
@@ -138,7 +145,8 @@ definition and Bill remain independent snapshots.
 
 The owner controls the suggestion window in days, from 1 through 31, with a default of 7. Suggested
 occurrences are derived relative to the paycheck income date. Selection is always explicit and the
-user may override only this paycheck's amount or also update the definition's typical amount.
+user may override only this paycheck's amount or also update a Fixed definition's typical amount.
+For Variable definitions, the user may import a one-time amount or save it for that occurrence.
 
 ## Entry types
 

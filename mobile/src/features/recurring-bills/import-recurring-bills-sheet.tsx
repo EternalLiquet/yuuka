@@ -16,6 +16,8 @@ import { useAppTheme } from '@/theme/use-app-theme';
 
 export type RecurringBillImportSelection = RecurringBillOccurrence & {
   amountMinor: number;
+  occurrenceAmountVersion: number | null;
+  saveOccurrenceAmount: boolean;
   updateTypicalAmount: boolean;
 };
 
@@ -85,6 +87,10 @@ export function ImportRecurringBillsSheet({
 
   function toggle(item: RecurringBillOccurrence) {
     const key = selectionKey(item);
+    if (!selected[key] && item.amountMinor == null) {
+      editAmount(item);
+      return;
+    }
     setSelected((current) => {
       if (current[key]) {
         const next = { ...current };
@@ -93,17 +99,18 @@ export function ImportRecurringBillsSheet({
       }
       return {
         ...current,
-        [key]: recurringImportSelection(item, item.typicalAmountMinor, false),
+        [key]: recurringImportSelection(item, item.amountMinor!, false),
       };
     });
   }
 
   function editAmount(item: RecurringBillOccurrence) {
     setEditing(item);
-    setAmount(minorToInput(selected[selectionKey(item)]?.amountMinor ?? item.typicalAmountMinor));
+    const currentAmount = selected[selectionKey(item)]?.amountMinor ?? item.amountMinor;
+    setAmount(currentAmount == null ? '' : minorToInput(currentAmount));
   }
 
-  function applyAmount(updateTypicalAmount: boolean) {
+  function applyAmount(saveDefinitionAmount: boolean) {
     if (!editing) return;
     try {
       const amountMinor = parseMoneyToMinor(amount);
@@ -112,7 +119,7 @@ export function ImportRecurringBillsSheet({
           current,
           editing,
           amountMinor,
-          updateTypicalAmount,
+          saveDefinitionAmount,
           localDraft,
         ),
       );
@@ -130,11 +137,15 @@ export function ImportRecurringBillsSheet({
     setError('');
     try {
       if (localDraft) {
-        const typicalUpdates = items.filter((value) => value.updateTypicalAmount);
-        if (typicalUpdates.length > 1) {
-          throw new Error('Update only one recurring Bill typical amount at a time.');
+        const persistedUpdates = items.filter(
+          (value) => value.updateTypicalAmount || value.saveOccurrenceAmount,
+        );
+        if (persistedUpdates.length > 1) {
+          throw new Error('Save only one recurring Bill amount at a time.');
         }
-        for (const item of typicalUpdates) {
+        const persistedUpdate = persistedUpdates[0];
+        if (persistedUpdate?.updateTypicalAmount) {
+          const item = persistedUpdate;
           const definition = definitions.data?.items.find(
             (value) => value.id === item.definitionId,
           );
@@ -142,6 +153,7 @@ export function ImportRecurringBillsSheet({
             throw new Error('Refresh recurring Bills before updating a typical amount.');
           await api.updateRecurringBill(definition.id, {
             name: definition.name,
+            amountMode: definition.amountMode,
             typicalAmountMinor: item.amountMinor,
             paymentMethod: definition.paymentMethod,
             dueDay: definition.dueDay,
@@ -150,6 +162,15 @@ export function ImportRecurringBillsSheet({
             notes: definition.notes,
             version: definition.version,
           });
+        }
+        if (persistedUpdate?.saveOccurrenceAmount) {
+          const item = persistedUpdate;
+          await api.updateRecurringBillOccurrenceAmount(
+            item.definitionId,
+            item.occurrenceDate,
+            item.amountMinor,
+            item.occurrenceAmountVersion,
+          );
         }
       }
       await onImport(items);
@@ -272,7 +293,11 @@ export function ImportRecurringBillsSheet({
           <View style={[styles.amountDialog, { backgroundColor: colors.surface }]}>
             <AppText variant="title">{editing?.name}</AppText>
             <AppText style={{ color: colors.muted }} variant="caption">
-              Typical amount: {formatMoney(editing?.typicalAmountMinor ?? 0, settings.currencyCode)}
+              {editing?.amountMode === 'FIXED'
+                ? `Typical amount: ${formatMoney(editing.typicalAmountMinor!, settings.currencyCode)}`
+                : editing?.amountMinor == null
+                  ? 'Amount not entered'
+                  : `Saved amount: ${formatMoney(editing.amountMinor, settings.currencyCode)}`}
             </AppText>
             <TextField
               keyboardType="decimal-pad"
@@ -280,10 +305,18 @@ export function ImportRecurringBillsSheet({
               onChangeText={setAmount}
               value={amount}
             />
-            <AppText variant="label">Update the recurring Bill&apos;s typical amount?</AppText>
-            <Button label="This paycheck only" onPress={() => applyAmount(false)} />
+            <AppText variant="label">
+              {editing?.amountMode === 'FIXED'
+                ? 'Update the recurring Bill’s typical amount?'
+                : 'Save this amount for the occurrence?'}
+            </AppText>
+            <Button label="Use for this paycheck only" onPress={() => applyAmount(false)} />
             <Button
-              label="Update typical amount"
+              label={
+                editing?.amountMode === 'FIXED'
+                  ? 'Update typical amount'
+                  : 'Save for this occurrence'
+              }
               onPress={() => applyAmount(true)}
               variant="secondary"
             />
@@ -353,9 +386,15 @@ function OccurrenceSection({
                   Due {formatDate(item.occurrenceDate)} ·{' '}
                   {item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}
                 </AppText>
-                <AppText variant="money">
-                  {formatMoney(selectedItem?.amountMinor ?? item.typicalAmountMinor)}
-                </AppText>
+                {selectedItem?.amountMinor != null || item.amountMinor != null ? (
+                  <AppText variant="money">
+                    {formatMoney(selectedItem?.amountMinor ?? item.amountMinor!)}
+                  </AppText>
+                ) : (
+                  <AppText style={{ color: colors.muted }} variant="caption">
+                    Amount not entered
+                  </AppText>
+                )}
               </View>
             </Pressable>
             <Pressable
@@ -413,33 +452,51 @@ function selectionKey(item: RecurringBillOccurrence) {
 
 export function recurringImportSelection(
   occurrence: RecurringBillOccurrence,
-  amountMinor = occurrence.typicalAmountMinor,
-  updateTypicalAmount = false,
+  amountMinor = occurrence.amountMinor!,
+  saveDefinitionAmount = false,
 ): RecurringBillImportSelection {
-  return { ...occurrence, amountMinor, updateTypicalAmount };
+  if (amountMinor == null) throw new Error('Enter an amount before selecting this occurrence.');
+  return {
+    ...occurrence,
+    amountMinor,
+    occurrenceAmountVersion:
+      occurrence.amountMode === 'VARIABLE' && saveDefinitionAmount
+        ? occurrence.occurrenceAmountVersion
+        : null,
+    saveOccurrenceAmount: occurrence.amountMode === 'VARIABLE' && saveDefinitionAmount,
+    updateTypicalAmount: occurrence.amountMode === 'FIXED' && saveDefinitionAmount,
+  };
 }
 
 export function updateRecurringAmountSelection(
   current: Record<string, RecurringBillImportSelection>,
   occurrence: RecurringBillOccurrence,
   amountMinor: number,
-  updateTypicalAmount: boolean,
-  singleTypicalUpdateAcrossImport: boolean,
+  saveDefinitionAmount: boolean,
+  singlePersistedUpdateAcrossImport: boolean,
 ): Record<string, RecurringBillImportSelection> {
   const next = Object.fromEntries(
     Object.entries(current).map(([key, item]) => [
       key,
-      updateTypicalAmount &&
-      item.updateTypicalAmount &&
-      (singleTypicalUpdateAcrossImport || item.definitionId === occurrence.definitionId)
-        ? { ...item, updateTypicalAmount: false }
+      saveDefinitionAmount &&
+      ((singlePersistedUpdateAcrossImport &&
+        (item.updateTypicalAmount || item.saveOccurrenceAmount)) ||
+        (occurrence.amountMode === 'FIXED' &&
+          item.updateTypicalAmount &&
+          item.definitionId === occurrence.definitionId))
+        ? {
+            ...item,
+            occurrenceAmountVersion: null,
+            saveOccurrenceAmount: false,
+            updateTypicalAmount: false,
+          }
         : item,
     ]),
   );
   next[selectionKey(occurrence)] = recurringImportSelection(
     occurrence,
     amountMinor,
-    updateTypicalAmount,
+    saveDefinitionAmount,
   );
   return next;
 }

@@ -101,6 +101,51 @@
         }
       }
     },
+    "/api/v1/recurring-bills/{definitionId}/occurrences/{occurrenceDate}/amount" : {
+      "put" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "updateOccurrenceAmount",
+        "parameters" : [ {
+          "name" : "definitionId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "occurrenceDate",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateRecurringBillOccurrenceAmountRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecurringBillOccurrenceAmountResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/templates" : {
       "get" : {
         "tags" : [ "template-controller" ],
@@ -3032,6 +3077,49 @@
   },
   "components" : {
     "schemas" : {
+      "UpdateRecurringBillOccurrenceAmountRequest" : {
+        "type" : "object",
+        "properties" : {
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "version" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          }
+        },
+        "required" : [ "amountMinor" ]
+      },
+      "RecurringBillOccurrenceAmountResponse" : {
+        "type" : "object",
+        "properties" : {
+          "definitionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "occurrenceDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
       "UpdateRecurringBillRequest" : {
         "type" : "object",
         "properties" : {
@@ -3040,8 +3128,12 @@
             "maxLength" : 160,
             "minLength" : 0
           },
+          "amountMode" : {
+            "type" : "string",
+            "enum" : [ "FIXED", "VARIABLE" ]
+          },
           "typicalAmountMinor" : {
-            "type" : "integer",
+            "type" : [ "integer", "null" ],
             "format" : "int64"
           },
           "paymentMethod" : {
@@ -3074,7 +3166,7 @@
             "format" : "int64"
           }
         },
-        "required" : [ "name", "typicalAmountMinor" ]
+        "required" : [ "amountMode", "name" ]
       },
       "RecurringBillResponse" : {
         "type" : "object",
@@ -3086,8 +3178,12 @@
           "name" : {
             "type" : "string"
           },
+          "amountMode" : {
+            "type" : "string",
+            "enum" : [ "FIXED", "VARIABLE" ]
+          },
           "typicalAmountMinor" : {
-            "type" : "integer",
+            "type" : [ "integer", "null" ],
             "format" : "int64"
           },
           "paymentMethod" : {
@@ -3619,8 +3715,12 @@
             "maxLength" : 160,
             "minLength" : 0
           },
+          "amountMode" : {
+            "type" : "string",
+            "enum" : [ "FIXED", "VARIABLE" ]
+          },
           "typicalAmountMinor" : {
-            "type" : "integer",
+            "type" : [ "integer", "null" ],
             "format" : "int64"
           },
           "paymentMethod" : {
@@ -3649,7 +3749,7 @@
             "minLength" : 0
           }
         },
-        "required" : [ "name", "typicalAmountMinor" ]
+        "required" : [ "amountMode", "name" ]
       },
       "CreatePaycheckRequest" : {
         "type" : "object",
@@ -3950,8 +4050,12 @@
             "maxLength" : 160,
             "minLength" : 0
           },
+          "amountMode" : {
+            "type" : "string",
+            "enum" : [ "FIXED", "VARIABLE" ]
+          },
           "typicalAmountMinor" : {
-            "type" : "integer",
+            "type" : [ "integer", "null" ],
             "format" : "int64"
           },
           "paymentMethod" : {
@@ -3984,7 +4088,7 @@
             "format" : "date"
           }
         },
-        "required" : [ "entryVersion", "name", "occurrenceDate", "paycheckVersion", "typicalAmountMinor" ]
+        "required" : [ "amountMode", "entryVersion", "name", "occurrenceDate", "paycheckVersion" ]
       },
       "RecurringBillImportItemRequest" : {
         "type" : "object",
@@ -4007,6 +4111,13 @@
           },
           "updateTypicalAmount" : {
             "type" : "boolean"
+          },
+          "saveOccurrenceAmount" : {
+            "type" : "boolean"
+          },
+          "occurrenceAmountVersion" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
           }
         },
         "required" : [ "amountMinor", "definitionId", "occurrenceDate" ]
@@ -5529,8 +5640,23 @@
           "name" : {
             "type" : "string"
           },
+          "amountMode" : {
+            "type" : "string",
+            "enum" : [ "FIXED", "VARIABLE" ]
+          },
           "typicalAmountMinor" : {
-            "type" : "integer",
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "amountMinor" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "amountEntered" : {
+            "type" : "boolean"
+          },
+          "occurrenceAmountVersion" : {
+            "type" : [ "integer", "null" ],
             "format" : "int64"
           },
           "paymentMethod" : {

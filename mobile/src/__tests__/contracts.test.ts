@@ -11,6 +11,9 @@ import {
   meSchema,
   pageSchema,
   paycheckSchema,
+  recurringBillOccurrenceAmountSchema,
+  recurringBillOccurrenceSchema,
+  recurringBillSchema,
   rollingSpendingBucketPerformanceSchema,
   spendingBucketInsightsSchema,
   sinkingFundListSchema,
@@ -70,6 +73,55 @@ const templateEntry = {
 };
 
 describe('API response contracts', () => {
+  it('distinguishes a missing variable amount from a real zero amount', () => {
+    const definition = {
+      id: '11111111-1111-4111-8111-111111111130',
+      name: 'Electricity',
+      amountMode: 'VARIABLE',
+      typicalAmountMinor: null,
+      paymentMethod: 'AUTOPAY',
+      recurrenceType: 'MONTHLY',
+      dueDay: 15,
+      accountName: null,
+      payee: null,
+      notes: null,
+      active: true,
+      createdAt: '2026-07-10T12:00:00Z',
+      updatedAt: '2026-07-10T12:00:00Z',
+      version: 0,
+    } as const;
+    expect(recurringBillSchema.parse(definition)).toMatchObject({ typicalAmountMinor: null });
+    expect(
+      recurringBillOccurrenceSchema.parse({
+        definitionId: definition.id,
+        definitionVersion: 0,
+        occurrenceDate: '2026-08-15',
+        name: definition.name,
+        amountMode: definition.amountMode,
+        typicalAmountMinor: null,
+        amountMinor: null,
+        amountEntered: false,
+        occurrenceAmountVersion: null,
+        paymentMethod: definition.paymentMethod,
+        accountName: null,
+        payee: null,
+        notes: null,
+        importCount: 0,
+        imports: [],
+      }),
+    ).toMatchObject({ amountMinor: null, amountEntered: false });
+    expect(
+      recurringBillOccurrenceAmountSchema.parse({
+        definitionId: definition.id,
+        occurrenceDate: '2026-08-15',
+        amountMinor: 0,
+        version: 0,
+        createdAt: '2026-07-10T12:00:00Z',
+        updatedAt: '2026-07-10T12:00:00Z',
+      }),
+    ).toMatchObject({ amountMinor: 0 });
+  });
+
   it('parses representative domain payloads', () => {
     expect(entryStatusSchema.parse('POSTED')).toBe('POSTED');
     expect(entryTypeSchema.parse('BILL')).toBe('BILL');

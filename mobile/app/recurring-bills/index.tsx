@@ -1,10 +1,11 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';
-import { CalendarDays, Settings2 } from 'lucide-react-native';
+import { CalendarDays, Pencil, Settings2 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -24,8 +25,9 @@ import {
   useFloatingCreateActionBottomPadding,
 } from '@/components/floating-create-action';
 import { Screen } from '@/components/screen';
+import { TextField } from '@/components/text-field';
 import { ErrorState, YuukaLoadingState } from '@/components/states';
-import { formatMoney } from '@/domain/money';
+import { formatMoney, minorToInput, parseMoneyToMinor } from '@/domain/money';
 import {
   groupTimeline,
   initialTimelineRange,
@@ -72,6 +74,10 @@ export default function RecurringBillsTimelineScreen() {
   const [reviewingOccurrence, setReviewingOccurrence] = useState<RecurringBillOccurrence | null>(
     null,
   );
+  const [editingAmount, setEditingAmount] = useState<RecurringBillOccurrence | null>(null);
+  const [amountInput, setAmountInput] = useState('');
+  const [amountError, setAmountError] = useState('');
+  const [amountSaving, setAmountSaving] = useState(false);
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<TimelineDay>[] }) => {
       setTodayVisible(viewableItems.some((item) => item.item.date === today));
@@ -357,6 +363,13 @@ export default function RecurringBillsTimelineScreen() {
             <TimelineDayRow
               day={item}
               onEdit={(definitionId) => router.push(`/recurring-bills/${definitionId}/edit`)}
+              onEditAmount={(occurrence) => {
+                setEditingAmount(occurrence);
+                setAmountInput(
+                  occurrence.amountMinor == null ? '' : minorToInput(occurrence.amountMinor),
+                );
+                setAmountError('');
+              }}
               onOpenImport={(paycheckId, entryId) =>
                 router.push({
                   pathname: '/paychecks/[id]',
@@ -386,6 +399,72 @@ export default function RecurringBillsTimelineScreen() {
           });
         }}
       />
+      <Modal
+        animationType="fade"
+        onRequestClose={() => !amountSaving && setEditingAmount(null)}
+        transparent
+        visible={Boolean(editingAmount)}
+      >
+        <View style={styles.amountBackdrop}>
+          <View style={[styles.amountDialog, { backgroundColor: colors.surface }]}>
+            <AppText variant="title">{editingAmount?.name}</AppText>
+            <AppText style={{ color: colors.muted }} variant="caption">
+              Amount for {editingAmount ? formatLongDate(editingAmount.occurrenceDate) : ''}
+            </AppText>
+            <TextField
+              keyboardType="decimal-pad"
+              label="Amount"
+              onChangeText={setAmountInput}
+              value={amountInput}
+            />
+            {amountError ? (
+              <AppText style={{ color: colors.danger }} variant="error">
+                {amountError}
+              </AppText>
+            ) : null}
+            <Button
+              label="Save occurrence amount"
+              loading={amountSaving}
+              onPress={async () => {
+                if (!editingAmount || amountSaving) return;
+                try {
+                  const amountMinor = parseMoneyToMinor(amountInput);
+                  setAmountSaving(true);
+                  await api.updateRecurringBillOccurrenceAmount(
+                    editingAmount.definitionId,
+                    editingAmount.occurrenceDate,
+                    amountMinor,
+                    editingAmount.occurrenceAmountVersion,
+                  );
+                  await Promise.all([
+                    queryClient.invalidateQueries({
+                      queryKey: ['dashboard', 'upcoming-recurring-bills'],
+                    }),
+                    queryClient.invalidateQueries({ queryKey: ['recurring-bills'] }),
+                  ]);
+                  setEditingAmount(null);
+                } catch (error) {
+                  setAmountError(
+                    displayError(
+                      error,
+                      settings.currencyCode,
+                      'The occurrence amount was not saved.',
+                    ),
+                  );
+                } finally {
+                  setAmountSaving(false);
+                }
+              }}
+            />
+            <Button
+              disabled={amountSaving}
+              label="Cancel"
+              onPress={() => setEditingAmount(null)}
+              variant="ghost"
+            />
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -502,12 +581,14 @@ function EdgeFeedback({
 function TimelineDayRow({
   day,
   onEdit,
+  onEditAmount,
   onOpenImport,
   onReviewImports,
   today,
 }: {
   day: TimelineDay;
   onEdit: (definitionId: string) => void;
+  onEditAmount: (item: RecurringBillOccurrence) => void;
   onOpenImport: (paycheckId: string, entryId: string) => void;
   onReviewImports: (item: RecurringBillOccurrence) => void;
   today: string;
@@ -535,6 +616,7 @@ function TimelineDayRow({
             item={item}
             key={item.definitionId}
             onEdit={() => onEdit(item.definitionId)}
+            onEditAmount={() => onEditAmount(item)}
             onOpenImport={onOpenImport}
             onReviewImports={() => onReviewImports(item)}
           />
@@ -547,11 +629,13 @@ function TimelineDayRow({
 function OccurrenceCard({
   item,
   onEdit,
+  onEditAmount,
   onOpenImport,
   onReviewImports,
 }: {
   item: RecurringBillOccurrence;
   onEdit: () => void;
+  onEditAmount: () => void;
   onOpenImport: (paycheckId: string, entryId: string) => void;
   onReviewImports: () => void;
 }) {
@@ -571,6 +655,14 @@ function OccurrenceCard({
     <Pressable
       accessibilityActions={[
         ...(hasPrimaryAction ? [{ label: recurringCoverageAction(item), name: 'activate' }] : []),
+        ...(item.amountMode === 'VARIABLE'
+          ? [
+              {
+                label: item.amountEntered ? 'Edit occurrence amount' : 'Enter occurrence amount',
+                name: 'amount',
+              },
+            ]
+          : []),
         { label: 'Edit recurring Bill', name: 'edit' },
       ]}
       accessibilityHint={
@@ -578,11 +670,12 @@ function OccurrenceCard({
           ? recurringCoverageAction(item)
           : 'Long press or use the Edit recurring Bill action to edit the definition'
       }
-      accessibilityLabel={`${item.name}, ${formatMoney(item.typicalAmountMinor, settings.currencyCode)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}, ${recurringCoverageLabel(item)}`}
+      accessibilityLabel={`${item.name}, ${item.amountMinor == null ? 'Amount not entered' : formatMoney(item.amountMinor, settings.currencyCode)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}, ${recurringCoverageLabel(item)}`}
       accessibilityRole="button"
       delayLongPress={500}
       onAccessibilityAction={({ nativeEvent }) => {
         if (nativeEvent.actionName === 'activate') openPrimaryAction();
+        if (nativeEvent.actionName === 'amount') onEditAmount();
         if (nativeEvent.actionName === 'edit') onEdit();
       }}
       onLongPress={onEdit}
@@ -596,9 +689,13 @@ function OccurrenceCard({
     >
       <View style={styles.cardHeading}>
         <AppText variant="label">{item.name}</AppText>
-        <AppText variant="money">
-          {formatMoney(item.typicalAmountMinor, settings.currencyCode)}
-        </AppText>
+        {item.amountMinor == null ? (
+          <AppText style={{ color: colors.muted }} variant="caption">
+            Amount not entered
+          </AppText>
+        ) : (
+          <AppText variant="money">{formatMoney(item.amountMinor, settings.currencyCode)}</AppText>
+        )}
       </View>
       <AppText style={{ color: colors.muted }} variant="caption">
         {item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}
@@ -610,6 +707,14 @@ function OccurrenceCard({
           Added to {entry.paycheckName} · {statusLabel(entry.status)}
         </AppText>
       ))}
+      {item.amountMode === 'VARIABLE' ? (
+        <Button
+          icon={Pencil}
+          label={item.amountEntered ? 'Edit amount' : 'Enter amount'}
+          onPress={onEditAmount}
+          variant="ghost"
+        />
+      ) : null}
     </Pressable>
   );
 }
@@ -649,6 +754,13 @@ function compareTimelineRanges(left: TimelineRange, right: TimelineRange) {
 }
 
 const styles = StyleSheet.create({
+  amountBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  amountDialog: { borderRadius: 10, gap: 14, padding: 18 },
   card: { borderRadius: 8, borderWidth: 1, gap: 5, padding: 13 },
   cardHeading: {
     alignItems: 'center',

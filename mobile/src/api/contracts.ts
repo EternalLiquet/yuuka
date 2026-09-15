@@ -459,13 +459,16 @@ export const meSchema = z.object({
 export type Me = z.infer<typeof meSchema>;
 
 export const recurringBillRecurrenceTypeSchema = z.literal('MONTHLY');
+export const recurringBillAmountModeSchema = z.enum(['FIXED', 'VARIABLE']);
+export type RecurringBillAmountMode = z.infer<typeof recurringBillAmountModeSchema>;
 export const recurringBillStatusFilterSchema = z.enum(['ACTIVE', 'INACTIVE', 'ALL']);
 export type RecurringBillStatusFilter = z.infer<typeof recurringBillStatusFilterSchema>;
 
 export const recurringBillSchema = z.object({
   id: uuid,
   name: z.string(),
-  typicalAmountMinor: minor.nonnegative(),
+  amountMode: recurringBillAmountModeSchema,
+  typicalAmountMinor: minor.nonnegative().nullable(),
   paymentMethod: entryPaymentMethodSchema,
   recurrenceType: recurringBillRecurrenceTypeSchema,
   dueDay: z.number().int().min(1).max(31),
@@ -493,7 +496,11 @@ export const recurringBillOccurrenceSchema = z.object({
   definitionVersion: z.number().int().nonnegative(),
   occurrenceDate: date,
   name: z.string(),
-  typicalAmountMinor: minor.nonnegative(),
+  amountMode: recurringBillAmountModeSchema,
+  typicalAmountMinor: minor.nonnegative().nullable(),
+  amountMinor: minor.nonnegative().nullable(),
+  amountEntered: z.boolean(),
+  occurrenceAmountVersion: z.number().int().nonnegative().nullable(),
   paymentMethod: entryPaymentMethodSchema,
   accountName: z.string().nullable(),
   payee: z.string().nullable(),
@@ -502,6 +509,16 @@ export const recurringBillOccurrenceSchema = z.object({
   imports: z.array(recurringBillImportSummarySchema),
 });
 export type RecurringBillOccurrence = z.infer<typeof recurringBillOccurrenceSchema>;
+
+export const recurringBillOccurrenceAmountSchema = z.object({
+  definitionId: uuid,
+  occurrenceDate: date,
+  amountMinor: minor.nonnegative(),
+  version: z.number().int().nonnegative(),
+  createdAt: instant,
+  updatedAt: instant,
+});
+export type RecurringBillOccurrenceAmount = z.infer<typeof recurringBillOccurrenceAmountSchema>;
 
 export const recurringBillTimelineSchema = z.object({
   from: date,

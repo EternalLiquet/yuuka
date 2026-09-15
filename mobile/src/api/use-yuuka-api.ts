@@ -22,6 +22,7 @@ import {
   rollingSpendingBucketPerformanceSchema,
   spendingBucketInsightsSchema,
   recurringBillListSchema,
+  recurringBillOccurrenceAmountSchema,
   recurringBillSchema,
   recurringBillTimelineSchema,
   sinkingFundListSchema,
@@ -37,6 +38,7 @@ import type {
   EntrySearchResult,
   Page,
   RecurringBillStatusFilter,
+  RecurringBillAmountMode,
   SearchScope,
 } from './contracts';
 
@@ -60,12 +62,13 @@ export type EntryPayload = {
 
 export type RecurringBillPayload = {
   accountName?: string | null;
+  amountMode: RecurringBillAmountMode;
   dueDay: number;
   name: string;
   notes?: string | null;
   payee?: string | null;
   paymentMethod?: EntryPaymentMethod;
-  typicalAmountMinor: number;
+  typicalAmountMinor: number | null;
   version?: number;
 };
 
@@ -74,6 +77,8 @@ export type RecurringBillImportPayload = {
   definitionId: string;
   definitionVersion: number;
   occurrenceDate: string;
+  occurrenceAmountVersion: number | null;
+  saveOccurrenceAmount: boolean;
   updateTypicalAmount: boolean;
 };
 
@@ -156,6 +161,18 @@ export function useYuukaApi() {
         get(
           `/recurring-bills/timeline?from=${encodeURIComponent(from)}&through=${encodeURIComponent(through)}`,
           recurringBillTimelineSchema,
+        ),
+      updateRecurringBillOccurrenceAmount: (
+        definitionId: string,
+        occurrenceDate: string,
+        amountMinor: number,
+        version: number | null,
+      ) =>
+        send(
+          `/recurring-bills/${definitionId}/occurrences/${occurrenceDate}/amount`,
+          'PUT',
+          { amountMinor, version },
+          recurringBillOccurrenceAmountSchema,
         ),
       importRecurringBills: (
         paycheckId: string,

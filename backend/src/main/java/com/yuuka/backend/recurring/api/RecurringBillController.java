@@ -9,8 +9,10 @@ import com.yuuka.backend.recurring.api.dto.CreateRecurringBillRequest;
 import com.yuuka.backend.recurring.api.dto.LinkRecurringBillRequest;
 import com.yuuka.backend.recurring.api.dto.RecurringBillImportRequest;
 import com.yuuka.backend.recurring.api.dto.RecurringBillListResponse;
+import com.yuuka.backend.recurring.api.dto.RecurringBillOccurrenceAmountResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillTimelineResponse;
+import com.yuuka.backend.recurring.api.dto.UpdateRecurringBillOccurrenceAmountRequest;
 import com.yuuka.backend.recurring.api.dto.UpdateRecurringBillRequest;
 import com.yuuka.backend.recurring.application.RecurringBillService;
 import com.yuuka.backend.recurring.domain.RecurringBillStatusFilter;
@@ -71,6 +73,16 @@ public class RecurringBillController {
   public RecurringBillResponse get(
       @AuthenticationPrincipal Jwt jwt, @PathVariable UUID definitionId) {
     return recurringBills.get(AuthenticatedOwner.id(jwt), definitionId);
+  }
+
+  @PutMapping("/recurring-bills/{definitionId}/occurrences/{occurrenceDate}/amount")
+  public RecurringBillOccurrenceAmountResponse updateOccurrenceAmount(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID definitionId,
+      @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate occurrenceDate,
+      @Valid @RequestBody UpdateRecurringBillOccurrenceAmountRequest request) {
+    return recurringBills.updateOccurrenceAmount(
+        AuthenticatedOwner.id(jwt), definitionId, occurrenceDate, request);
   }
 
   @PutMapping("/recurring-bills/{definitionId}")

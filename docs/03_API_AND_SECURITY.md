@@ -220,6 +220,7 @@ containing paycheck.
 - `GET /recurring-bills/timeline?from=YYYY-MM-DD&through=YYYY-MM-DD`
 - `GET /recurring-bills/{definitionId}`
 - `PUT /recurring-bills/{definitionId}`
+- `PUT /recurring-bills/{definitionId}/occurrences/{occurrenceDate}/amount`
 - `POST /recurring-bills/{definitionId}/activate`
 - `POST /recurring-bills/{definitionId}/deactivate`
 - `DELETE /recurring-bills/{definitionId}?version=...`
@@ -229,10 +230,16 @@ containing paycheck.
 - `POST /entries/{entryId}/recurring-bill-definition`
 
 Timeline ranges are inclusive and bounded to 366 days. They return dynamically derived active
-monthly occurrences together with import counts/status for the requested period. Existing-paycheck
+monthly occurrences together with amount mode, nullable effective amount, amount-entered state,
+occurrence amount version, and import counts/status for the requested period. Fixed definitions
+require `typicalAmountMinor`; Variable definitions use only sparse occurrence amounts. The
+occurrence amount endpoint is Variable-only, owner-scoped, validates the exact clamped monthly
+date, and requires the current version when replacing a stored amount. Existing-paycheck
 imports require the current paycheck version, validate every selected occurrence and the aggregate
 allocation, and either create the complete ordered Bill snapshot batch or roll back. Draft creation
 requests may carry nullable recurring-definition and occurrence provenance for Bill entries.
+Import items can save a Variable occurrence amount with `saveOccurrenceAmount` and its nullable
+`occurrenceAmountVersion`; Fixed imports retain the separate `updateTypicalAmount` option.
 The entry reconciliation operations are owner-scoped and version-guarded. Link/change loads the
 current definition server-side, validates its exact monthly occurrence and resulting allocation,
 then returns the authoritative paycheck. Duplicate occurrence assignments require an explicit

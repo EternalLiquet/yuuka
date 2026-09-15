@@ -37,6 +37,7 @@ export type ReconciliationAttempt =
       action: 'create';
       baselineDefinitionId: string | null;
       occurrenceDate: string;
+      reviewedAmountMinor: number;
       reviewedDefinitionValues: RecurringBillPayload;
     });
 
@@ -58,8 +59,8 @@ export type NormalizedRecurringEntrySnapshot = {
 
 export type RecurringSnapshot = Pick<
   RecurringBill,
-  'accountName' | 'name' | 'notes' | 'payee' | 'paymentMethod' | 'typicalAmountMinor'
->;
+  'accountName' | 'name' | 'notes' | 'payee' | 'paymentMethod'
+> & { amountMinor: number };
 
 export type MaterialChange = {
   after: string;
@@ -127,7 +128,11 @@ export function classifyReconciliationResult(
     occurrenceDate === attempt.occurrenceDate &&
     matchesRecurringEntrySnapshot(
       entry,
-      recurringEntrySnapshot(attempt.reviewedDefinitionValues, attempt.occurrenceDate),
+      recurringEntrySnapshot(
+        attempt.reviewedDefinitionValues,
+        attempt.occurrenceDate,
+        attempt.reviewedAmountMinor,
+      ),
     )
   ) {
     return { entry, kind: 'create-candidate' };
@@ -153,12 +158,19 @@ export function normalizeRecurringEntrySnapshot(
 }
 
 export function recurringEntrySnapshot(
-  values: RecurringSnapshot | RecurringBillPayload,
+  values: RecurringBillOccurrence | RecurringBillPayload,
   occurrenceDate: string,
+  fallbackAmountMinor: number,
 ): NormalizedRecurringEntrySnapshot {
+  const amountMinor =
+    'amountMinor' in values
+      ? (values.amountMinor ?? fallbackAmountMinor)
+      : values.amountMode === 'FIXED'
+        ? values.typicalAmountMinor!
+        : fallbackAmountMinor;
   return {
     accountName: normalizeOptional(values.accountName),
-    amountMinor: values.typicalAmountMinor,
+    amountMinor,
     dueDate: occurrenceDate,
     name: values.name.trim(),
     notes: normalizeOptional(values.notes),
@@ -189,6 +201,7 @@ export function matchesReviewedRecurringDefinition(
 ) {
   return (
     definition.name.trim() === values.name.trim() &&
+    definition.amountMode === values.amountMode &&
     definition.typicalAmountMinor === values.typicalAmountMinor &&
     definition.paymentMethod === (values.paymentMethod ?? 'AUTOPAY') &&
     definition.dueDay === values.dueDay &&
@@ -290,7 +303,7 @@ export function materialRecurringChanges(
 ): MaterialChange[] {
   const values = [
     ['Name', entry.name, definition.name],
-    ['Amount', formatAmount(entry.amountMinor), formatAmount(definition.typicalAmountMinor)],
+    ['Amount', formatAmount(entry.amountMinor), formatAmount(definition.amountMinor)],
     ['Due date', entry.dueDate ?? 'None', occurrenceDate],
     [
       'Payment method',

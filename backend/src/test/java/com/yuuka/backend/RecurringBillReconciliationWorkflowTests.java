@@ -166,6 +166,7 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
                     """
                     {
                       "name":"Rent",
+                      "amountMode":"FIXED",
                       "typicalAmountMinor":9000,
                       "dueDay":21,
                       "occurrenceDate":"2026-08-21"
@@ -251,6 +252,7 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
     request.put("entryVersion", entry.path("version").asLong());
     request.put("paycheckVersion", paycheck.path("version").asLong());
     request.put("name", "Edited recurring");
+    request.put("amountMode", "FIXED");
     request.put("typicalAmountMinor", 7000);
     request.put("paymentMethod", "AUTOPAY");
     request.put("dueDay", 31);
@@ -406,6 +408,7 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
       throws Exception {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("name", name);
+    body.put("amountMode", "FIXED");
     body.put("typicalAmountMinor", amount);
     body.put("paymentMethod", paymentMethod);
     body.put("dueDay", dueDay);

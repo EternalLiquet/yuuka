@@ -29,6 +29,7 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/recurring-bills",
           "/api/v1/recurring-bills/timeline",
           "/api/v1/recurring-bills/{definitionId}",
+          "/api/v1/recurring-bills/{definitionId}/occurrences/{occurrenceDate}/amount",
           "/api/v1/entries/{entryId}/recurring-bill-link",
           "/api/v1/entries/{entryId}/recurring-bill-definition",
           "/api/v1/expense-ledgers",
@@ -269,6 +270,19 @@ class OpenApiContractTests extends AbstractIntegrationTest {
         "definitionVersion");
     assertRequired(
         generated, "CreateRecurringBillFromEntryRequest", "entryVersion", "paycheckVersion");
+    assertRequired(generated, "CreateRecurringBillRequest", "amountMode");
+    assertRequired(generated, "UpdateRecurringBillRequest", "amountMode");
+    assertRequired(generated, "UpdateRecurringBillOccurrenceAmountRequest", "amountMinor");
+    assertThat(
+            generated
+                .path("components")
+                .path("schemas")
+                .path("RecurringBillOccurrenceResponse")
+                .path("properties")
+                .path("amountMinor")
+                .path("type"))
+        .extracting(JsonNode::asText)
+        .containsExactly("integer", "null");
 
     assertBalanceAssignmentSchema(generated, "DraftPaycheckEntryRequest");
     assertBalanceAssignmentSchema(generated, "TemplateApplicationEntryRequest");

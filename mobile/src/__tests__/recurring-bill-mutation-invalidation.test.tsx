@@ -127,6 +127,7 @@ describe('Recurring Bill mutation timeline invalidation', () => {
 
 const mockPayload = {
   accountName: null,
+  amountMode: 'FIXED' as const,
   dueDay: 21,
   name: 'Electric',
   notes: null,

@@ -41,7 +41,7 @@ describe('recurring Bill reconciliation helpers', () => {
         notes: 'Streaming',
         payee: 'Netflix Inc',
         paymentMethod: 'AUTOPAY',
-        typicalAmountMinor: 1499,
+        amountMinor: 1499,
       },
       '2026-08-21',
       (value) => `$${(value / 100).toFixed(2)}`,
@@ -62,7 +62,7 @@ describe('recurring Bill reconciliation helpers', () => {
   });
 
   it('refreshes every affected query family after reconciliation', async () => {
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
     const invalidate = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
     const updated = {
       entries: [],
@@ -154,7 +154,7 @@ describe('recurring Bill reconciliation helpers', () => {
         definitionId: recurringDefinition().id,
         definitionVersion: 3,
         occurrenceDate: '2026-08-21',
-        reviewedSnapshot: recurringEntrySnapshot(recurringDefinition(), '2026-08-21'),
+        reviewedSnapshot: recurringEntrySnapshot(recurringOccurrence(), '2026-08-21', 1399),
       }),
     ).toMatchObject({ kind: 'succeeded' });
     expect(
@@ -182,8 +182,10 @@ describe('recurring Bill reconciliation helpers', () => {
           action: 'create',
           baselineDefinitionId: null,
           occurrenceDate: '2026-08-21',
+          reviewedAmountMinor: 1399,
           reviewedDefinitionValues: {
             accountName: ' Visa ',
+            amountMode: 'FIXED',
             dueDay: 21,
             name: ' Netflix ',
             notes: ' ',
@@ -223,7 +225,7 @@ describe('recurring Bill reconciliation helpers', () => {
       sourceRecurringBillDefinitionId: recurringDefinition().id,
       sourceRecurringOccurrenceDate: '2026-08-21',
     };
-    const reviewedSnapshot = recurringEntrySnapshot(recurringDefinition(), '2026-08-21');
+    const reviewedSnapshot = recurringEntrySnapshot(recurringOccurrence(), '2026-08-21', 1399);
     const attempt = {
       action: 'link' as const,
       baselineDefinitionId: source.sourceRecurringBillDefinitionId,
@@ -270,6 +272,7 @@ describe('recurring Bill reconciliation helpers', () => {
   it('compares a created definition due day independently from its clamped occurrence', () => {
     const reviewed = {
       accountName: ' Visa ',
+      amountMode: 'FIXED' as const,
       dueDay: 31,
       name: ' Netflix ',
       notes: ' Streaming ',
@@ -322,6 +325,7 @@ function recurringDefinition() {
   return {
     accountName: 'Visa',
     active: true,
+    amountMode: 'FIXED' as const,
     createdAt: '2026-08-01T12:00:00Z',
     dueDay: 21,
     id: '33333333-3333-4333-8333-333333333333',
@@ -339,6 +343,9 @@ function recurringDefinition() {
 function recurringOccurrence() {
   return {
     accountName: 'Visa',
+    amountEntered: true,
+    amountMinor: 1499,
+    amountMode: 'FIXED' as const,
     definitionId: recurringDefinition().id,
     definitionVersion: 3,
     importCount: 0,
@@ -346,6 +353,7 @@ function recurringOccurrence() {
     name: 'Netflix',
     notes: 'Streaming',
     occurrenceDate: '2026-08-21',
+    occurrenceAmountVersion: null,
     payee: 'Netflix Inc',
     paymentMethod: 'AUTOPAY' as const,
     typicalAmountMinor: 1499,

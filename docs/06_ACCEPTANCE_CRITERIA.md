@@ -113,6 +113,13 @@ Two stale edits to the same version must not silently overwrite. The stale reque
 
 ### Existing-Bill recurring reconciliation
 
+A recurring Bill definition explicitly uses Fixed or Variable amount mode. Existing definitions
+migrate as Fixed without changing their typical amounts. Fixed definitions require a typical
+amount. Variable timeline occurrences distinguish missing from a saved zero, allow an owner-scoped
+version-guarded amount save, and never fall back to a dormant typical amount. Imports can use a
+one-time Variable amount or atomically save and import it; later imports reuse the saved occurrence
+amount while prior paycheck entries remain independent snapshots.
+
 An eligible existing Bill can be linked or relinked to an exact Active recurring definition and
 monthly occurrence without replacing its entry identity, status, order, or immutable history.
 Recurring-owned snapshot fields and allocation update atomically, stale versions and
