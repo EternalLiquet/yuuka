@@ -176,7 +176,7 @@ public class BucketTransactionService {
 
   private Paycheck requirePaycheck(UUID ownerId, UUID paycheckId) {
     return paychecks
-        .findByIdAndOwnerId(paycheckId, ownerId)
+        .findByIdAndOwnerIdAndDeletedAtIsNull(paycheckId, ownerId)
         .orElseThrow(ResourceNotFoundException::new);
   }
 

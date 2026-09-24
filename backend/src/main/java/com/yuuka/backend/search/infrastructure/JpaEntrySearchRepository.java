@@ -54,6 +54,7 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
             on paycheck.id = entry.paycheckId and paycheck.ownerId = entry.ownerId
           where entry.ownerId = :ownerId
             and entry.deletedAt is null
+            and paycheck.deletedAt is null
             and (
               :activeOnly = false
               or (
@@ -140,6 +141,7 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
             on paycheck.id = entry.paycheckId and paycheck.ownerId = entry.ownerId
           where entry.ownerId = :ownerId
             and entry.deletedAt is null
+            and paycheck.deletedAt is null
             and (
               :activeOnly = false
               or (

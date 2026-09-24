@@ -1,5 +1,10 @@
 # Architecture and Data Model
 
+Paycheck deletion uses `paychecks.deleted_at` as the aggregate marker. Normal paycheck, dashboard,
+search, recurring coverage, and Spending Bucket performance reads exclude deleted paychecks.
+Entries are soft-deleted in the same transaction so existing entry-level visibility and linked
+effect semantics remain authoritative; immutable and financial history rows are retained.
+
 ## Repository layout
 
 ```text

@@ -2,6 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { PropsWithChildren, ReactElement, ReactNode } from 'react';
+import { Alert } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -37,6 +38,7 @@ const mockApi = {
   closePaycheck: jest.fn(),
   deleteBucketTransaction: jest.fn(),
   deleteEntry: jest.fn(),
+  deletePaycheck: jest.fn(),
   paybacks: jest.fn(),
   paycheck: jest.fn(),
   reopenPaycheck: jest.fn(),
@@ -238,6 +240,7 @@ describe('paycheck route regressions', () => {
       },
     });
     mockApi.paycheck.mockResolvedValue(paycheck);
+    mockApi.deletePaycheck.mockResolvedValue(undefined);
     mockApi.reorderEntries.mockImplementation((_paycheckId: string, entryIds: string[]) =>
       Promise.resolve(reorderedPaycheck(entryIds, paycheck.version + 1)),
     );
@@ -400,7 +403,6 @@ describe('paycheck route regressions', () => {
     fireEvent.press(await view.findByLabelText('Duplicate Paycheck'));
     expect(mockPush).toHaveBeenCalledWith(`/paychecks/duplicate/${paycheck.id}`);
   });
-
   it('filters Manual Pay Bills together with Not Paid status', async () => {
     const view = await renderRoute(<PaycheckDetailScreen />);
 
@@ -566,7 +568,58 @@ describe('paycheck route regressions', () => {
     ).toBeTruthy();
 
     fireEvent.press(view.getByLabelText('Close bucket ledger'));
-  });
+    const invalidateQueries = jest.spyOn(queryClients.at(-1)!, 'invalidateQueries');
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const deleteButton = view.getByLabelText('Delete paycheck');
+    fireEvent.press(deleteButton);
+    fireEvent.press(deleteButton);
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith(
+      'Delete “UTILITIES 1/2”?',
+      'This will remove this paycheck and its 3 entries. This cannot be undone.',
+      expect.any(Array),
+      expect.any(Object),
+    );
+    const actions = alert.mock.calls[0][2]!;
+    mockApi.deletePaycheck.mockRejectedValueOnce(
+      new Error('The paycheck changed. Refresh and retry.'),
+    );
+    await act(async () => {
+      actions[1].onPress?.();
+    });
+    expect(await view.findByText('The paycheck changed. Refresh and retry.')).toBeTruthy();
+    expect(mockReplace).not.toHaveBeenCalled();
+
+    alert.mockClear();
+    mockApi.deletePaycheck.mockResolvedValue(undefined);
+    fireEvent.press(view.getByLabelText('Delete paycheck'));
+    const retryActions = alert.mock.calls[0][2]!;
+    await act(async () => {
+      retryActions[1].onPress?.();
+    });
+
+    await waitFor(() => expect(mockApi.deletePaycheck).toHaveBeenCalledTimes(2));
+    expect(mockApi.deletePaycheck).toHaveBeenCalledWith(paycheck.id, paycheck.version);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/active'));
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['paycheck', paycheck.id],
+      refetchType: 'none',
+    });
+    for (const queryKey of [
+      ['paychecks'],
+      ['dashboard'],
+      ['search', 'entries'],
+      ['recurring-bills'],
+      ['paybacks'],
+      ['payback'],
+      ['sinking-funds'],
+      ['sinking-fund'],
+      ['spending-buckets'],
+    ]) {
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey });
+    }
+    alert.mockRestore();
+  }, 15000);
 });
 
 function entry(overrides: Partial<Entry>): Entry {

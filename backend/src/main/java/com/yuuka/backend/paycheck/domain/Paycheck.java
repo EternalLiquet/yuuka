@@ -62,6 +62,9 @@ public class Paycheck {
   @Column(name = "archived_at")
   private Instant archivedAt;
 
+  @Column(name = "deleted_at")
+  private Instant deletedAt;
+
   @Version
   @Column(nullable = false)
   private long version;
@@ -122,6 +125,10 @@ public class Paycheck {
     archivedAt = now;
   }
 
+  public void delete(Instant now) {
+    deletedAt = now;
+  }
+
   public void touch(Instant now) {
     updatedAt = now;
   }
@@ -180,6 +187,10 @@ public class Paycheck {
 
   public Instant getArchivedAt() {
     return archivedAt;
+  }
+
+  public Instant getDeletedAt() {
+    return deletedAt;
   }
 
   public long getVersion() {

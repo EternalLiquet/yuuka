@@ -136,6 +136,14 @@ export function useYuukaApi() {
       );
     const remove = async (path: string) =>
       expectNoContent(await authenticatedRequest(path, { method: 'DELETE' }));
+    const postNoContent = async (path: string, body: unknown) =>
+      expectNoContent(
+        await authenticatedRequest(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+      );
 
     return {
       me: () => get('/me', meSchema),
@@ -410,6 +418,8 @@ export function useYuukaApi() {
         send(`/paychecks/${id}/reopen`, 'POST', { version }, paycheckSchema),
       archivePaycheck: (id: string, version: number) =>
         send(`/paychecks/${id}?version=${version}`, 'DELETE', undefined, paycheckSchema),
+      deletePaycheck: (id: string, version: number) =>
+        postNoContent(`/paychecks/${id}/delete`, { version }),
       allocateLeftover: (paycheckId: string, paycheckVersion: number) =>
         send(`/paychecks/${paycheckId}/leftover-entry`, 'POST', { paycheckVersion }, entrySchema),
       addEntry: (paycheckId: string, body: EntryPayload) =>

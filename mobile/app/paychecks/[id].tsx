@@ -9,9 +9,10 @@ import {
   Plus,
   ReceiptText,
   RotateCcw,
+  Trash2,
 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshControl, StyleSheet, View } from 'react-native';
+import { Alert, RefreshControl, StyleSheet, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import type {
@@ -115,6 +116,7 @@ export default function PaycheckDetailScreen() {
   const [paycheckEditorVisible, setPaycheckEditorVisible] = useState(false);
   const [recurringImportVisible, setRecurringImportVisible] = useState(false);
   const leftoverInFlight = useRef(false);
+  const deleteConfirmationOpen = useRef(false);
   const reorderInFlight = useRef(false);
   const listRef = useRef<EntryListHandle | null>(null);
   const highlightScrolledRef = useRef(false);
@@ -254,6 +256,35 @@ export default function PaycheckDetailScreen() {
     },
     onSuccess: invalidate,
   });
+  const deleteMutation = useMutation({
+    mutationFn: () => {
+      if (!query.data) throw new Error('Refresh the paycheck before deleting it.');
+      return api.deletePaycheck(id, query.data.version);
+    },
+    onSuccess: async () => {
+      setDetailError('');
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['paycheck', id],
+          refetchType: 'none',
+        }),
+        queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['search', 'entries'] }),
+        queryClient.invalidateQueries({ queryKey: ['recurring-bills'] }),
+        queryClient.invalidateQueries({ queryKey: ['paybacks'] }),
+        queryClient.invalidateQueries({ queryKey: ['payback'] }),
+        queryClient.invalidateQueries({ queryKey: ['sinking-funds'] }),
+        queryClient.invalidateQueries({ queryKey: ['sinking-fund'] }),
+        queryClient.invalidateQueries({ queryKey: ['spending-buckets'] }),
+      ]);
+      router.replace('/(tabs)/active');
+    },
+    onError: async (error) => {
+      setDetailError(displayError(error, settings.currencyCode));
+      await query.refetch();
+    },
+  });
   const paycheckMutation = useMutation({
     mutationFn: (values: {
       amountMinor: number;
@@ -288,6 +319,52 @@ export default function PaycheckDetailScreen() {
     paymentMethodFilter === 'ALL' &&
     query.data?.state === 'ACTIVE';
   const canReorder = showReorderControls && !reorderMutation.isPending;
+
+  const confirmDelete = useCallback(() => {
+    const paycheck = query.data;
+    if (!paycheck || deleteMutation.isPending || deleteConfirmationOpen.current) return;
+    deleteConfirmationOpen.current = true;
+    const reversesPayback = paycheck.entries.some(
+      (entry) => entry.status === 'POSTED' && Boolean(entry.paybackId),
+    );
+    const reversesPlannedSavings = paycheck.entries.some(
+      (entry) => entry.status === 'POSTED' && Boolean(entry.sinkingFundId),
+    );
+    const entryLabel = `${paycheck.entries.length} ${paycheck.entries.length === 1 ? 'entry' : 'entries'}`;
+    const linkedCopy = reversesPayback
+      ? reversesPlannedSavings
+        ? ' Posted Payback repayments and Planned Savings contributions will be reversed.'
+        : ' Posted Payback repayments will be reversed.'
+      : reversesPlannedSavings
+        ? ' Posted Planned Savings contributions will be reversed.'
+        : '';
+    Alert.alert(
+      `Delete “${paycheck.name}”?`,
+      `This will remove this paycheck and its ${entryLabel}.${linkedCopy} This cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => {
+            deleteConfirmationOpen.current = false;
+          },
+        },
+        {
+          text: 'Delete paycheck',
+          style: 'destructive',
+          onPress: () => {
+            deleteConfirmationOpen.current = false;
+            deleteMutation.mutate();
+          },
+        },
+      ],
+      {
+        onDismiss: () => {
+          deleteConfirmationOpen.current = false;
+        },
+      },
+    );
+  }, [deleteMutation, query.data]);
 
   const markListInteracted = useCallback(() => {
     userInteractedWithListRef.current = true;
@@ -450,6 +527,7 @@ export default function PaycheckDetailScreen() {
           }
           ListHeaderComponent={
             <DetailHeader
+              deleteMutation={deleteMutation}
               paycheck={paycheck}
               refreshing={query.isFetching && Boolean(query.data)}
               stale={query.isError}
@@ -459,6 +537,7 @@ export default function PaycheckDetailScreen() {
               }}
               onEdit={() => setPaycheckEditorVisible(true)}
               onDuplicate={() => router.push(`/paychecks/duplicate/${id}`)}
+              onDelete={confirmDelete}
               onImportRecurring={() => setRecurringImportVisible(true)}
               statusFilter={statusFilter}
               setStatusFilter={setStatusFilter}
@@ -628,6 +707,7 @@ export default function PaycheckDetailScreen() {
 }
 
 function DetailHeader({
+  deleteMutation,
   direction,
   detailError,
   lifecycleMutation,
@@ -636,6 +716,7 @@ function DetailHeader({
   onAllocateLeftover,
   onEdit,
   onDuplicate,
+  onDelete,
   onImportRecurring,
   paymentMethodFilter,
   paycheck,
@@ -650,6 +731,7 @@ function DetailHeader({
   statusFilter,
   typeFilter,
 }: {
+  deleteMutation: UseMutationResult<void, Error, void>;
   detailError: string;
   direction: 'asc' | 'desc';
   lifecycleMutation: UseMutationResult<Paycheck, Error, 'archive' | 'close' | 'reopen'>;
@@ -658,6 +740,7 @@ function DetailHeader({
   onAllocateLeftover: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
+  onDelete: () => void;
   onImportRecurring: () => void;
   paymentMethodFilter: 'ALL' | EntryPaymentMethod;
   paycheck: Paycheck;
@@ -772,6 +855,13 @@ function DetailHeader({
               label="Archive"
               onPress={() => lifecycleMutation.mutate('archive')}
               variant="ghost"
+            />
+            <Button
+              icon={Trash2}
+              label="Delete paycheck"
+              loading={deleteMutation.isPending}
+              onPress={onDelete}
+              variant="danger"
             />
           </>
         ) : (

@@ -1075,6 +1075,36 @@
         }
       }
     },
+    "/api/v1/paychecks/{paycheckId}/delete" : {
+      "post" : {
+        "tags" : [ "paycheck-controller" ],
+        "operationId" : "delete_1",
+        "parameters" : [ {
+          "name" : "paycheckId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          }
+        }
+      }
+    },
     "/api/v1/paychecks/{paycheckId}/close" : {
       "post" : {
         "tags" : [ "paycheck-controller" ],
@@ -2070,7 +2100,7 @@
       },
       "delete" : {
         "tags" : [ "payback-controller" ],
-        "operationId" : "delete_1",
+        "operationId" : "delete_2",
         "parameters" : [ {
           "name" : "paybackId",
           "in" : "path",
@@ -2186,7 +2216,7 @@
       },
       "delete" : {
         "tags" : [ "expense-ledger-controller" ],
-        "operationId" : "delete_2",
+        "operationId" : "delete_3",
         "parameters" : [ {
           "name" : "ledgerId",
           "in" : "path",
@@ -2375,7 +2405,7 @@
     "/api/v1/bucket-transactions/{transactionId}" : {
       "delete" : {
         "tags" : [ "bucket-transaction-controller" ],
-        "operationId" : "delete_3",
+        "operationId" : "delete_4",
         "parameters" : [ {
           "name" : "transactionId",
           "in" : "path",

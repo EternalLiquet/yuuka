@@ -65,6 +65,9 @@ display. Example:
 - `POST /paychecks/{id}/close`
 - `POST /paychecks/{id}/reopen`
 - `DELETE /paychecks/{id}` for archive/soft delete
+- `POST /paychecks/{id}/delete` with `{ "version": ... }` removes an eligible Active paycheck from
+  normal visibility using soft deletion and returns `204 No Content`. This separate action preserves
+  the established archive endpoint for existing clients.
 
 `POST /paychecks/from-draft` creates a normal Active paycheck from a complete edited draft request.
 It accepts paycheck fields plus an ordered `entries` array, validates the full allocation
