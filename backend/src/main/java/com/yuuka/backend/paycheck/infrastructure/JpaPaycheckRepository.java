@@ -18,8 +18,12 @@ public interface JpaPaycheckRepository
     extends JpaRepository<Paycheck, UUID>, JpaSpecificationExecutor<Paycheck> {
   Optional<Paycheck> findByIdAndOwnerId(UUID id, UUID ownerId);
 
+  Optional<Paycheck> findByIdAndOwnerIdAndDeletedAtIsNull(UUID id, UUID ownerId);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select p from Paycheck p where p.id = :id and p.ownerId = :ownerId")
+  @Query(
+      "select p from Paycheck p where p.id = :id and p.ownerId = :ownerId "
+          + "and p.deletedAt is null")
   Optional<Paycheck> findByIdAndOwnerIdForUpdate(
       @Param("id") UUID id, @Param("ownerId") UUID ownerId);
 
@@ -36,6 +40,7 @@ public interface JpaPaycheckRepository
           select p.*
           from paychecks p
           where p.owner_id = :ownerId
+            and p.deleted_at is null
             and p.state = 'ACTIVE'
             and (
               p.reopened_at is not null
@@ -92,6 +97,7 @@ public interface JpaPaycheckRepository
           select count(*)
           from paychecks p
           where p.owner_id = :ownerId
+            and p.deleted_at is null
             and p.state = 'ACTIVE'
             and (
               p.reopened_at is not null
@@ -151,6 +157,7 @@ public interface JpaPaycheckRepository
           select p.*
           from paychecks p
           where p.owner_id = :ownerId
+            and p.deleted_at is null
             and (:term = ''
               or position(:term in lower(p.name)) > 0
               or position(:term in lower(coalesce(p.source, ''))) > 0)
@@ -216,6 +223,7 @@ public interface JpaPaycheckRepository
           select count(*)
           from paychecks p
           where p.owner_id = :ownerId
+            and p.deleted_at is null
             and (:term = ''
               or position(:term in lower(p.name)) > 0
               or position(:term in lower(coalesce(p.source, ''))) > 0)
@@ -289,6 +297,7 @@ public interface JpaPaycheckRepository
           select p.*
           from paychecks p
           where p.owner_id = :ownerId
+            and p.deleted_at is null
             and (:term = ''
               or position(:term in lower(p.name)) > 0
               or position(:term in lower(coalesce(p.source, ''))) > 0)
@@ -354,6 +363,7 @@ public interface JpaPaycheckRepository
           select count(*)
           from paychecks p
           where p.owner_id = :ownerId
+            and p.deleted_at is null
             and (:term = ''
               or position(:term in lower(p.name)) > 0
               or position(:term in lower(coalesce(p.source, ''))) > 0)

@@ -126,6 +126,15 @@ public class PaycheckController {
     return paycheckService.archive(AuthenticatedOwner.id(jwt), paycheckId, version);
   }
 
+  @PostMapping("/paychecks/{paycheckId}/delete")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void delete(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID paycheckId,
+      @Valid @RequestBody VersionRequest request) {
+    paycheckService.delete(AuthenticatedOwner.id(jwt), paycheckId, request.version());
+  }
+
   @PostMapping("/paychecks/{paycheckId}/leftover-entry")
   @ResponseStatus(HttpStatus.CREATED)
   public EntryResponse allocateLeftover(

@@ -49,6 +49,7 @@ public interface JpaBucketTransactionRepository extends JpaRepository<BucketTran
                and e.owner_id = p.owner_id
               where p.id = :paycheckId
                 and p.owner_id = :ownerId
+                and p.deleted_at is null
                 and e.owner_id = :ownerId
                 and e.deleted_at is null
                 and e.entry_type = 'SPENDING_BUCKET'
@@ -84,6 +85,7 @@ public interface JpaBucketTransactionRepository extends JpaRepository<BucketTran
                and e.owner_id = p.owner_id
               where p.id in (:paycheckIds)
                 and p.owner_id = :ownerId
+                and p.deleted_at is null
                 and e.owner_id = :ownerId
                 and e.deleted_at is null
                 and e.entry_type = 'SPENDING_BUCKET'
@@ -123,6 +125,7 @@ public interface JpaBucketTransactionRepository extends JpaRepository<BucketTran
                 on e.paycheck_id = p.id
                and e.owner_id = p.owner_id
               where p.owner_id = :ownerId
+                and p.deleted_at is null
                 and e.owner_id = :ownerId
                 and p.state in ('ACTIVE', 'CLOSED', 'ARCHIVED')
                 and p.income_date between :windowStartDate and :asOfDate
@@ -156,6 +159,7 @@ public interface JpaBucketTransactionRepository extends JpaRepository<BucketTran
               select p.id, p.name, p.income_date
               from paychecks p
               where p.owner_id = :ownerId
+                and p.deleted_at is null
                 and p.state in ('ACTIVE', 'CLOSED', 'ARCHIVED')
                 and p.income_date <= :asOfDate
                 and exists (

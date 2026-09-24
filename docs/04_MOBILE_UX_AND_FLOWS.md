@@ -96,6 +96,12 @@ The secondary actions include Duplicate Paycheck for Active, Closed, Archived, h
 reopened paychecks. Duplication opens a reviewed draft instead of immediately cloning persisted
 data.
 
+Active paycheck detail also exposes `Delete paycheck` as a destructive secondary action. The
+confirmation names the paycheck, states how many entries will be removed, summarizes linked
+repayment or Planned Savings reversals when present, and warns that deletion cannot be undone.
+Success returns to Active after invalidating paycheck, Home, History, search, recurring, Payback,
+Planned Savings, and Spending Bucket data. Failure keeps the detail open with the mapped error.
+
 Entries default to custom order.
 
 Each entry row shows:

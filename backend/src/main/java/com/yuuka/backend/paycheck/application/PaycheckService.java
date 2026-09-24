@@ -443,6 +443,35 @@ public class PaycheckService {
   }
 
   @Transactional
+  public void delete(UUID ownerId, UUID paycheckId, long version) {
+    Paycheck paycheck = requirePaycheckForUpdate(ownerId, paycheckId);
+    validations.requireActive(paycheck);
+    validations.assertVersion(paycheck.getVersion(), version);
+    List<PaycheckEntry> liveEntries = findEntries(ownerId, paycheckId);
+    PaycheckResponse before = toResponse(paycheck, liveEntries);
+    Instant now = clock.instant();
+    for (PaycheckEntry entry : liveEntries) {
+      if (entry.getStatus() == EntryStatus.POSTED) {
+        paybackService.reversePostedEntryRepayment(ownerId, entry.getId(), now);
+        sinkingFundService.reversePostedEntryContribution(ownerId, entry, now);
+      }
+      entry.delete(now);
+    }
+    entries.flush();
+    paycheck.delete(now);
+    paychecks.flush();
+    auditService.append(
+        ownerId,
+        "PAYCHECK",
+        paycheckId,
+        "DELETED",
+        null,
+        before,
+        null,
+        Map.of("entryCount", liveEntries.size()));
+  }
+
+  @Transactional
   public EntryResponse changeStatus(UUID ownerId, UUID entryId, StatusChangeRequest request) {
     PaycheckEntry entry = requireEntry(ownerId, entryId);
     Paycheck paycheck = requirePaycheck(ownerId, entry.getPaycheckId());
@@ -583,7 +612,7 @@ public class PaycheckService {
 
   public Paycheck requirePaycheck(UUID ownerId, UUID paycheckId) {
     return paychecks
-        .findByIdAndOwnerId(paycheckId, ownerId)
+        .findByIdAndOwnerIdAndDeletedAtIsNull(paycheckId, ownerId)
         .orElseThrow(ResourceNotFoundException::new);
   }
 

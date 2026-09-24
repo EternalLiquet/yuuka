@@ -26,6 +26,12 @@ The user must be able to:
 
 ## Paychecks and income events
 
+An Active paycheck may be deleted as corrective cleanup. Deletion soft-deletes the paycheck and all
+of its live entries in one transaction, reverses active Posted Payback repayments and Planned
+Savings contributions, and removes recurring occurrence coverage. Closed and Archived paychecks
+are not eligible. Immutable status, audit, repayment, and Planned Savings transaction history is
+retained, and Expense List settlement provenance never reopens or mutates its source list.
+
 The user-facing term is **Paycheck**, but the model must support any incoming money event:
 
 - normal employment pay,
