@@ -117,6 +117,7 @@ describe('Recurring Bill detail route deletion', () => {
 const definition: RecurringBill = {
   accountName: 'Checking',
   active: true,
+  amountMode: 'FIXED',
   createdAt: '2026-07-01T12:00:00Z',
   dueDay: 21,
   id: recurringBillId,

@@ -42,18 +42,10 @@ This document tracks foundation-level security controls. It does not define budg
 
 ## Known Follow-Up
 
-- The Expo SDK 57 Metro dependency graph currently reports two high-severity denial-of-service
-  advisories in `image-size`. The affected parser only processes repository-controlled assets during
-  Yuuka's build and is not reachable from user-supplied mobile data. No patched `image-size` release
-  exists, and npm's proposed automatic fix would downgrade Expo to 53. CI temporarily accepts only
-  `GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq` when every installed production path is exactly
-  `yuuka-mobile > expo > @expo/metro > metro > image-size`. The acceptance expires on 2026-09-10 so
-  the risk and upstream patch availability must be reviewed again.
-- npm currently reports `GHSA-2v37-7h3g-55p8` against `nanoid` even though the installed `3.3.17`
-  release is identified as patched by the reviewed GitHub advisory. CI temporarily accepts that
-  advisory only when every production installation remains on `3.3.17` through the two approved
-  Expo-owned dependency paths. The acceptance expires on 2026-08-27 so npm advisory metadata and
-  the production dependency graph must be reviewed again.
+- The mobile dependency graph pins patched transitive releases for `image-size`, `@xmldom/xmldom`,
+  and the Istanbul-owned `js-yaml` path until their upstream packages adopt those versions. Keep the
+  overrides under review during Expo upgrades and validate them with the production audit and Android
+  export gates.
 - Before deployment, use the `prod` Spring profile, replace all example secrets, and configure production CORS origins explicitly.
 - Owner onboarding steps live in `docs/owner-onboarding.md`.
 - If the backend is deployed behind a reverse proxy, configure trusted forwarded-header handling at the proxy/platform layer before relying on client-address rate limits.

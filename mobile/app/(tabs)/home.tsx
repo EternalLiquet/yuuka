@@ -540,7 +540,7 @@ function RecurringBillRow({
   return (
     <Pressable
       accessibilityHint={recurringCoverageAction(item)}
-      accessibilityLabel={`${item.name}, ${formatMoney(item.typicalAmountMinor, settings.currencyCode)}, due ${formatDate(item.occurrenceDate)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}, ${recurringCoverageLabel(item)}`}
+      accessibilityLabel={`${item.name}, ${item.amountMinor == null ? 'Amount not entered' : formatMoney(item.amountMinor, settings.currencyCode)}, due ${formatDate(item.occurrenceDate)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}, ${recurringCoverageLabel(item)}`}
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
@@ -558,7 +558,9 @@ function RecurringBillRow({
         </AppText>
       </View>
       <AppText style={styles.amount} variant="caption">
-        {formatMoney(item.typicalAmountMinor, settings.currencyCode)}
+        {item.amountMinor == null
+          ? 'Amount not entered'
+          : formatMoney(item.amountMinor, settings.currencyCode)}
       </AppText>
       <ChevronRight color={colors.muted} size={18} />
     </Pressable>

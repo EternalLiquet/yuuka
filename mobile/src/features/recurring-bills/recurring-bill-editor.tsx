@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Check, Save } from 'lucide-react-native';
-import { Controller, useForm } from 'react-hook-form';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Controller, useForm, useWatch } from 'react-hook-form';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { z } from 'zod';
 
 import type { RecurringBill } from '@/api/contracts';
@@ -13,18 +13,29 @@ import { TextField } from '@/components/text-field';
 import { minorToInput, parseMoneyToMinor } from '@/domain/money';
 import { useAppTheme } from '@/theme/use-app-theme';
 
-const formSchema = z.object({
-  accountName: z.string().max(160),
-  amount: z.string().refine(canParseMoney, 'Enter a valid typical amount.'),
-  dueDay: z
-    .string()
-    .regex(/^\d+$/, 'Enter a due day from 1 through 31.')
-    .refine((value) => Number(value) >= 1 && Number(value) <= 31, 'Use a day from 1 through 31.'),
-  manualPay: z.boolean(),
-  name: z.string().trim().min(1, 'Enter a name.').max(160),
-  notes: z.string().max(2000),
-  payee: z.string().max(160),
-});
+const formSchema = z
+  .object({
+    accountName: z.string().max(160),
+    amount: z.string(),
+    amountMode: z.enum(['FIXED', 'VARIABLE']),
+    dueDay: z
+      .string()
+      .regex(/^\d+$/, 'Enter a due day from 1 through 31.')
+      .refine((value) => Number(value) >= 1 && Number(value) <= 31, 'Use a day from 1 through 31.'),
+    manualPay: z.boolean(),
+    name: z.string().trim().min(1, 'Enter a name.').max(160),
+    notes: z.string().max(2000),
+    payee: z.string().max(160),
+  })
+  .superRefine((values, context) => {
+    if (values.amountMode === 'FIXED' && !canParseMoney(values.amount)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Enter a valid typical amount.',
+        path: ['amount'],
+      });
+    }
+  });
 type FormValues = z.infer<typeof formSchema>;
 
 export function RecurringBillEditor({
@@ -44,16 +55,35 @@ export function RecurringBillEditor({
     formState: { errors, isSubmitting },
     handleSubmit,
     setError,
+    setValue,
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: defaults(definition, initialValues),
   });
+  const amountMode = useWatch({ control, name: 'amountMode' });
+
+  function chooseAmountMode(next: FormValues['amountMode']) {
+    if (next === amountMode) return;
+    if (definition?.amountMode === 'FIXED' && next === 'VARIABLE') {
+      Alert.alert(
+        'Change to Variable?',
+        'The typical amount will stop being used. Existing paycheck Bills will not change.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Change to Variable', onPress: () => setValue('amountMode', next) },
+        ],
+      );
+      return;
+    }
+    setValue('amountMode', next);
+  }
 
   async function submit(values: FormValues) {
     try {
       await onSubmit({
         name: values.name.trim(),
-        typicalAmountMinor: parseMoneyToMinor(values.amount),
+        amountMode: values.amountMode,
+        typicalAmountMinor: values.amountMode === 'FIXED' ? parseMoneyToMinor(values.amount) : null,
         paymentMethod: values.manualPay ? 'MANUAL' : 'AUTOPAY',
         dueDay: Number(values.dueDay),
         accountName: values.accountName.trim() || null,
@@ -71,13 +101,42 @@ export function RecurringBillEditor({
   return (
     <ScrollScreen contentContainerStyle={styles.content}>
       <Field control={control} error={errors.name?.message} label="Name" name="name" />
-      <Field
-        control={control}
-        error={errors.amount?.message}
-        keyboardType="decimal-pad"
-        label="Typical amount"
-        name="amount"
-      />
+      <View style={styles.amountModeGroup}>
+        <AppText variant="label">Amount</AppText>
+        <View style={styles.amountModeRow}>
+          {(['FIXED', 'VARIABLE'] as const).map((mode) => (
+            <Pressable
+              accessibilityLabel={mode === 'FIXED' ? 'Fixed amount' : 'Variable amount'}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: amountMode === mode }}
+              key={mode}
+              onPress={() => chooseAmountMode(mode)}
+              style={[
+                styles.amountModeChoice,
+                {
+                  backgroundColor: amountMode === mode ? colors.accentSoft : colors.surface,
+                  borderColor: amountMode === mode ? colors.accent : colors.border,
+                },
+              ]}
+            >
+              <AppText variant="label">{mode === 'FIXED' ? 'Fixed' : 'Variable'}</AppText>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+      {amountMode === 'FIXED' ? (
+        <Field
+          control={control}
+          error={errors.amount?.message}
+          keyboardType="decimal-pad"
+          label="Typical amount"
+          name="amount"
+        />
+      ) : (
+        <AppText style={{ color: colors.muted }} variant="caption">
+          Amount changes each month. Enter it when you know this month&apos;s Bill.
+        </AppText>
+      )}
       <Field
         control={control}
         error={errors.dueDay?.message}
@@ -175,8 +234,9 @@ function defaults(
 ): FormValues {
   return {
     accountName: definition?.accountName ?? initialValues?.accountName ?? '',
+    amountMode: definition?.amountMode ?? initialValues?.amountMode ?? 'FIXED',
     amount:
-      definition || initialValues?.typicalAmountMinor != null
+      definition?.typicalAmountMinor != null || initialValues?.typicalAmountMinor != null
         ? minorToInput(definition?.typicalAmountMinor ?? initialValues!.typicalAmountMinor!)
         : '',
     dueDay: String(definition?.dueDay ?? initialValues?.dueDay ?? ''),
@@ -197,6 +257,17 @@ function canParseMoney(value: string) {
 }
 
 const styles = StyleSheet.create({
+  amountModeChoice: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: 12,
+  },
+  amountModeGroup: { gap: 8 },
+  amountModeRow: { flexDirection: 'row', gap: 10 },
   checkbox: {
     alignItems: 'center',
     borderRadius: 4,

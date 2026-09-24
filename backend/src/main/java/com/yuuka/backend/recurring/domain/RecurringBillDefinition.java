@@ -28,8 +28,12 @@ public class RecurringBillDefinition {
   @Column(nullable = false, length = 160)
   private String name;
 
-  @Column(name = "typical_amount_minor", nullable = false)
-  private long typicalAmountMinor;
+  @Column(name = "typical_amount_minor")
+  private Long typicalAmountMinor;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "amount_mode", nullable = false, length = 20)
+  private RecurringBillAmountMode amountMode;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "payment_method", nullable = false, length = 20)
@@ -72,14 +76,15 @@ public class RecurringBillDefinition {
   public RecurringBillDefinition(
       UUID ownerId,
       String name,
-      long typicalAmountMinor,
+      RecurringBillAmountMode amountMode,
+      Long typicalAmountMinor,
       EntryPaymentMethod paymentMethod,
       int dueDay,
       String accountName,
       String payee,
       String notes) {
     this.ownerId = ownerId;
-    update(name, typicalAmountMinor, paymentMethod, dueDay, accountName, payee, notes);
+    update(name, amountMode, typicalAmountMinor, paymentMethod, dueDay, accountName, payee, notes);
   }
 
   @PrePersist
@@ -96,14 +101,18 @@ public class RecurringBillDefinition {
 
   public void update(
       String name,
-      long typicalAmountMinor,
+      RecurringBillAmountMode amountMode,
+      Long typicalAmountMinor,
       EntryPaymentMethod paymentMethod,
       int dueDay,
       String accountName,
       String payee,
       String notes) {
+    Long retainedTypicalAmount = this.typicalAmountMinor;
     this.name = name;
-    this.typicalAmountMinor = typicalAmountMinor;
+    this.amountMode = amountMode;
+    this.typicalAmountMinor =
+        amountMode == RecurringBillAmountMode.FIXED ? typicalAmountMinor : retainedTypicalAmount;
     this.paymentMethod = paymentMethod;
     this.dueDay = dueDay;
     this.accountName = accountName;
@@ -112,6 +121,9 @@ public class RecurringBillDefinition {
   }
 
   public void updateTypicalAmount(long typicalAmountMinor) {
+    if (amountMode != RecurringBillAmountMode.FIXED) {
+      throw new IllegalStateException("Only Fixed recurring Bills have a typical amount.");
+    }
     this.typicalAmountMinor = typicalAmountMinor;
   }
 
@@ -140,8 +152,12 @@ public class RecurringBillDefinition {
     return name;
   }
 
-  public long getTypicalAmountMinor() {
+  public Long getTypicalAmountMinor() {
     return typicalAmountMinor;
+  }
+
+  public RecurringBillAmountMode getAmountMode() {
+    return amountMode;
   }
 
   public EntryPaymentMethod getPaymentMethod() {

@@ -112,11 +112,14 @@ class PaycheckEntryMutationHelper {
   }
 
   void normalizeRecurringBill(
-      PaycheckEntry entry, RecurringBillDefinition definition, LocalDate occurrenceDate) {
+      PaycheckEntry entry,
+      RecurringBillDefinition definition,
+      LocalDate occurrenceDate,
+      long amountMinor) {
     entry.update(
         EntryType.BILL,
         definition.getName(),
-        definition.getTypicalAmountMinor(),
+        amountMinor,
         definition.getPaymentMethod(),
         occurrenceDate,
         definition.getAccountName(),

@@ -134,9 +134,15 @@ function DefinitionRow({
         </AppText>
       </View>
       <View style={styles.amount}>
-        <AppText variant="money">
-          {formatMoney(definition.typicalAmountMinor, settings.currencyCode)}
-        </AppText>
+        {definition.amountMode === 'FIXED' ? (
+          <AppText variant="money">
+            {formatMoney(definition.typicalAmountMinor!, settings.currencyCode)}
+          </AppText>
+        ) : (
+          <AppText style={{ color: colors.muted }} variant="caption">
+            Variable amount
+          </AppText>
+        )}
         <AppText
           style={{ color: definition.active ? colors.posted : colors.muted }}
           variant="caption"

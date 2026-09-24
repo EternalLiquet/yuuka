@@ -614,6 +614,8 @@ export default function PaycheckDetailScreen() {
                 definitionVersion: item.definitionVersion,
                 occurrenceDate: item.occurrenceDate,
                 amountMinor: item.amountMinor,
+                occurrenceAmountVersion: item.occurrenceAmountVersion,
+                saveOccurrenceAmount: item.saveOccurrenceAmount,
                 updateTypicalAmount: item.updateTypicalAmount,
               })),
             )

@@ -11,6 +11,7 @@ const mockApi = {
   recurringBills: jest.fn(),
   recurringBillTimeline: jest.fn(),
   updateRecurringBill: jest.fn(),
+  updateRecurringBillOccurrenceAmount: jest.fn(),
 };
 
 jest.mock('@/api/use-yuuka-api', () => ({ useYuukaApi: () => mockApi }));
@@ -72,6 +73,7 @@ describe('Recurring Bill import sheet query states', () => {
     mockApi.me.mockResolvedValue({ recurringBillSuggestionDays: 7 });
     mockApi.recurringBills.mockResolvedValue({ items: [definition] });
     mockApi.recurringBillTimeline.mockResolvedValue(timeline);
+    mockApi.updateRecurringBillOccurrenceAmount.mockResolvedValue({});
   });
 
   it('renders loading while required data is pending', async () => {
@@ -184,11 +186,89 @@ describe('Recurring Bill import sheet query states', () => {
     expect(onImport).not.toHaveBeenCalled();
     expect(view.getByText('Import recurring Bills')).toBeTruthy();
   });
+
+  it('reuses a saved Variable occurrence without sending its optimistic version', async () => {
+    const onImport = jest.fn().mockResolvedValue(undefined);
+    mockApi.recurringBills.mockResolvedValue({ items: [variableDefinition] });
+    mockApi.recurringBillTimeline.mockResolvedValue({ ...timeline, items: [savedVariable] });
+    const queryClient = client();
+    const view = await sheet(queryClient, { onImport });
+
+    const option = (await view.findAllByLabelText(/Select Water, due/))[0];
+    await act(async () => {
+      fireEvent.press(option);
+    });
+    const addSelected = await view.findByLabelText('Add selected Bills (1)');
+    await act(async () => {
+      fireEvent.press(addSelected);
+    });
+
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1));
+    expect(onImport.mock.calls[0][0][0]).toEqual(
+      expect.objectContaining({
+        occurrenceAmountVersion: null,
+        saveOccurrenceAmount: false,
+      }),
+    );
+  });
+
+  it('persists only the latest requested amount change for a local draft batch', async () => {
+    const onImport = jest.fn().mockResolvedValue(undefined);
+    mockApi.recurringBills.mockResolvedValue({
+      items: [variableDefinition, secondVariableDefinition],
+    });
+    mockApi.recurringBillTimeline.mockResolvedValue({
+      ...timeline,
+      items: [missingVariable, secondMissingVariable],
+    });
+    const queryClient = client();
+    const view = await sheet(queryClient, { localDraft: true, onImport });
+
+    await act(async () => {
+      fireEvent.press((await view.findAllByLabelText('Edit amount for Water'))[0]);
+    });
+    await act(async () => {
+      fireEvent.changeText(await view.findByLabelText('Amount for this paycheck'), '118.22');
+    });
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Save for this occurrence'));
+    });
+    await view.findByLabelText('Add selected Bills (1)');
+    await act(async () => {
+      fireEvent.press((await view.findAllByLabelText('Edit amount for Internet'))[0]);
+    });
+    await act(async () => {
+      fireEvent.changeText(await view.findByLabelText('Amount for this paycheck'), '81.00');
+    });
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Save for this occurrence'));
+    });
+    const addSelected = await view.findByLabelText('Add selected Bills (2)');
+    await act(async () => {
+      fireEvent.press(addSelected);
+    });
+
+    await waitFor(() =>
+      expect(mockApi.updateRecurringBillOccurrenceAmount).toHaveBeenCalledWith(
+        secondVariableDefinition.id,
+        secondMissingVariable.occurrenceDate,
+        8100,
+        null,
+      ),
+    );
+    expect(mockApi.updateRecurringBillOccurrenceAmount).toHaveBeenCalledTimes(1);
+    expect(mockApi.updateRecurringBill).not.toHaveBeenCalled();
+    expect(onImport).toHaveBeenCalledWith([
+      expect.objectContaining({ name: 'Water', saveOccurrenceAmount: false }),
+      expect.objectContaining({ name: 'Internet', saveOccurrenceAmount: true }),
+    ]);
+  });
 });
 
 const definition: RecurringBill = {
   accountName: 'Checking',
   active: true,
+  amountMode: 'FIXED',
   createdAt: '2026-07-01T12:00:00Z',
   dueDay: 21,
   id: '11111111-1111-4111-8111-111111111111',
@@ -204,6 +284,9 @@ const definition: RecurringBill = {
 
 const occurrence: RecurringBillOccurrence = {
   accountName: 'Checking',
+  amountEntered: true,
+  amountMinor: definition.typicalAmountMinor,
+  amountMode: 'FIXED',
   definitionId: definition.id,
   definitionVersion: definition.version,
   importCount: 0,
@@ -211,6 +294,7 @@ const occurrence: RecurringBillOccurrence = {
   name: definition.name,
   notes: null,
   occurrenceDate: '2026-07-21',
+  occurrenceAmountVersion: null,
   payee: definition.payee,
   paymentMethod: definition.paymentMethod,
   typicalAmountMinor: definition.typicalAmountMinor,
@@ -220,4 +304,42 @@ const timeline = {
   from: '2026-06-16',
   items: [occurrence],
   through: '2026-09-17',
+};
+
+const variableDefinition: RecurringBill = {
+  ...definition,
+  amountMode: 'VARIABLE',
+  id: '22222222-2222-4222-8222-222222222222',
+  name: 'Water',
+  typicalAmountMinor: null,
+};
+
+const secondVariableDefinition: RecurringBill = {
+  ...variableDefinition,
+  id: '33333333-3333-4333-8333-333333333333',
+  name: 'Internet',
+};
+
+const savedVariable: RecurringBillOccurrence = {
+  ...occurrence,
+  amountMinor: 11822,
+  amountMode: 'VARIABLE',
+  definitionId: variableDefinition.id,
+  name: variableDefinition.name,
+  occurrenceAmountVersion: 4,
+  typicalAmountMinor: null,
+};
+
+const missingVariable: RecurringBillOccurrence = {
+  ...savedVariable,
+  amountEntered: false,
+  amountMinor: null,
+  occurrenceAmountVersion: null,
+};
+
+const secondMissingVariable: RecurringBillOccurrence = {
+  ...missingVariable,
+  definitionId: secondVariableDefinition.id,
+  name: secondVariableDefinition.name,
+  occurrenceDate: '2026-07-22',
 };

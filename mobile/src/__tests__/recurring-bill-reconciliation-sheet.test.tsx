@@ -136,6 +136,7 @@ function definition(): RecurringBill {
   return {
     accountName: 'Visa',
     active: true,
+    amountMode: 'FIXED',
     createdAt: '2026-08-01T12:00:00Z',
     dueDay: 21,
     id: '33333333-3333-4333-8333-333333333333',
@@ -154,6 +155,9 @@ function occurrences(): RecurringBillOccurrence[] {
   return ['2026-06-21', '2026-07-21', '2026-08-21', '2026-09-21', '2026-10-21'].map(
     (occurrenceDate) => ({
       accountName: 'Visa',
+      amountEntered: true,
+      amountMinor: 1499,
+      amountMode: 'FIXED' as const,
       definitionId: definition().id,
       definitionVersion: 2,
       importCount: occurrenceDate === '2026-08-21' ? 1 : 0,
@@ -171,6 +175,7 @@ function occurrences(): RecurringBillOccurrence[] {
       name: 'Netflix',
       notes: 'Streaming',
       occurrenceDate,
+      occurrenceAmountVersion: null,
       payee: 'Netflix Inc',
       paymentMethod: 'AUTOPAY' as const,
       typicalAmountMinor: 1499,

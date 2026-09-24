@@ -23,14 +23,19 @@ import com.yuuka.backend.recurring.api.dto.RecurringBillImportItemRequest;
 import com.yuuka.backend.recurring.api.dto.RecurringBillImportRequest;
 import com.yuuka.backend.recurring.api.dto.RecurringBillImportSummaryResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillListResponse;
+import com.yuuka.backend.recurring.api.dto.RecurringBillOccurrenceAmountResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillOccurrenceResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillTimelineResponse;
+import com.yuuka.backend.recurring.api.dto.UpdateRecurringBillOccurrenceAmountRequest;
 import com.yuuka.backend.recurring.api.dto.UpdateRecurringBillRequest;
 import com.yuuka.backend.recurring.domain.MonthlyOccurrencePolicy;
+import com.yuuka.backend.recurring.domain.RecurringBillAmountMode;
 import com.yuuka.backend.recurring.domain.RecurringBillDefinition;
+import com.yuuka.backend.recurring.domain.RecurringBillOccurrenceAmount;
 import com.yuuka.backend.recurring.domain.RecurringBillStatusFilter;
 import com.yuuka.backend.recurring.infrastructure.JpaRecurringBillDefinitionRepository;
+import com.yuuka.backend.recurring.infrastructure.JpaRecurringBillOccurrenceAmountRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -54,6 +59,7 @@ public class RecurringBillService {
   private static final long MAX_TIMELINE_DAYS = 366;
 
   private final JpaRecurringBillDefinitionRepository definitions;
+  private final JpaRecurringBillOccurrenceAmountRepository occurrenceAmounts;
   private final JpaPaycheckRepository paychecks;
   private final JpaPaycheckEntryRepository entries;
   private final JpaEntryStatusEventRepository statusEvents;
@@ -65,6 +71,7 @@ public class RecurringBillService {
 
   public RecurringBillService(
       JpaRecurringBillDefinitionRepository definitions,
+      JpaRecurringBillOccurrenceAmountRepository occurrenceAmounts,
       JpaPaycheckRepository paychecks,
       JpaPaycheckEntryRepository entries,
       JpaEntryStatusEventRepository statusEvents,
@@ -74,6 +81,7 @@ public class RecurringBillService {
       AuditService auditService,
       Clock clock) {
     this.definitions = definitions;
+    this.occurrenceAmounts = occurrenceAmounts;
     this.paychecks = paychecks;
     this.entries = entries;
     this.statusEvents = statusEvents;
@@ -86,11 +94,13 @@ public class RecurringBillService {
 
   @Transactional
   public RecurringBillResponse create(UUID ownerId, CreateRecurringBillRequest request) {
+    validateDefinitionAmount(request.amountMode(), request.typicalAmountMinor());
     RecurringBillDefinition definition =
         definitions.saveAndFlush(
             new RecurringBillDefinition(
                 ownerId,
                 request.name().trim(),
+                request.amountMode(),
                 request.typicalAmountMinor(),
                 paymentMethod(request.paymentMethod()),
                 request.dueDay(),
@@ -136,11 +146,13 @@ public class RecurringBillService {
   @Transactional
   public RecurringBillResponse update(
       UUID ownerId, UUID definitionId, UpdateRecurringBillRequest request) {
+    validateDefinitionAmount(request.amountMode(), request.typicalAmountMinor());
     RecurringBillDefinition definition = requireDefinition(ownerId, definitionId);
     assertVersion(definition.getVersion(), request.version());
     RecurringBillResponse before = RecurringBillResponse.from(definition);
     definition.update(
         request.name().trim(),
+        request.amountMode(),
         request.typicalAmountMinor(),
         paymentMethod(request.paymentMethod()),
         request.dueDay(),
@@ -184,6 +196,17 @@ public class RecurringBillService {
         active.stream()
             .map(RecurringBillDefinition::getId)
             .collect(HashSet::new, Set::add, Set::addAll);
+    Map<OccurrenceKey, RecurringBillOccurrenceAmount> amountByOccurrence = new HashMap<>();
+    if (!definitionIds.isEmpty()) {
+      occurrenceAmounts
+          .findAllByOwnerIdAndDefinitionIdInAndOccurrenceDateBetween(
+              ownerId, definitionIds, from, through)
+          .forEach(
+              amount ->
+                  amountByOccurrence.put(
+                      new OccurrenceKey(amount.getDefinitionId(), amount.getOccurrenceDate()),
+                      amount));
+    }
     List<PaycheckEntry> importedEntries =
         definitionIds.isEmpty()
             ? List.of()
@@ -220,15 +243,24 @@ public class RecurringBillService {
     List<RecurringBillOccurrenceResponse> items = new ArrayList<>();
     for (RecurringBillDefinition definition : active) {
       for (LocalDate date : occurrencePolicy.occurrences(from, through, definition.getDueDay())) {
-        List<RecurringBillImportSummaryResponse> matching =
-            imports.getOrDefault(new OccurrenceKey(definition.getId(), date), List.of());
+        OccurrenceKey key = new OccurrenceKey(definition.getId(), date);
+        List<RecurringBillImportSummaryResponse> matching = imports.getOrDefault(key, List.of());
+        RecurringBillOccurrenceAmount savedAmount = amountByOccurrence.get(key);
+        Long effectiveAmount =
+            definition.getAmountMode() == RecurringBillAmountMode.FIXED
+                ? definition.getTypicalAmountMinor()
+                : savedAmount == null ? null : savedAmount.getAmountMinor();
         items.add(
             new RecurringBillOccurrenceResponse(
                 definition.getId(),
                 definition.getVersion(),
                 date,
                 definition.getName(),
+                definition.getAmountMode(),
                 definition.getTypicalAmountMinor(),
+                effectiveAmount,
+                effectiveAmount != null,
+                savedAmount == null ? null : savedAmount.getVersion(),
                 definition.getPaymentMethod(),
                 definition.getAccountName(),
                 definition.getPayee(),
@@ -245,6 +277,32 @@ public class RecurringBillService {
   }
 
   @Transactional
+  public RecurringBillOccurrenceAmountResponse updateOccurrenceAmount(
+      UUID ownerId,
+      UUID definitionId,
+      LocalDate occurrenceDate,
+      UpdateRecurringBillOccurrenceAmountRequest request) {
+    RecurringBillDefinition definition =
+        definitions
+            .findByIdAndOwnerIdForUpdate(definitionId, ownerId)
+            .orElseThrow(ResourceNotFoundException::new);
+    requireVariable(definition);
+    validateOccurrence(definition, occurrenceDate);
+    RecurringBillOccurrenceAmount existing =
+        occurrenceAmounts.findForUpdate(ownerId, definitionId, occurrenceDate).orElse(null);
+    RecurringBillOccurrenceAmount saved =
+        saveOccurrenceAmount(
+            ownerId,
+            definition,
+            occurrenceDate,
+            request.amountMinor(),
+            request.version(),
+            existing,
+            null);
+    return RecurringBillOccurrenceAmountResponse.from(saved);
+  }
+
+  @Transactional
   public PaycheckResponse importIntoPaycheck(
       UUID ownerId, UUID paycheckId, RecurringBillImportRequest request) {
     Paycheck paycheck =
@@ -255,7 +313,6 @@ public class RecurringBillService {
       throw new BusinessRuleException("Reopen the paycheck before changing it.");
     }
     assertVersion(paycheck.getVersion(), request.paycheckVersion());
-    validateTypicalAmountUpdates(request.items());
 
     List<PaycheckEntry> liveEntries =
         entries.findAllByPaycheckIdAndOwnerIdAndDeletedAtIsNullOrderByPosition(paycheckId, ownerId);
@@ -302,12 +359,39 @@ public class RecurringBillService {
       }
       assertVersion(definition.getVersion(), item.definitionVersion());
     }
+    validateImportUpdateChoices(request.items(), loaded);
+    Map<OccurrenceKey, RecurringBillOccurrenceAmount> savedAmounts = new HashMap<>();
+    request.items().stream()
+        .filter(RecurringBillImportItemRequest::saveOccurrenceAmount)
+        .map(item -> new OccurrenceKey(item.definitionId(), item.occurrenceDate()))
+        .distinct()
+        .sorted(
+            Comparator.comparing(OccurrenceKey::definitionId)
+                .thenComparing(OccurrenceKey::occurrenceDate))
+        .forEach(
+            key ->
+                occurrenceAmounts
+                    .findForUpdate(ownerId, key.definitionId(), key.occurrenceDate())
+                    .ifPresent(amount -> savedAmounts.put(key, amount)));
 
     Instant now = clock.instant();
     int position = entries.findMaxLivePosition(paycheckId) + 1;
     List<PaycheckEntry> created = new ArrayList<>();
     for (RecurringBillImportItemRequest item : request.items()) {
       RecurringBillDefinition definition = loaded.get(item.definitionId());
+      if (item.saveOccurrenceAmount()) {
+        OccurrenceKey key = new OccurrenceKey(item.definitionId(), item.occurrenceDate());
+        RecurringBillOccurrenceAmount saved =
+            saveOccurrenceAmount(
+                ownerId,
+                definition,
+                item.occurrenceDate(),
+                item.amountMinor(),
+                item.occurrenceAmountVersion(),
+                savedAmounts.get(key),
+                paycheckId);
+        savedAmounts.put(key, saved);
+      }
       if (item.updateTypicalAmount()) {
         RecurringBillResponse before = RecurringBillResponse.from(definition);
         definition.updateTypicalAmount(item.amountMinor());
@@ -369,13 +453,36 @@ public class RecurringBillService {
     return paycheckService.toResponse(paycheck, allEntries);
   }
 
-  private void validateTypicalAmountUpdates(List<RecurringBillImportItemRequest> items) {
+  private void validateImportUpdateChoices(
+      List<RecurringBillImportItemRequest> items,
+      Map<UUID, RecurringBillDefinition> loadedDefinitions) {
     Set<UUID> definitionsWithTypicalAmountUpdate = new HashSet<>();
+    Set<OccurrenceKey> occurrencesWithAmountSave = new HashSet<>();
     for (RecurringBillImportItemRequest item : items) {
+      RecurringBillDefinition definition = loadedDefinitions.get(item.definitionId());
+      if (definition.getAmountMode() == RecurringBillAmountMode.FIXED
+          && item.saveOccurrenceAmount()) {
+        throw new BusinessRuleException(
+            "Fixed recurring Bills use their typical amount instead of saved occurrence amounts.");
+      }
+      if (definition.getAmountMode() == RecurringBillAmountMode.VARIABLE
+          && item.updateTypicalAmount()) {
+        throw new BusinessRuleException(
+            "Variable recurring Bills do not have a typical amount to update.");
+      }
+      if (!item.saveOccurrenceAmount() && item.occurrenceAmountVersion() != null) {
+        throw new BusinessRuleException(
+            "An occurrence amount version can only be supplied when saving that occurrence amount.");
+      }
       if (item.updateTypicalAmount()
           && !definitionsWithTypicalAmountUpdate.add(item.definitionId())) {
         throw new BusinessRuleException(
             "Choose Update typical amount for at most one occurrence of each recurring Bill.");
+      }
+      OccurrenceKey key = new OccurrenceKey(item.definitionId(), item.occurrenceDate());
+      if (item.saveOccurrenceAmount() && !occurrencesWithAmountSave.add(key)) {
+        throw new BusinessRuleException(
+            "Choose Save for this occurrence at most once for each recurring Bill occurrence.");
       }
     }
   }
@@ -414,6 +521,70 @@ public class RecurringBillService {
     if (ChronoUnit.DAYS.between(from, through) > MAX_TIMELINE_DAYS) {
       throw new BusinessRuleException("Recurring Bill timeline ranges cannot exceed 366 days.");
     }
+  }
+
+  private void validateDefinitionAmount(RecurringBillAmountMode mode, Long typicalAmountMinor) {
+    if (mode == RecurringBillAmountMode.FIXED && typicalAmountMinor == null) {
+      throw new BusinessRuleException("Enter a typical amount for a Fixed recurring Bill.");
+    }
+  }
+
+  private void requireVariable(RecurringBillDefinition definition) {
+    if (definition.getAmountMode() != RecurringBillAmountMode.VARIABLE) {
+      throw new BusinessRuleException(
+          "Only Variable recurring Bills can save an amount for one occurrence.");
+    }
+  }
+
+  private void validateOccurrence(RecurringBillDefinition definition, LocalDate occurrenceDate) {
+    LocalDate expected =
+        occurrencePolicy.occurrence(YearMonth.from(occurrenceDate), definition.getDueDay());
+    if (!expected.equals(occurrenceDate)) {
+      throw new BusinessRuleException("The recurring Bill occurrence date is invalid.");
+    }
+  }
+
+  private RecurringBillOccurrenceAmount saveOccurrenceAmount(
+      UUID ownerId,
+      RecurringBillDefinition definition,
+      LocalDate occurrenceDate,
+      long amountMinor,
+      Long suppliedVersion,
+      RecurringBillOccurrenceAmount existing,
+      UUID paycheckId) {
+    requireVariable(definition);
+    validateOccurrence(definition, occurrenceDate);
+    RecurringBillOccurrenceAmountResponse before =
+        existing == null ? null : RecurringBillOccurrenceAmountResponse.from(existing);
+    if (existing == null && suppliedVersion != null) {
+      throw new ConflictException(
+          "This record changed since it was loaded. Refresh and try again.");
+    }
+    if (existing != null) {
+      if (suppliedVersion == null) {
+        throw new ConflictException(
+            "This record changed since it was loaded. Refresh and try again.");
+      }
+      assertVersion(existing.getVersion(), suppliedVersion);
+      existing.updateAmount(amountMinor);
+    }
+    RecurringBillOccurrenceAmount saved =
+        occurrenceAmounts.saveAndFlush(
+            existing == null
+                ? new RecurringBillOccurrenceAmount(
+                    ownerId, definition.getId(), occurrenceDate, amountMinor)
+                : existing);
+    RecurringBillOccurrenceAmountResponse after = RecurringBillOccurrenceAmountResponse.from(saved);
+    auditService.append(
+        ownerId,
+        "RECURRING_BILL_OCCURRENCE_AMOUNT",
+        saved.getId(),
+        before == null ? "CREATED" : "UPDATED",
+        null,
+        before,
+        after,
+        paycheckId == null ? null : Map.of("paycheckId", paycheckId));
+    return saved;
   }
 
   private boolean matches(RecurringBillDefinition definition, String query) {

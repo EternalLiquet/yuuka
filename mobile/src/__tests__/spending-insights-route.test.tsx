@@ -419,7 +419,9 @@ async function renderScreen() {
 }
 
 async function renderScreenWithClient(seed?: (client: QueryClient) => void) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { gcTime: Infinity, retry: false } },
+  });
   seed?.(client);
   function Wrapper({ children }: PropsWithChildren) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>;

@@ -1,15 +1,18 @@
 package com.yuuka.backend.recurring.api.dto;
 
 import com.yuuka.backend.paycheck.domain.EntryPaymentMethod;
+import com.yuuka.backend.recurring.domain.RecurringBillAmountMode;
 import com.yuuka.backend.recurring.domain.RecurringBillDefinition;
 import com.yuuka.backend.recurring.domain.RecurringBillRecurrenceType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
 
 public record RecurringBillResponse(
     UUID id,
     String name,
-    long typicalAmountMinor,
+    RecurringBillAmountMode amountMode,
+    @Schema(types = {"integer", "null"}) Long typicalAmountMinor,
     EntryPaymentMethod paymentMethod,
     RecurringBillRecurrenceType recurrenceType,
     int dueDay,
@@ -24,6 +27,7 @@ public record RecurringBillResponse(
     return new RecurringBillResponse(
         definition.getId(),
         definition.getName(),
+        definition.getAmountMode(),
         definition.getTypicalAmountMinor(),
         definition.getPaymentMethod(),
         definition.getRecurrenceType(),

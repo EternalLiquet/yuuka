@@ -274,7 +274,11 @@ function RecurringBillReconciliationSheet({
         definitionVersion: selectedOccurrence.definitionVersion,
         occurrenceDate: selectedOccurrence.occurrenceDate,
         reviewedSnapshot: Object.freeze(
-          recurringEntrySnapshot(selectedOccurrence, selectedOccurrence.occurrenceDate),
+          recurringEntrySnapshot(
+            selectedOccurrence,
+            selectedOccurrence.occurrenceDate,
+            effectiveEntry.amountMinor,
+          ),
         ),
       });
     }
@@ -285,6 +289,7 @@ function RecurringBillReconciliationSheet({
         action,
         baselineDefinitionId: effectiveEntry.sourceRecurringBillDefinitionId,
         occurrenceDate: createdOccurrence,
+        reviewedAmountMinor: effectiveEntry.amountMinor,
         reviewedDefinitionValues: Object.freeze({ ...createdValues }),
       });
     }
@@ -494,6 +499,7 @@ function RecurringBillReconciliationSheet({
         <RecurringBillEditor
           initialValues={{
             accountName: effectiveEntry.accountName,
+            amountMode: 'FIXED',
             dueDay: effectiveEntry.dueDate ? Number(effectiveEntry.dueDate.slice(-2)) : undefined,
             name: effectiveEntry.name,
             notes: effectiveEntry.notes,
@@ -562,7 +568,14 @@ function RecurringBillReconciliationSheet({
           ) : null}
           {step === 'review-link' && definition && selectedOccurrence ? (
             <ReviewChanges
-              definition={selectedOccurrence}
+              definition={{
+                accountName: selectedOccurrence.accountName,
+                amountMinor: selectedOccurrence.amountMinor ?? effectiveEntry.amountMinor,
+                name: selectedOccurrence.name,
+                notes: selectedOccurrence.notes,
+                payee: selectedOccurrence.payee,
+                paymentMethod: selectedOccurrence.paymentMethod,
+              }}
               entry={effectiveEntry}
               occurrence={selectedOccurrence.occurrenceDate}
               duplicateImports={selectedOccurrence.imports.filter(
@@ -588,11 +601,14 @@ function RecurringBillReconciliationSheet({
             <ReviewChanges
               definition={{
                 accountName: createdValues.accountName ?? null,
+                amountMinor:
+                  createdValues.amountMode === 'FIXED'
+                    ? createdValues.typicalAmountMinor!
+                    : effectiveEntry.amountMinor,
                 name: createdValues.name,
                 notes: createdValues.notes ?? null,
                 payee: createdValues.payee ?? null,
                 paymentMethod: createdValues.paymentMethod ?? 'AUTOPAY',
-                typicalAmountMinor: createdValues.typicalAmountMinor,
               }}
               entry={effectiveEntry}
               occurrence={createdOccurrence}
@@ -802,7 +818,7 @@ function ReviewChanges({
       <View style={[styles.change, { borderColor: colors.border }]}>
         <AppText variant="label">Allocation</AppText>
         <AppText>
-          {allocationChangeMessage(entry.amountMinor, definition.typicalAmountMinor, money)}
+          {allocationChangeMessage(entry.amountMinor, definition.amountMinor, money)}
         </AppText>
       </View>
       {duplicateImports.length ? (

@@ -25,6 +25,12 @@ informational and never makes later definition edits cascade into a paycheck. Ex
 batch imports lock the paycheck, validate optimistic version and total allocation, then persist all
 selected snapshots in one transaction.
 
+Definitions explicitly select Fixed or Variable amount mode. Fixed definitions own a required
+typical amount. Variable definitions resolve amounts from sparse owner-scoped, versioned records
+keyed by definition and exact occurrence date; absence is intentionally different from a stored
+zero. Sparse values survive definition edits and lifecycle changes but are never authoritative for
+already-imported paycheck snapshots.
+
 ## Immutable history
 
 Every status change appends an event with separate effective and recorded timestamps. Status and audit tables have PostgreSQL update/delete rejection triggers so application defects cannot rewrite history.

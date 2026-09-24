@@ -34,6 +34,7 @@ describe('committed backend contract', () => {
     ['/api/v1/entries/{entryId}/recurring-bill-link', 'put'],
     ['/api/v1/entries/{entryId}/recurring-bill-link', 'delete'],
     ['/api/v1/entries/{entryId}/recurring-bill-definition', 'post'],
+    ['/api/v1/recurring-bills/{definitionId}/occurrences/{occurrenceDate}/amount', 'put'],
     ['/api/v1/entries/{entryId}/bucket-transactions', 'post'],
     ['/api/v1/paybacks', 'get'],
     ['/api/v1/paybacks', 'post'],
@@ -99,5 +100,21 @@ describe('committed backend contract', () => {
     expect(contract.components?.schemas?.CreateRecurringBillFromEntryRequest?.required).toEqual(
       expect.arrayContaining(['entryVersion', 'paycheckVersion']),
     );
+  });
+
+  it('describes fixed and variable recurring bill amounts', () => {
+    expect(contract.components?.schemas?.CreateRecurringBillRequest?.required).toEqual(
+      expect.arrayContaining(['amountMode']),
+    );
+    expect(
+      contract.components?.schemas?.RecurringBillOccurrenceResponse?.properties?.amountMinor?.type,
+    ).toEqual(['integer', 'null']);
+    expect(
+      contract.components?.schemas?.RecurringBillImportItemRequest?.properties
+        ?.occurrenceAmountVersion?.type,
+    ).toEqual(['integer', 'null']);
+    expect(
+      contract.components?.schemas?.UpdateRecurringBillOccurrenceAmountRequest?.required,
+    ).toEqual(expect.arrayContaining(['amountMinor']));
   });
 });

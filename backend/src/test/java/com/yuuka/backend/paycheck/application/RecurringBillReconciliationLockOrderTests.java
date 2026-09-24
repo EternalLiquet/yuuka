@@ -26,7 +26,9 @@ import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckRepository;
 import com.yuuka.backend.recurring.api.dto.CreateRecurringBillFromEntryRequest;
 import com.yuuka.backend.recurring.api.dto.LinkRecurringBillRequest;
 import com.yuuka.backend.recurring.domain.MonthlyOccurrencePolicy;
+import com.yuuka.backend.recurring.domain.RecurringBillAmountMode;
 import com.yuuka.backend.recurring.infrastructure.JpaRecurringBillDefinitionRepository;
+import com.yuuka.backend.recurring.infrastructure.JpaRecurringBillOccurrenceAmountRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -39,6 +41,8 @@ import org.mockito.InOrder;
 class RecurringBillReconciliationLockOrderTests {
   private final JpaRecurringBillDefinitionRepository definitions =
       mock(JpaRecurringBillDefinitionRepository.class);
+  private final JpaRecurringBillOccurrenceAmountRepository occurrenceAmounts =
+      mock(JpaRecurringBillOccurrenceAmountRepository.class);
   private final JpaPaycheckRepository paychecks = mock(JpaPaycheckRepository.class);
   private final JpaPaycheckEntryRepository entries = mock(JpaPaycheckEntryRepository.class);
   private final PaybackService paybackService = mock(PaybackService.class);
@@ -239,12 +243,23 @@ class RecurringBillReconciliationLockOrderTests {
 
   private CreateRecurringBillFromEntryRequest createRequest() {
     return new CreateRecurringBillFromEntryRequest(
-        2L, 4L, "Netflix", 1499L, null, 21, "Visa", "Netflix", null, LocalDate.parse("2026-08-21"));
+        2L,
+        4L,
+        "Netflix",
+        RecurringBillAmountMode.FIXED,
+        1499L,
+        null,
+        21,
+        "Visa",
+        "Netflix",
+        null,
+        LocalDate.parse("2026-08-21"));
   }
 
   private RecurringBillEntryReconciliationService service() {
     return new RecurringBillEntryReconciliationService(
         definitions,
+        occurrenceAmounts,
         paychecks,
         entries,
         responseAssembler,

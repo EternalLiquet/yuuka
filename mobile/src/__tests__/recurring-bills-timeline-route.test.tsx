@@ -20,7 +20,10 @@ const definitionId = '11111111-1111-4111-8111-111111111111';
 const mockPush = jest.fn();
 const mockScrollToIndex = jest.fn();
 const mockScrollToOffset = jest.fn();
-const mockApi = { recurringBillTimeline: jest.fn() };
+const mockApi = {
+  recurringBillTimeline: jest.fn(),
+  updateRecurringBillOccurrenceAmount: jest.fn(),
+};
 let latestListProps: Record<string, unknown> = {};
 const queryClients: QueryClient[] = [];
 
@@ -199,6 +202,37 @@ describe('Recurring Bills timeline route', () => {
     await fireEvent(card, 'accessibilityAction', { nativeEvent: { actionName: 'edit' } });
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith(`/recurring-bills/${definitionId}/edit`);
+  });
+
+  it('shows and saves a missing Variable occurrence amount without displaying zero', async () => {
+    mockApi.recurringBillTimeline.mockImplementation(async (from: string, through: string) =>
+      timeline(from, through, [
+        {
+          ...occurrence(from),
+          amountEntered: false,
+          amountMinor: null,
+          amountMode: 'VARIABLE',
+          typicalAmountMinor: null,
+        },
+      ]),
+    );
+    mockApi.updateRecurringBillOccurrenceAmount.mockResolvedValue({ version: 0 });
+    const view = await render(<RecurringBillsTimelineScreen />, { wrapper: wrapper(client()) });
+
+    expect(await view.findByText('Amount not entered')).toBeTruthy();
+    expect(view.queryByText('$0.00')).toBeNull();
+    await fireEvent.press(view.getByLabelText('Enter amount'));
+    await fireEvent.changeText(view.getByLabelText('Amount'), '118.22');
+    await fireEvent.press(view.getByLabelText('Save occurrence amount'));
+
+    await waitFor(() =>
+      expect(mockApi.updateRecurringBillOccurrenceAmount).toHaveBeenCalledWith(
+        definitionId,
+        expect.any(String),
+        11822,
+        null,
+      ),
+    );
   });
 
   it('opens one imported entry on normal press and accessibility activation', async () => {
@@ -551,6 +585,9 @@ function occurrence(date: string, name = 'Electric', importCount = 0): Recurring
   }));
   return {
     accountName: null,
+    amountEntered: true,
+    amountMinor: 1000,
+    amountMode: 'FIXED',
     definitionId,
     definitionVersion: 2,
     importCount,
@@ -558,6 +595,7 @@ function occurrence(date: string, name = 'Electric', importCount = 0): Recurring
     name,
     notes: null,
     occurrenceDate: date,
+    occurrenceAmountVersion: null,
     payee: null,
     paymentMethod: 'AUTOPAY',
     typicalAmountMinor: 1000,

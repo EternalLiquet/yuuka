@@ -319,7 +319,10 @@ navigation. A safe-area-aware floating create action remains visible while scrol
 an occurrence, or invoking its accessibility edit action, edits the underlying recurring Bill
 definition. Definition management supports search, active/inactive filtering, create, edit,
 deactivate, reactivate, and delete. Monthly dates shown in the timeline come from the backend's
-clamped calendar policy.
+clamped calendar policy. The definition editor requires an explicit Fixed or Variable amount mode.
+Fixed shows a required typical amount. Variable hides it, warns before converting an existing Fixed
+definition, and lets each timeline occurrence show `Amount not entered` or a formatted saved amount.
+The occurrence action enters or edits that amount without treating a missing value as zero.
 
 Scratch, template, duplicate, and existing-paycheck entry drafts expose Import recurring bills.
 Home quick assignment uses the same single-item import contract and amount behavior. The user must
@@ -331,8 +334,10 @@ An uncertain quick-import result must be reconciled against authoritative payche
 retry; optimistic-lock refreshes preserve the in-progress selection and amount while retrying with
 the latest paycheck and recurring Bill definition versions.
 Suggested results use the owner setting around the paycheck income date; All shows the relevant
-occurrence date near that income date. Nothing is preselected. Selecting uses the typical amount,
-and editing that selection offers This paycheck only or Update typical amount. Draft imports remain
+occurrence date near that income date. Nothing is preselected. Fixed selections use the typical
+amount, and editing offers This paycheck only or Update typical amount. Variable selections require
+an entered amount and offer This paycheck only or Save for this occurrence. A saved zero remains a
+real entered amount; a missing amount never silently becomes zero. Draft imports remain
 editable local snapshots. Existing-paycheck imports submit the full selection as one transactional
 request and retain the user's selection if validation or allocation fails.
 
