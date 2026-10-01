@@ -96,17 +96,16 @@ public class RecurringBillService {
   public RecurringBillResponse create(UUID ownerId, CreateRecurringBillRequest request) {
     validateDefinitionAmount(request.amountMode(), request.typicalAmountMinor());
     RecurringBillDefinition definition =
-        definitions.saveAndFlush(
-            new RecurringBillDefinition(
-                ownerId,
-                request.name().trim(),
-                request.amountMode(),
-                request.typicalAmountMinor(),
-                paymentMethod(request.paymentMethod()),
-                request.dueDay(),
-                normalizeOptional(request.accountName()),
-                normalizeOptional(request.payee()),
-                normalizeOptional(request.notes())));
+        new RecurringBillDefinition(
+            ownerId,
+            request.name().trim(),
+            request.amountMode(),
+            request.typicalAmountMinor(),
+            paymentMethod(request.paymentMethod()),
+            request.dueDay(),
+            normalizeOptional(request.accountName()),
+            normalizeOptional(request.payee()),
+            normalizeOptional(request.notes()));
     definition.setPlanningAmountMinor(request.planningAmountMinor());
     definitions.saveAndFlush(definition);
     RecurringBillResponse response = RecurringBillResponse.from(definition);

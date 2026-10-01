@@ -31,6 +31,7 @@ import {
   draftTotalMinor,
   TemplateApplicationDraftEntry,
 } from '@/features/templates/application-draft';
+import { refreshRecurringReconciliationQueries } from '@/features/recurring-bills/reconciliation';
 import { DuplicateRecurringBill } from '@/features/recurring-bills/duplicate-recurring-bill';
 import { ImportRecurringBillsSheet } from '@/features/recurring-bills/import-recurring-bills-sheet';
 import { TemplateEntryEditor } from '@/features/templates/template-entry-editor';
@@ -123,10 +124,8 @@ export default function DuplicatePaycheckScreen() {
       }),
     onSuccess: async (paycheck) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['paychecks'] }),
+        refreshRecurringReconciliationQueries(queryClient, paycheck.id, paycheck),
         queryClient.invalidateQueries({ queryKey: ['paycheck', id] }),
-        queryClient.invalidateQueries({ queryKey: ['paycheck', paycheck.id] }),
-        queryClient.invalidateQueries({ queryKey: ['search', 'entries'] }),
         queryClient.invalidateQueries({ queryKey: ['spending-buckets'] }),
       ]);
       router.replace(`/paychecks/${paycheck.id}`);

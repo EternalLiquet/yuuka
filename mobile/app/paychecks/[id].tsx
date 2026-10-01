@@ -627,7 +627,9 @@ export default function PaycheckDetailScreen() {
           key={actualBillId}
           entry={paycheck.entries.find((entry) => entry.id === actualBillId)!}
           paycheck={paycheck}
-          onChanged={invalidate}
+          onChanged={(updated) =>
+            updated ? invalidateRecurringReconciliation(updated) : invalidate()
+          }
           onClose={() => setActualBillId(null)}
         />
       ) : null}

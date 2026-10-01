@@ -557,16 +557,63 @@ class RecurringBillReconciliationWorkflowTests extends AbstractIntegrationTest {
         .isEqualTo(15000);
   }
 
+  @Test
+  void createsVariableDefinitionFromBillWithEstimateBeforeItsFirstSave() throws Exception {
+    String token = register("single-save-estimate@yuuka.local");
+    JsonNode paycheck = createPaycheck(token, "Bills", 20000, "2026-08-15");
+    JsonNode entry = addBill(token, paycheck, "Power", 5000, null, "AUTOPAY");
+    paycheck = getPaycheck(token, paycheck.path("id").asText());
+    JsonNode linked =
+        requestJson(
+            post("/api/v1/entries/{id}/recurring-bill-definition", entry.path("id").asText())
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        Map.of(
+                            "entryVersion",
+                            entry.path("version").asLong(),
+                            "paycheckVersion",
+                            paycheck.path("version").asLong(),
+                            "name",
+                            "Power",
+                            "amountMode",
+                            "VARIABLE",
+                            "planningAmountMinor",
+                            15000,
+                            "dueDay",
+                            31,
+                            "occurrenceDate",
+                            "2026-08-31"))),
+            200);
+    JsonNode definition =
+        requestJson(
+            get(
+                    "/api/v1/recurring-bills/{id}",
+                    linked.path("entries").get(0).path("sourceRecurringBillDefinitionId").asText())
+                .header("Authorization", bearer(token)),
+            200);
+    assertThat(definition.path("planningAmountMinor").asLong()).isEqualTo(15000);
+    assertThat(definition.path("version").asLong()).isZero();
+    assertThat(definition.path("updatedAt")).isEqualTo(definition.path("createdAt"));
+    assertThat(linked.path("entries").get(0).path("amountMinor").asLong()).isEqualTo(5000);
+  }
+
   private JsonNode createEstimateDefinition(String token) throws Exception {
-    return requestJson(
-        post("/api/v1/recurring-bills")
-            .header("Authorization", bearer(token))
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(
-                """
+    JsonNode created =
+        requestJson(
+            post("/api/v1/recurring-bills")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
           {"name":"Power","amountMode":"VARIABLE","planningAmountMinor":15000,"dueDay":31}
           """),
-        201);
+            201);
+    assertThat(created.path("planningAmountMinor").asLong()).isEqualTo(15000);
+    assertThat(created.path("version").asLong()).isZero();
+    assertThat(created.path("updatedAt")).isEqualTo(created.path("createdAt"));
+    return created;
   }
 
   private JsonNode createEstimatedDraft(

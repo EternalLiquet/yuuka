@@ -315,19 +315,18 @@ public class RecurringBillEntryReconciliationService {
     assertAllocation(locked, amountMinor);
 
     RecurringBillDefinition definition =
-        definitions.saveAndFlush(
-            new RecurringBillDefinition(
-                ownerId,
-                request.name().trim(),
-                request.amountMode(),
-                request.typicalAmountMinor(),
-                request.paymentMethod() == null
-                    ? com.yuuka.backend.paycheck.domain.EntryPaymentMethod.AUTOPAY
-                    : request.paymentMethod(),
-                request.dueDay(),
-                validations.normalizeOptional(request.accountName()),
-                validations.normalizeOptional(request.payee()),
-                validations.normalizeOptional(request.notes())));
+        new RecurringBillDefinition(
+            ownerId,
+            request.name().trim(),
+            request.amountMode(),
+            request.typicalAmountMinor(),
+            request.paymentMethod() == null
+                ? com.yuuka.backend.paycheck.domain.EntryPaymentMethod.AUTOPAY
+                : request.paymentMethod(),
+            request.dueDay(),
+            validations.normalizeOptional(request.accountName()),
+            validations.normalizeOptional(request.payee()),
+            validations.normalizeOptional(request.notes()));
     definition.setPlanningAmountMinor(request.planningAmountMinor());
     definitions.saveAndFlush(definition);
     RecurringBillResponse definitionAfter = RecurringBillResponse.from(definition);

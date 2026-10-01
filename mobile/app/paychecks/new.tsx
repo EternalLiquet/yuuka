@@ -33,6 +33,7 @@ import {
   draftTotalMinor,
   TemplateApplicationDraftEntry,
 } from '@/features/templates/application-draft';
+import { refreshRecurringReconciliationQueries } from '@/features/recurring-bills/reconciliation';
 import { ImportRecurringBillsSheet } from '@/features/recurring-bills/import-recurring-bills-sheet';
 import { TemplateEntryEditor } from '@/features/templates/template-entry-editor';
 import type { TemplateEntryEditorEntry } from '@/features/templates/template-entry-editor';
@@ -115,7 +116,7 @@ export default function NewPaycheckScreen() {
         : api.createPaycheck(details);
     },
     onSuccess: async (paycheck) => {
-      await queryClient.invalidateQueries({ queryKey: ['paychecks'] });
+      await refreshRecurringReconciliationQueries(queryClient, paycheck.id, paycheck);
       router.replace(`/paychecks/${paycheck.id}`);
     },
     onSettled: () => {
@@ -137,7 +138,7 @@ export default function NewPaycheckScreen() {
       });
     },
     onSuccess: async (paycheck) => {
-      await queryClient.invalidateQueries({ queryKey: ['paychecks'] });
+      await refreshRecurringReconciliationQueries(queryClient, paycheck.id, paycheck);
       router.replace(`/paychecks/${paycheck.id}`);
     },
     onSettled: () => {

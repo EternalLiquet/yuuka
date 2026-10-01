@@ -229,6 +229,9 @@ it('records actual on only the selected bill and reports returned money after su
   );
   expect(await view.findByText('$30.00 returned to Unallocated.')).toBeTruthy();
   expect(onChanged).toHaveBeenCalledTimes(1);
+  expect(onChanged).toHaveBeenCalledWith(
+    expect.objectContaining({ id: paycheck.id, unallocatedMinor: 8000 }),
+  );
 });
 it('keeps the typed actual after a failed save and requires review when definition changed', async () => {
   mockApi.recurringBillActualContext.mockResolvedValue({

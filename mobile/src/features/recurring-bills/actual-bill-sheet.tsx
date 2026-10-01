@@ -22,7 +22,7 @@ export function ActualBillSheet({
   entry: Entry;
   paycheck: Paycheck;
   onClose: () => void;
-  onChanged: () => Promise<unknown>;
+  onChanged: (updated?: Paycheck) => Promise<unknown>;
 }) {
   const api = useYuukaApi();
   const { colors } = useAppTheme();
@@ -66,7 +66,7 @@ export function ActualBillSheet({
             ? `${formatMoney(-difference, settings.currencyCode)} more set aside from this paycheck.`
             : 'Actual bill saved. The amount set aside stays the same.',
       );
-      await onChanged();
+      await onChanged(result);
     } catch (cause) {
       setError(
         displayError(

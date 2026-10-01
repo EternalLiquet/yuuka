@@ -301,6 +301,7 @@ describe('duplicate paycheck route', () => {
     });
     queryClient.setQueryData(['paycheck', sourceId], stalePaycheck);
     queryClient.setQueryData(['paycheck', 'duplicate-source', sourceId], stalePaycheck);
+    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
     const authoritativePaycheck = sourcePaycheck();
     authoritativePaycheck.entries.push(
       entry({
@@ -381,6 +382,8 @@ describe('duplicate paycheck route', () => {
       ),
     );
     expect(mockApi.createPaycheckFromDraft).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['recurring-bills'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dashboard'] });
     expect(mockApi.createPaycheckFromDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         entries: [
