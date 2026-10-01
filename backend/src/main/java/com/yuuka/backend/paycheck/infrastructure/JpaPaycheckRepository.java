@@ -44,6 +44,8 @@ public interface JpaPaycheckRepository
             and p.state = 'ACTIVE'
             and (
               p.reopened_at is not null
+              or exists (select 1 from paycheck_entries estimate where estimate.paycheck_id = p.id
+                and estimate.owner_id = p.owner_id and estimate.deleted_at is null and estimate.amount_estimated)
               or p.amount_minor <> (
                 select coalesce(sum(e.amount_minor), 0)
                 from paycheck_entries e
@@ -101,6 +103,8 @@ public interface JpaPaycheckRepository
             and p.state = 'ACTIVE'
             and (
               p.reopened_at is not null
+              or exists (select 1 from paycheck_entries estimate where estimate.paycheck_id = p.id
+                and estimate.owner_id = p.owner_id and estimate.deleted_at is null and estimate.amount_estimated)
               or p.amount_minor <> (
                 select coalesce(sum(e.amount_minor), 0)
                 from paycheck_entries e
@@ -167,6 +171,8 @@ public interface JpaPaycheckRepository
               p.state <> 'ACTIVE'
               or (
                 p.reopened_at is null
+                and not exists (select 1 from paycheck_entries estimate where estimate.paycheck_id = p.id
+                  and estimate.owner_id = p.owner_id and estimate.deleted_at is null and estimate.amount_estimated)
                 and not (
                   p.amount_minor <> (
                     select coalesce(sum(e.amount_minor), 0)
@@ -233,6 +239,8 @@ public interface JpaPaycheckRepository
               p.state <> 'ACTIVE'
               or (
                 p.reopened_at is null
+                and not exists (select 1 from paycheck_entries estimate where estimate.paycheck_id = p.id
+                  and estimate.owner_id = p.owner_id and estimate.deleted_at is null and estimate.amount_estimated)
                 and not (
                   p.amount_minor <> (
                     select coalesce(sum(e.amount_minor), 0)
@@ -307,6 +315,8 @@ public interface JpaPaycheckRepository
               p.state <> 'ACTIVE'
               or (
                 p.reopened_at is null
+                and not exists (select 1 from paycheck_entries estimate where estimate.paycheck_id = p.id
+                  and estimate.owner_id = p.owner_id and estimate.deleted_at is null and estimate.amount_estimated)
                 and not (
                   p.amount_minor <> (
                     select coalesce(sum(e.amount_minor), 0)
@@ -373,6 +383,8 @@ public interface JpaPaycheckRepository
               p.state <> 'ACTIVE'
               or (
                 p.reopened_at is null
+                and not exists (select 1 from paycheck_entries estimate where estimate.paycheck_id = p.id
+                  and estimate.owner_id = p.owner_id and estimate.deleted_at is null and estimate.amount_estimated)
                 and not (
                   p.amount_minor <> (
                     select coalesce(sum(e.amount_minor), 0)

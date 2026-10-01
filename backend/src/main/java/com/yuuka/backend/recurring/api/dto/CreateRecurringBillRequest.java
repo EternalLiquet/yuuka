@@ -16,6 +16,9 @@ public record CreateRecurringBillRequest(
     @Schema(types = {"integer", "null"})
         @PositiveOrZero(message = "Typical amount must be greater than or equal to $0.00.")
         Long typicalAmountMinor,
+    @Schema(types = {"integer", "null"})
+        @PositiveOrZero(message = "Estimated amount must be greater than or equal to $0.00.")
+        Long planningAmountMinor,
     EntryPaymentMethod paymentMethod,
     @Min(1) @Max(31) int dueDay,
     @Size(max = 160) String accountName,

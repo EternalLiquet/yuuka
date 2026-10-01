@@ -63,6 +63,8 @@ public class TemplateService {
   private final OwnerLocalDateService ownerLocalDateService;
   private final AuditService auditService;
   private final Clock clock;
+  private final com.yuuka.backend.paycheck.application.RecurringBillEntryReconciliationService
+      recurringReconciliation;
 
   public TemplateService(
       JpaBudgetTemplateRepository templates,
@@ -76,7 +78,9 @@ public class TemplateService {
       SinkingFundService sinkingFundService,
       OwnerLocalDateService ownerLocalDateService,
       AuditService auditService,
-      Clock clock) {
+      Clock clock,
+      com.yuuka.backend.paycheck.application.RecurringBillEntryReconciliationService
+          recurringReconciliation) {
     this.templates = templates;
     this.templateEntries = templateEntries;
     this.paychecks = paychecks;
@@ -89,6 +93,7 @@ public class TemplateService {
     this.ownerLocalDateService = ownerLocalDateService;
     this.auditService = auditService;
     this.clock = clock;
+    this.recurringReconciliation = recurringReconciliation;
   }
 
   @Transactional(readOnly = true)
@@ -306,6 +311,11 @@ public class TemplateService {
     if (template.isArchived()) {
       throw new BusinessRuleException("Restore the template before using it.");
     }
+    if (request.entries() != null) {
+      recurringReconciliation.validateDraftEntries(
+          ownerId,
+          request.entries().stream().map(TemplateApplicationEntryRequest::toDraft).toList());
+    }
     List<ApplicationEntry> applicationEntries = applicationEntries(ownerId, template, request);
     PaycheckMetrics proposed =
         calculator.calculate(
@@ -363,6 +373,8 @@ public class TemplateService {
           source.sourceRecurringOccurrenceDate());
       entry.setRecurringSource(
           source.sourceRecurringBillDefinitionId(), source.sourceRecurringOccurrenceDate());
+      if (request.entries() != null)
+        entry.setAmountEstimated(request.entries().get(index).amountEstimated());
       entry = paycheckEntries.saveAndFlush(entry);
       copied.add(entry);
       statusEvents.save(

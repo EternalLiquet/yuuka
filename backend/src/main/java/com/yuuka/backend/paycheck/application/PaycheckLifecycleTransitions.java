@@ -37,9 +37,11 @@ class PaycheckLifecycleTransitions {
       Instant recordedAt,
       LocalDate asOfDate) {
     PaycheckMetrics metrics = responseAssembler.calculate(paycheck, liveEntries);
-    if (!metrics.fullyAllocated() || !metrics.fullyPosted()) {
+    if (!metrics.fullyAllocated()
+        || !metrics.fullyPosted()
+        || liveEntries.stream().anyMatch(PaycheckEntry::isAmountEstimated)) {
       throw new BusinessRuleException(
-          "A paycheck can be closed only when fully allocated and fully Posted.");
+          "A paycheck can be closed only when fully allocated, fully Posted, and all actual bill amounts are entered.");
     }
     PaycheckResponse before = responseAssembler.toResponse(paycheck, liveEntries, asOfDate);
     paycheck.close(recordedAt);
@@ -89,7 +91,9 @@ class PaycheckLifecycleTransitions {
       return;
     }
     PaycheckMetrics metrics = responseAssembler.calculate(paycheck, liveEntries);
-    if (!metrics.fullyAllocated() || !metrics.fullyPosted()) {
+    if (!metrics.fullyAllocated()
+        || !metrics.fullyPosted()
+        || liveEntries.stream().anyMatch(PaycheckEntry::isAmountEstimated)) {
       return;
     }
 

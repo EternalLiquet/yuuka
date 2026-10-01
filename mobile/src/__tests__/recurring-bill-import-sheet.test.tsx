@@ -212,6 +212,26 @@ describe('Recurring Bill import sheet query states', () => {
     );
   });
 
+  it('requires duplicate confirmation for an already assigned bill in a local draft', async () => {
+    const onImport = jest.fn().mockResolvedValue(undefined);
+    mockApi.recurringBillTimeline.mockResolvedValue({
+      ...timeline,
+      items: timeline.items.map((item) => ({ ...item, importCount: 1 })),
+    });
+    const view = await sheet(client(), { localDraft: true, onImport });
+    await fireEvent.press((await view.findAllByLabelText(/Select Electric, due/))[0]);
+    expect(view.getByLabelText('Add selected Bills (1)').props.accessibilityState.disabled).toBe(
+      true,
+    );
+    await fireEvent.press(view.getByLabelText('Add another copy of Electric'));
+    await fireEvent.press(view.getByLabelText('Add selected Bills (1)'));
+    await waitFor(() =>
+      expect(onImport).toHaveBeenCalledWith([
+        expect.objectContaining({ confirmDuplicateOccurrence: true }),
+      ]),
+    );
+  });
+
   it('persists only the latest requested amount change for a local draft batch', async () => {
     const onImport = jest.fn().mockResolvedValue(undefined);
     mockApi.recurringBills.mockResolvedValue({
@@ -259,8 +279,16 @@ describe('Recurring Bill import sheet query states', () => {
     expect(mockApi.updateRecurringBillOccurrenceAmount).toHaveBeenCalledTimes(1);
     expect(mockApi.updateRecurringBill).not.toHaveBeenCalled();
     expect(onImport).toHaveBeenCalledWith([
-      expect.objectContaining({ name: 'Water', saveOccurrenceAmount: false }),
-      expect.objectContaining({ name: 'Internet', saveOccurrenceAmount: true }),
+      expect.objectContaining({
+        name: 'Water',
+        saveOccurrenceAmount: false,
+        amountEstimated: true,
+      }),
+      expect.objectContaining({
+        name: 'Internet',
+        saveOccurrenceAmount: true,
+        amountEstimated: false,
+      }),
     ]);
   });
 });

@@ -197,6 +197,33 @@ class RecurringBillReconciliationLockOrderTests {
         .findByIdAndOwnerIdForUpdate(request(2).definitionId(), fixture.ownerId());
   }
 
+  @Test
+  void actualLocksAssignedPaybackBeforePaycheckEntryAndEvenDeletedDefinition() {
+    Fixture fixture = fixture(UUID.randomUUID(), 2);
+    when(fixture.lockedEntry().isAmountEstimated()).thenReturn(true);
+    when(fixture.lockedEntry().getSourceRecurringBillDefinitionId())
+        .thenReturn(request(2).definitionId());
+    when(fixture.lockedEntry().getSourceRecurringOccurrenceDate())
+        .thenReturn(request(2).occurrenceDate());
+    var actual =
+        new com.yuuka.backend.recurring.api.dto.RecordRecurringBillActualRequest(
+            request(2).definitionId(), 1L, request(2).occurrenceDate(), 2L, 4L, null, 1200L, true);
+    assertThatThrownBy(() -> service().recordActual(fixture.ownerId(), fixture.entryId(), actual))
+        .isInstanceOf(ResourceNotFoundException.class);
+    InOrder order = inOrder(paybackService, paychecks, entries, definitions);
+    order
+        .verify(entries)
+        .findByIdAndOwnerIdAndDeletedAtIsNull(fixture.entryId(), fixture.ownerId());
+    order
+        .verify(paybackService)
+        .lockForRecurringReconciliation(fixture.ownerId(), fixture.paybackId());
+    order.verify(paychecks).findByIdAndOwnerIdForUpdate(fixture.paycheckId(), fixture.ownerId());
+    order.verify(entries).findLiveByIdAndOwnerIdForUpdate(fixture.entryId(), fixture.ownerId());
+    order
+        .verify(definitions)
+        .findIncludingDeletedForUpdate(actual.definitionId(), fixture.ownerId());
+  }
+
   private Fixture fixture(UUID paybackId, long lockedEntryVersion) {
     UUID ownerId = UUID.randomUUID();
     UUID paycheckId = UUID.randomUUID();
@@ -248,6 +275,7 @@ class RecurringBillReconciliationLockOrderTests {
         "Netflix",
         RecurringBillAmountMode.FIXED,
         1499L,
+        null,
         null,
         21,
         "Visa",

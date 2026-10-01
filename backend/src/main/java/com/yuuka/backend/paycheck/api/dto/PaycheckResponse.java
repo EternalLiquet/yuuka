@@ -62,7 +62,7 @@ public record PaycheckResponse(
         metrics.postedCount(),
         metrics.processingCount(),
         metrics.notPaidCount(),
-        metrics.requiresAttention(),
+        metrics.requiresAttention() || entries.stream().anyMatch(EntryResponse::amountEstimated),
         spendingBucketPerformance,
         List.copyOf(entries),
         paycheck.getCreatedAt(),

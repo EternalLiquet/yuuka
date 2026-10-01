@@ -22,6 +22,13 @@ public interface JpaRecurringBillDefinitionRepository
   Optional<RecurringBillDefinition> findByIdAndOwnerIdForUpdate(
       @Param("id") UUID id, @Param("ownerId") UUID ownerId);
 
+  Optional<RecurringBillDefinition> findByIdAndOwnerId(UUID id, UUID ownerId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select d from RecurringBillDefinition d where d.id = :id and d.ownerId = :ownerId")
+  Optional<RecurringBillDefinition> findIncludingDeletedForUpdate(
+      @Param("id") UUID id, @Param("ownerId") UUID ownerId);
+
   List<RecurringBillDefinition> findAllByOwnerIdAndDeletedAtIsNullOrderByDueDayAscNameAscIdAsc(
       UUID ownerId);
 

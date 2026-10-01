@@ -18,6 +18,8 @@ describe('committed backend contract', () => {
     ['/api/v1/auth/login', 'post'],
     ['/api/v1/auth/refresh', 'post'],
     ['/api/v1/paychecks', 'post'],
+    ['/api/v1/entries/{entryId}/recurring-bill-actual', 'get'],
+    ['/api/v1/entries/{entryId}/recurring-bill-actual', 'put'],
     ['/api/v1/paychecks/active', 'get'],
     ['/api/v1/paychecks/history', 'get'],
     ['/api/v1/paychecks/{paycheckId}/delete', 'post'],
@@ -101,6 +103,33 @@ describe('committed backend contract', () => {
     expect(contract.components?.schemas?.CreateRecurringBillFromEntryRequest?.required).toEqual(
       expect.arrayContaining(['entryVersion', 'paycheckVersion']),
     );
+  });
+
+  it('describes estimated bills and requires exact selected-bill actual versions', () => {
+    expect(contract.components?.schemas?.RecordRecurringBillActualRequest?.required).toEqual(
+      expect.arrayContaining([
+        'entryVersion',
+        'paycheckVersion',
+        'definitionVersion',
+        'definitionId',
+        'occurrenceDate',
+        'amountMinor',
+      ]),
+    );
+    expect(
+      contract.components?.schemas?.RecurringBillResponse?.properties?.planningAmountMinor?.type,
+    ).toEqual(['integer', 'null']);
+    expect(contract.components?.schemas?.EntryResponse?.properties?.amountEstimated?.type).toBe(
+      'boolean',
+    );
+    expect(
+      contract.components?.schemas?.TemplateApplicationEntryRequest?.properties?.amountEstimated
+        ?.type,
+    ).toBe('boolean');
+    expect(
+      contract.components?.schemas?.RecurringBillActualContextResponse?.properties
+        ?.definitionReviewRequired?.type,
+    ).toBe('boolean');
   });
 
   it('describes fixed and variable recurring bill amounts', () => {

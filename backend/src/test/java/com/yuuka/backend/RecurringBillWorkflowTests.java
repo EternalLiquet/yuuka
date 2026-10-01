@@ -469,6 +469,7 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
             "Changed after snapshot",
             RecurringBillAmountMode.FIXED,
             13000L,
+            null,
             EntryPaymentMethod.MANUAL,
             22,
             "Changed account",
@@ -810,6 +811,7 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
                 definition.path("version").asLong(),
                 LocalDate.parse(occurrenceDate),
                 amountMinor,
+                false,
                 updateTypicalAmount,
                 false,
                 null)));

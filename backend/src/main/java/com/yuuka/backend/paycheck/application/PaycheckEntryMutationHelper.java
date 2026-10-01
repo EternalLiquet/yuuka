@@ -44,6 +44,7 @@ class PaycheckEntryMutationHelper {
         source.sourceRecurringOccurrenceDate());
     entry.setRecurringSource(
         source.sourceRecurringBillDefinitionId(), source.sourceRecurringOccurrenceDate());
+    entry.setAmountEstimated(source.amountEstimated());
     return entry;
   }
 

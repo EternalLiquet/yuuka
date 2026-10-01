@@ -31,6 +31,7 @@ class OpenApiContractTests extends AbstractIntegrationTest {
           "/api/v1/recurring-bills/{definitionId}",
           "/api/v1/recurring-bills/{definitionId}/occurrences/{occurrenceDate}/amount",
           "/api/v1/entries/{entryId}/recurring-bill-link",
+          "/api/v1/entries/{entryId}/recurring-bill-actual",
           "/api/v1/entries/{entryId}/recurring-bill-definition",
           "/api/v1/expense-ledgers",
           "/api/v1/expense-ledgers/{ledgerId}",
@@ -271,6 +272,33 @@ class OpenApiContractTests extends AbstractIntegrationTest {
         "definitionVersion");
     assertRequired(
         generated, "CreateRecurringBillFromEntryRequest", "entryVersion", "paycheckVersion");
+    assertRequired(
+        generated,
+        "RecordRecurringBillActualRequest",
+        "entryVersion",
+        "paycheckVersion",
+        "definitionVersion",
+        "definitionId",
+        "occurrenceDate",
+        "amountMinor");
+    assertThat(
+            generated
+                .path("components")
+                .path("schemas")
+                .path("EntryResponse")
+                .path("properties")
+                .path("amountEstimated")
+                .path("type")
+                .asText())
+        .isEqualTo("boolean");
+    assertThat(
+            generated
+                .path("components")
+                .path("schemas")
+                .path("RecurringBillResponse")
+                .path("properties")
+                .has("planningAmountMinor"))
+        .isTrue();
     assertRequired(generated, "CreateRecurringBillRequest", "amountMode");
     assertRequired(generated, "UpdateRecurringBillRequest", "amountMode");
     assertRequired(generated, "UpdateRecurringBillOccurrenceAmountRequest", "amountMinor");

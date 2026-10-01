@@ -691,7 +691,9 @@ function OccurrenceCard({
         <AppText variant="label">{item.name}</AppText>
         {item.amountMinor == null ? (
           <AppText style={{ color: colors.muted }} variant="caption">
-            Amount not entered
+            {item.planningAmountMinor != null
+              ? `Estimated: ${formatMoney(item.planningAmountMinor, settings.currencyCode)}`
+              : 'Amount not entered'}
           </AppText>
         ) : (
           <AppText variant="money">{formatMoney(item.amountMinor, settings.currencyCode)}</AppText>

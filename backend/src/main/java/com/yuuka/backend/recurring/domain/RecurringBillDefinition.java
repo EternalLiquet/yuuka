@@ -31,6 +31,9 @@ public class RecurringBillDefinition {
   @Column(name = "typical_amount_minor")
   private Long typicalAmountMinor;
 
+  @Column(name = "planning_amount_minor")
+  private Long planningAmountMinor;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "amount_mode", nullable = false, length = 20)
   private RecurringBillAmountMode amountMode;
@@ -118,6 +121,17 @@ public class RecurringBillDefinition {
     this.accountName = accountName;
     this.payee = payee;
     this.notes = notes;
+  }
+
+  public Long getPlanningAmountMinor() {
+    return planningAmountMinor;
+  }
+
+  public void setPlanningAmountMinor(Long amount) {
+    if (amount != null && amount < 0) {
+      throw new IllegalArgumentException("Estimated amount must not be negative.");
+    }
+    planningAmountMinor = amount;
   }
 
   public void updateTypicalAmount(long typicalAmountMinor) {

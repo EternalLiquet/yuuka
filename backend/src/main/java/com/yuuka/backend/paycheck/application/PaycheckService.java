@@ -64,6 +64,7 @@ public class PaycheckService {
   private final SinkingFundService sinkingFundService;
   private final AuditService auditService;
   private final Clock clock;
+  private final RecurringBillEntryReconciliationService recurringReconciliation;
 
   public PaycheckService(
       JpaPaycheckRepository paychecks,
@@ -78,7 +79,8 @@ public class PaycheckService {
       PaybackService paybackService,
       SinkingFundService sinkingFundService,
       AuditService auditService,
-      Clock clock) {
+      Clock clock,
+      RecurringBillEntryReconciliationService recurringReconciliation) {
     this.paychecks = paychecks;
     this.entries = entries;
     this.statusEvents = statusEvents;
@@ -92,6 +94,7 @@ public class PaycheckService {
     this.sinkingFundService = sinkingFundService;
     this.auditService = auditService;
     this.clock = clock;
+    this.recurringReconciliation = recurringReconciliation;
   }
 
   @Transactional
@@ -116,6 +119,7 @@ public class PaycheckService {
   @Transactional
   public PaycheckResponse createFromDraft(UUID ownerId, CreatePaycheckFromDraftRequest request) {
     List<DraftPaycheckEntryRequest> requestedEntries = request.entries();
+    recurringReconciliation.validateDraftEntries(ownerId, requestedEntries);
     PaycheckMetrics proposed =
         responseAssembler.calculate(
             request.amountMinor(),

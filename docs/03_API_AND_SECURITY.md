@@ -346,3 +346,19 @@ Provide documentation for:
 - encrypted off-machine backup,
 - restore procedure,
 - restore verification.
+
+### Estimated recurring bills
+
+Variable definitions expose nullable `planningAmountMinor`; entries expose `amountEstimated`.
+Migration V16 adds these without deriving estimates from historical amounts. Draft recurring entries
+carry expected definition/actual versions and explicit duplicate confirmation. New imports may mark
+an amount as estimated; saving an actual and importing an estimate cannot be combined.
+
+`GET /api/v1/entries/{entryId}/recurring-bill-actual` returns owner-scoped review context for one
+estimated Bill, including a changed/deleted definition. `PUT` at the same path accepts its exact
+source/date and expected definition, occurrence, entry and paycheck versions, actual amount and
+explicit review confirmation when needed. The transaction saves the actual and updates only that
+Bill's amount/estimate marker, preserves status history, audits both changes and retains Payback
+apply/reverse behavior. Allocation failure or stale versions roll back both changes. Definitions
+and future planning amounts are never changed by this action. Reverting V16 requires removing
+estimate-aware code first; do not drop pending estimate state from production data.

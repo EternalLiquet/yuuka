@@ -212,14 +212,21 @@ template.
 6. Create paycheck and open the new paycheck detail.
 
 The duplicate draft loads the authoritative paycheck detail before initialization. It copies live
-entries in saved order, excludes generated `LEFTOVER` and linked recurring Bills, clears Payback assignments with an
-informational count, and does not copy statuses, history, bucket purchases, spent values, IDs, or
-versions. Bills preserve Autopay or Manual Pay and shift due dates by the source due-date offset
-from the source paycheck income date to the new income date. Planned Savings target dates remain
-exact. The draft reports linked recurring omissions and keeps Import recurring Bills prominent;
-duplication never selects or imports an occurrence automatically.
-Failed creation keeps the local draft available for retry, and repeated taps are guarded so one
-successful request creates one paycheck.
+entries in saved order, excludes generated `LEFTOVER`, and clears Payback assignments with an
+informational count. Statuses, history, bucket purchases, spent values, IDs and versions are not
+copied. Ordinary Bills shift due dates by their source offset; Planned Savings target dates remain exact.
+Recurring Bills stay in their original positions and require a bill-date review. Nearby dates come
+from the backend calendar policy; a destination-month suggestion appears only when the source bill
+matched its income month and the destination month differs. Same-month/weekly paychecks require an
+explicit choice. Changing the income date requires reviewing the selection again. Amounts use that
+bill date's actual, then its estimated amount, then a typed estimate. Duplicate assignments require
+confirmation. Failed creation keeps the local draft, and repeated taps create only one paycheck.
+
+Estimated Bills show **Estimated amount · Waiting for the actual bill** and **Enter actual bill**.
+The Actual bill sheet names the selected paycheck and date, explains that future estimates stay
+unchanged, and asks for review if the recurring bill changed or was removed. It preserves typed
+amounts on failure. Success reports money returned to Unallocated or additional money set aside.
+Saving an equal actual still removes the waiting label. Other copies are not changed.
 
 ## Entry editor
 
@@ -326,8 +333,9 @@ an occurrence, or invoking its accessibility edit action, edits the underlying r
 definition. Definition management supports search, active/inactive filtering, create, edit,
 deactivate, reactivate, and delete. Monthly dates shown in the timeline come from the backend's
 clamped calendar policy. The definition editor requires an explicit Fixed or Variable amount mode.
-Fixed shows a required typical amount. Variable hides it, warns before converting an existing Fixed
-definition, and lets each timeline occurrence show `Amount not entered` or a formatted saved amount.
+Fixed shows a required typical amount. Variable shows an optional Estimated amount and warns before
+converting an existing Fixed definition. Home and the timeline distinguish estimates, missing actuals
+and entered actual bill amounts.
 The occurrence action enters or edits that amount without treating a missing value as zero.
 
 Scratch, template, duplicate, and existing-paycheck entry drafts expose Import recurring bills.

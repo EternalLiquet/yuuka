@@ -17,6 +17,7 @@ const formSchema = z
   .object({
     accountName: z.string().max(160),
     amount: z.string(),
+    planningAmount: z.string(),
     amountMode: z.enum(['FIXED', 'VARIABLE']),
     dueDay: z
       .string()
@@ -28,6 +29,13 @@ const formSchema = z
     payee: z.string().max(160),
   })
   .superRefine((values, context) => {
+    if (values.planningAmount.trim() && !canParseMoney(values.planningAmount)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Enter a valid estimated amount.',
+        path: ['planningAmount'],
+      });
+    }
     if (values.amountMode === 'FIXED' && !canParseMoney(values.amount)) {
       context.addIssue({
         code: 'custom',
@@ -84,6 +92,9 @@ export function RecurringBillEditor({
         name: values.name.trim(),
         amountMode: values.amountMode,
         typicalAmountMinor: values.amountMode === 'FIXED' ? parseMoneyToMinor(values.amount) : null,
+        planningAmountMinor: values.planningAmount.trim()
+          ? parseMoneyToMinor(values.planningAmount)
+          : null,
         paymentMethod: values.manualPay ? 'MANUAL' : 'AUTOPAY',
         dueDay: Number(values.dueDay),
         accountName: values.accountName.trim() || null,
@@ -134,9 +145,18 @@ export function RecurringBillEditor({
         />
       ) : (
         <AppText style={{ color: colors.muted }} variant="caption">
-          Amount changes each month. Enter it when you know this month&apos;s Bill.
+          Set aside an estimate now, then enter the actual bill when it arrives.
         </AppText>
       )}
+      {amountMode === 'VARIABLE' ? (
+        <Field
+          control={control}
+          error={errors.planningAmount?.message}
+          keyboardType="decimal-pad"
+          label="Estimated amount (optional)"
+          name="planningAmount"
+        />
+      ) : null}
       <Field
         control={control}
         error={errors.dueDay?.message}
@@ -239,6 +259,12 @@ function defaults(
       definition?.typicalAmountMinor != null || initialValues?.typicalAmountMinor != null
         ? minorToInput(definition?.typicalAmountMinor ?? initialValues!.typicalAmountMinor!)
         : '',
+    planningAmount:
+      definition?.planningAmountMinor != null
+        ? minorToInput(definition.planningAmountMinor)
+        : initialValues?.planningAmountMinor != null
+          ? minorToInput(initialValues.planningAmountMinor)
+          : '',
     dueDay: String(definition?.dueDay ?? initialValues?.dueDay ?? ''),
     manualPay: (definition?.paymentMethod ?? initialValues?.paymentMethod) === 'MANUAL',
     name: definition?.name ?? initialValues?.name ?? '',

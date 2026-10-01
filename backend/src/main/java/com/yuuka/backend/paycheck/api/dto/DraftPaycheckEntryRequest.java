@@ -26,4 +26,8 @@ public record DraftPaycheckEntryRequest(
     UUID paybackId,
     UUID sinkingFundId,
     UUID sourceRecurringBillDefinitionId,
-    LocalDate sourceRecurringOccurrenceDate) {}
+    LocalDate sourceRecurringOccurrenceDate,
+    @PositiveOrZero Long recurringDefinitionVersion,
+    @PositiveOrZero Long occurrenceAmountVersion,
+    boolean amountEstimated,
+    boolean confirmDuplicateOccurrence) {}

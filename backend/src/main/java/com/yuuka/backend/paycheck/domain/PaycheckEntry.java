@@ -79,6 +79,9 @@ public class PaycheckEntry {
   @Column(name = "source_recurring_occurrence_date")
   private LocalDate sourceRecurringOccurrenceDate;
 
+  @Column(name = "amount_estimated", nullable = false)
+  private boolean amountEstimated;
+
   @Column(name = "source_expense_ledger_id")
   private UUID sourceExpenseLedgerId;
 
@@ -168,6 +171,7 @@ public class PaycheckEntry {
     this.paybackId = paybackId;
     this.sinkingFundId = sinkingFundId;
     if (entryType != EntryType.BILL) {
+      amountEstimated = false;
       sourceRecurringBillDefinitionId = null;
       sourceRecurringOccurrenceDate = null;
     }
@@ -180,8 +184,26 @@ public class PaycheckEntry {
     if ((definitionId == null) != (occurrenceDate == null)) {
       throw new IllegalArgumentException("Recurring provenance fields must be supplied together.");
     }
+    if (definitionId == null) amountEstimated = false;
     sourceRecurringBillDefinitionId = definitionId;
     sourceRecurringOccurrenceDate = occurrenceDate;
+  }
+
+  public boolean isAmountEstimated() {
+    return amountEstimated;
+  }
+
+  public void setAmountEstimated(boolean estimated) {
+    if (estimated && (entryType != EntryType.BILL || sourceRecurringBillDefinitionId == null)) {
+      throw new IllegalStateException("Only linked recurring Bills can have an estimated amount.");
+    }
+    amountEstimated = estimated;
+  }
+
+  public void recordActualAmount(long amount) {
+    if (amount < 0) throw new IllegalArgumentException("Amount must not be negative.");
+    amountMinor = amount;
+    amountEstimated = false;
   }
 
   public void setExpenseLedgerSource(UUID ledgerId) {

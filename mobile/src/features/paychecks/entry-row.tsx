@@ -11,6 +11,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Entry } from '@/api/contracts';
 import { AppText } from '@/components/app-text';
 import { IconButton } from '@/components/icon-button';
+import { Button } from '@/components/button';
 import { StatusBadge } from '@/components/status-badge';
 import { formatMoney } from '@/domain/money';
 import { useSettings } from '@/settings/settings-provider';
@@ -29,6 +30,7 @@ type EntryRowProps = {
   isFirst?: boolean;
   isLast?: boolean;
   onEdit: () => void;
+  onActualBill?: () => void;
   onBucketActivity?: () => void;
   onHistory?: () => void;
   onMoveDown?: () => void;
@@ -47,6 +49,7 @@ export function EntryRow({
   isFirst,
   isLast,
   onEdit,
+  onActualBill,
   onBucketActivity,
   onHistory,
   onMoveDown,
@@ -99,6 +102,14 @@ export function EntryRow({
           <AppText variant="money">{amount}</AppText>
         </View>
 
+        {entry.amountEstimated ? (
+          <View style={{ gap: 6 }}>
+            <AppText variant="caption">Estimated amount · Waiting for the actual bill</AppText>
+            {onActualBill ? (
+              <Button label="Enter actual bill" onPress={onActualBill} variant="secondary" />
+            ) : null}
+          </View>
+        ) : null}
         <View style={styles.detailRow}>
           <Pressable
             accessibilityLabel={`Change status for ${entry.name}`}

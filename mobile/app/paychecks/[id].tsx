@@ -39,6 +39,7 @@ import {
 } from '@/components/states';
 import { formatMoney } from '@/domain/money';
 import { BucketTransactionSheet } from '@/features/paychecks/bucket-transaction-sheet';
+import { ActualBillSheet } from '@/features/recurring-bills/actual-bill-sheet';
 import { EntryEditor } from '@/features/paychecks/entry-editor';
 import { filterAndSortEntries, EntrySort } from '@/features/paychecks/entry-list';
 import { EntryRow } from '@/features/paychecks/entry-row';
@@ -109,6 +110,7 @@ export default function PaycheckDetailScreen() {
   const [direction, setDirection] = useState<'asc' | 'desc'>('asc');
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [entryEditorVisible, setEntryEditorVisible] = useState(false);
+  const [actualBillId, setActualBillId] = useState<string | null>(null);
   const [statusEntry, setStatusEntry] = useState<Entry | null>(null);
   const [historyEntry, setHistoryEntry] = useState<Entry | null>(null);
   const [bucketEntryId, setBucketEntryId] = useState<string | null>(null);
@@ -597,6 +599,11 @@ export default function PaycheckDetailScreen() {
                   setEditingEntryId(params.item.id);
                   setEntryEditorVisible(true);
                 }}
+                onActualBill={
+                  params.item.amountEstimated && paycheck.state === 'ACTIVE'
+                    ? () => setActualBillId(params.item.id)
+                    : undefined
+                }
                 onMoveDown={() => moveEntry(index, 1)}
                 onMoveUp={() => moveEntry(index, -1)}
                 onHistory={() => setHistoryEntry(params.item)}
@@ -615,6 +622,15 @@ export default function PaycheckDetailScreen() {
         />
       </Screen>
 
+      {actualBillId && paycheck.entries.find((entry) => entry.id === actualBillId) ? (
+        <ActualBillSheet
+          key={actualBillId}
+          entry={paycheck.entries.find((entry) => entry.id === actualBillId)!}
+          paycheck={paycheck}
+          onChanged={invalidate}
+          onClose={() => setActualBillId(null)}
+        />
+      ) : null}
       <BucketTransactionSheet
         entry={selectedBucketEntry}
         onChanged={invalidate}
@@ -693,6 +709,7 @@ export default function PaycheckDetailScreen() {
                 definitionVersion: item.definitionVersion,
                 occurrenceDate: item.occurrenceDate,
                 amountMinor: item.amountMinor,
+                amountEstimated: item.amountEstimated,
                 occurrenceAmountVersion: item.occurrenceAmountVersion,
                 saveOccurrenceAmount: item.saveOccurrenceAmount,
                 updateTypicalAmount: item.updateTypicalAmount,

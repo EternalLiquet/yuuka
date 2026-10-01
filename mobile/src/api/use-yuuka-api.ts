@@ -22,6 +22,7 @@ import {
   rollingSpendingBucketPerformanceSchema,
   spendingBucketInsightsSchema,
   recurringBillListSchema,
+  recurringBillActualContextSchema,
   recurringBillOccurrenceAmountSchema,
   recurringBillSchema,
   recurringBillTimelineSchema,
@@ -57,6 +58,10 @@ export type EntryPayload = {
   targetMinor?: number | null;
   sourceRecurringBillDefinitionId?: string | null;
   sourceRecurringOccurrenceDate?: string | null;
+  recurringDefinitionVersion?: number;
+  occurrenceAmountVersion?: number | null;
+  amountEstimated?: boolean;
+  confirmDuplicateOccurrence?: boolean;
   version?: number;
 };
 
@@ -69,11 +74,13 @@ export type RecurringBillPayload = {
   payee?: string | null;
   paymentMethod?: EntryPaymentMethod;
   typicalAmountMinor: number | null;
+  planningAmountMinor?: number | null;
   version?: number;
 };
 
 export type RecurringBillImportPayload = {
   amountMinor: number;
+  amountEstimated?: boolean;
   definitionId: string;
   definitionVersion: number;
   occurrenceDate: string;
@@ -193,6 +200,21 @@ export function useYuukaApi() {
           { paycheckVersion, items },
           paycheckSchema,
         ),
+      recurringBillActualContext: (entryId: string) =>
+        get(`/entries/${entryId}/recurring-bill-actual`, recurringBillActualContextSchema),
+      recordRecurringBillActual: (
+        entryId: string,
+        body: {
+          definitionId: string;
+          definitionVersion: number;
+          occurrenceDate: string;
+          occurrenceAmountVersion: number | null;
+          entryVersion: number;
+          paycheckVersion: number;
+          amountMinor: number;
+          confirmDefinitionChanges: boolean;
+        },
+      ) => send(`/entries/${entryId}/recurring-bill-actual`, 'PUT', body, paycheckSchema),
       linkRecurringBill: (entryId: string, body: LinkRecurringBillPayload) =>
         send(`/entries/${entryId}/recurring-bill-link`, 'PUT', body, paycheckSchema),
       unlinkRecurringBill: (entryId: string, entryVersion: number, paycheckVersion: number) =>

@@ -31,6 +31,7 @@ import {
   draftTotalMinor,
   TemplateApplicationDraftEntry,
 } from '@/features/templates/application-draft';
+import { DuplicateRecurringBill } from '@/features/recurring-bills/duplicate-recurring-bill';
 import { ImportRecurringBillsSheet } from '@/features/recurring-bills/import-recurring-bills-sheet';
 import { TemplateEntryEditor } from '@/features/templates/template-entry-editor';
 import type { TemplateEntryEditorEntry } from '@/features/templates/template-entry-editor';
@@ -56,7 +57,6 @@ export default function DuplicatePaycheckScreen() {
   const [draftEntries, setDraftEntries] = useState<TemplateApplicationDraftEntry[]>([]);
   const [clearedPaybackCount, setClearedPaybackCount] = useState(0);
   const [omittedLeftoverCount, setOmittedLeftoverCount] = useState(0);
-  const [omittedRecurringBillCount, setOmittedRecurringBillCount] = useState(0);
   const [editingDraftEntry, setEditingDraftEntry] = useState<TemplateApplicationDraftEntry | null>(
     null,
   );
@@ -103,7 +103,6 @@ export default function DuplicatePaycheckScreen() {
     setDraftEntries(draft.entries);
     setClearedPaybackCount(draft.clearedPaybackCount);
     setOmittedLeftoverCount(draft.omittedLeftoverCount);
-    setOmittedRecurringBillCount(draft.omittedRecurringBillCount);
     setSourceInitialized(true);
   }, [query.data, query.isFetchedAfterMount, query.isSuccess, reset]);
 
@@ -132,13 +131,36 @@ export default function DuplicatePaycheckScreen() {
       ]);
       router.replace(`/paychecks/${paycheck.id}`);
     },
+    onError: () => {
+      setDraftEntries((current) =>
+        current.map((entry) =>
+          entry.sourceRecurringBillDefinitionId
+            ? { ...entry, reviewedIncomeDate: undefined, confirmDuplicateOccurrence: false }
+            : entry,
+        ),
+      );
+      return queryClient.invalidateQueries({ queryKey: ['recurring-bills'] });
+    },
     onSettled: () => {
       submitInFlight.current = false;
       setSubmitLocked(false);
     },
   });
 
-  const createDisabled = overAllocated || isSubmitting || submitLocked || mutation.isPending;
+  const needsBillReview = draftEntries.some(
+    (entry) =>
+      entry.sourceRecurringBillDefinitionId &&
+      (!entry.sourceRecurringOccurrenceDate ||
+        entry.reviewedIncomeDate !== incomeDate ||
+        (entry.duplicateConfirmationRequired && !entry.confirmDuplicateOccurrence)),
+  );
+  const createDisabled =
+    needsBillReview ||
+    overAllocated ||
+    isSubmitting ||
+    submitLocked ||
+    mutation.isPending ||
+    mutation.isSuccess;
   const sourceName = sourceInitialized ? (query.data?.name ?? 'paycheck') : 'paycheck';
 
   function continueToEntries(values: PaycheckFormValues) {
@@ -260,7 +282,11 @@ export default function DuplicatePaycheckScreen() {
               draftEntries={draftEntries}
               incomeDate={incomeDate}
               omittedLeftoverCount={omittedLeftoverCount}
-              omittedRecurringBillCount={omittedRecurringBillCount}
+              onChange={(next) =>
+                setDraftEntries((current) =>
+                  current.map((entry) => (entry.clientId === next.clientId ? next : entry)),
+                )
+              }
               onAdd={() => {
                 setEditingDraftEntry(null);
                 setDraftEditorVisible(true);
@@ -310,10 +336,13 @@ export default function DuplicatePaycheckScreen() {
         onClose={() => setDraftEditorVisible(false)}
         onSubmit={(payload) => {
           const next: TemplateApplicationDraftEntry = {
+            ...editingDraftEntry,
             accountName: payload.accountName,
             amountMinor: payload.defaultAmountMinor,
             clientId: editingDraftEntry?.clientId ?? newDraftClientId(),
-            defaultDueOffsetDays: payload.defaultDueOffsetDays,
+            defaultDueOffsetDays: editingDraftEntry?.sourceRecurringBillDefinitionId
+              ? null
+              : payload.defaultDueOffsetDays,
             entryType: payload.entryType,
             name: payload.name,
             notes: payload.notes,
@@ -345,6 +374,7 @@ export default function DuplicatePaycheckScreen() {
       <ImportRecurringBillsSheet
         incomeDate={incomeDate}
         localDraft
+        existingDraftEntries={draftEntries}
         onClose={() => setRecurringImportVisible(false)}
         onImport={(items) => {
           setDraftEntries((current) => [...current, ...draftEntriesFromRecurringBills(items)]);
@@ -363,8 +393,8 @@ function DraftSummary({
   draftEntries,
   incomeDate,
   omittedLeftoverCount,
-  omittedRecurringBillCount,
   onAdd,
+  onChange,
   onEdit,
   onImport,
   onMove,
@@ -377,8 +407,8 @@ function DraftSummary({
   draftEntries: TemplateApplicationDraftEntry[];
   incomeDate: string;
   omittedLeftoverCount: number;
-  omittedRecurringBillCount: number;
   onAdd: () => void;
+  onChange: (entry: TemplateApplicationDraftEntry) => void;
   onEdit: (entry: TemplateApplicationDraftEntry) => void;
   onImport: () => void;
   onMove: (index: number, offset: number) => void;
@@ -413,13 +443,6 @@ function DraftSummary({
           excluded.
         </AppText>
       ) : null}
-      {omittedRecurringBillCount > 0 ? (
-        <AppText style={{ color: colors.muted }} variant="caption">
-          {`${omittedRecurringBillCount} recurring Bill${
-            omittedRecurringBillCount === 1 ? ' was' : 's were'
-          } not copied. Add the occurrences that belong in this paycheck using Import recurring Bills.`}
-        </AppText>
-      ) : null}
       <View style={styles.actions}>
         <Button icon={Plus} label="Add draft entry" onPress={onAdd} variant="secondary" />
         <Button
@@ -438,6 +461,22 @@ function DraftSummary({
             <AppText style={{ color: colors.muted }} variant="caption">
               {entryDescription(entry, incomeDate)}
             </AppText>
+            {entry.sourceRecurringBillDefinitionId ? (
+              <DuplicateRecurringBill
+                entry={entry}
+                incomeDate={incomeDate}
+                onChange={onChange}
+                duplicateInDraft={(date) =>
+                  draftEntries.some(
+                    (other) =>
+                      other.clientId !== entry.clientId &&
+                      other.sourceRecurringBillDefinitionId ===
+                        entry.sourceRecurringBillDefinitionId &&
+                      other.sourceRecurringOccurrenceDate === date,
+                  )
+                }
+              />
+            ) : null}
           </View>
           <AppText variant="caption">
             {formatMoney(entry.amountMinor, settings.currencyCode)}
@@ -463,6 +502,7 @@ function DraftSummary({
               accessibilityLabel={`Edit ${entry.name}`}
               icon={Pencil}
               label={`Edit ${entry.name}`}
+              disabled={Boolean(entry.sourceRecurringBillDefinitionId)}
               onPress={() => onEdit(entry)}
               variant="ghost"
             />

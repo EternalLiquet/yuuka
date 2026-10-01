@@ -130,10 +130,22 @@ describe('template application draft helpers', () => {
 
     const draft = draftEntriesFromPaycheck(source);
 
-    expect(draft.omittedRecurringBillCount).toBe(1);
+    expect(draft.omittedRecurringBillCount).toBe(0);
     expect(draft.omittedLeftoverCount).toBe(1);
-    expect(draft.entries.map((entry) => entry.name)).toEqual(['Rent', 'Groceries', 'Insurance']);
-    expect(draft.entries.some((entry) => entry.sourceRecurringBillDefinitionId)).toBe(false);
+    expect(draft.entries.map((entry) => entry.name)).toEqual([
+      'Rent',
+      'Electric',
+      'Groceries',
+      'Insurance',
+    ]);
+    expect(draft.entries[1]).toEqual(
+      expect.objectContaining({
+        sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+        sourceRecurringOccurrenceDate: null,
+        amountMinor: 0,
+      }),
+    );
+    expect(source.entries[1].sourceRecurringOccurrenceDate).toBe('2026-07-21');
   });
 });
 

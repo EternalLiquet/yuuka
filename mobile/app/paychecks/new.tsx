@@ -300,6 +300,9 @@ export default function NewPaycheckScreen() {
         onClose={() => setDraftEditorVisible(false)}
         onSubmit={(payload) => {
           const next: TemplateApplicationDraftEntry = {
+            ...editingDraftEntry,
+            amountEstimated:
+              payload.entryType === 'BILL' ? editingDraftEntry?.amountEstimated : false,
             accountName: payload.accountName,
             amountMinor: payload.defaultAmountMinor,
             clientId: editingDraftEntry?.clientId ?? newDraftClientId(),
@@ -335,6 +338,7 @@ export default function NewPaycheckScreen() {
       <ImportRecurringBillsSheet
         incomeDate={incomeDate}
         localDraft
+        existingDraftEntries={draftEntries}
         onClose={() => setRecurringImportVisible(false)}
         onImport={(items) => {
           setDraftEntries((current) => [...current, ...draftEntriesFromRecurringBills(items)]);
