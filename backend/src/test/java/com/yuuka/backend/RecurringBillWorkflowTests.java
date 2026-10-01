@@ -253,7 +253,9 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
     assertThat(oneTime.path("entries").get(0).path("amountMinor").asLong()).isEqualTo(11822);
     assertThat(
             jdbcTemplate.queryForObject(
-                "select count(*) from recurring_bill_occurrence_amounts", Long.class))
+                "select count(*) from recurring_bill_occurrence_amounts where definition_id = ?",
+                Long.class,
+                UUID.fromString(definition.path("id").asText())))
         .isZero();
 
     JsonNode savedImport =
