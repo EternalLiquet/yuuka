@@ -113,7 +113,9 @@ export default function RecurringBillDetailScreen() {
             </>
           ) : (
             <AppText style={{ color: colors.muted }} variant="caption">
-              Variable amount · Enter each month when known
+              {definition.planningAmountMinor != null
+                ? `Estimated amount: ${formatMoney(definition.planningAmountMinor, settings.currencyCode)} · Enter the actual bill when it arrives`
+                : 'Variable amount · Enter each month when known'}
             </AppText>
           )}
         </View>

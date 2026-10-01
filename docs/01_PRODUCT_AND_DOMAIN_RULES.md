@@ -122,7 +122,9 @@ A recurring Bill definition is an owner-scoped planning source, not a paycheck e
 automatic payment. The first supported recurrence is monthly. A definition stores its name,
 amount mode, Bill payment method, due day, optional account/payee/notes, and active state. Fixed
 definitions require a typical amount. Variable definitions have no effective typical amount;
-their amount is entered for each occurrence.
+their actual amount is entered for each occurrence. They may also store an optional estimated
+amount for planning. The estimate is separate from dormant Fixed amounts and is never inferred
+from an earlier actual bill.
 
 Monthly occurrences are derived dynamically. If the configured due day does not exist in a month,
 the occurrence uses that month's final calendar day, including leap-year February. Occurrences are
@@ -130,8 +132,9 @@ not persisted as jobs or materialized future records.
 
 Variable occurrence amounts are sparse owner-scoped records created only when the user enters an
 amount. Missing and zero are distinct states. They are version-guarded, remain associated with the
-exact occurrence date across definition edits or lifecycle changes, and never alter an already
-imported Bill snapshot.
+exact occurrence date across definition edits or lifecycle changes. Saving an amount from the timeline
+alone never alters an imported Bill snapshot. The explicit **Actual bill** action on one estimated
+paycheck Bill saves that actual and updates only that selected Bill in one transaction.
 
 Importing an occurrence creates an ordinary independent `BILL` snapshot in a paycheck. The snapshot
 starts Not Paid, reserves its full amount, preserves the selected occurrence date and optional
@@ -153,6 +156,21 @@ The owner controls the suggestion window in days, from 1 through 31, with a defa
 occurrences are derived relative to the paycheck income date. Selection is always explicit and the
 user may override only this paycheck's amount or also update a Fixed definition's typical amount.
 For Variable definitions, the user may import a one-time amount or save it for that occurrence.
+
+### Estimated bills and actual amounts
+
+New Variable bill selections use the exact date's actual amount, then the configured estimated
+amount, then explicit amount entry. Missing and zero remain distinct. An estimated paycheck Bill
+reserves its full amount and visibly waits for the actual bill, even if Posted. It keeps the paycheck
+Active and prevents closing until its actual amount is entered. Ordinary Bill edits leave that
+marker in place. Existing Bills are not backfilled with estimates.
+
+Entering the actual bill preserves its ID, position, status, details and immutable status history.
+The selected Bill, sparse actual, allocation and applicable Payback effects update atomically with
+version checks and audit events. Insufficient funds or stale data roll back everything. Lower actuals
+return the difference to Unallocated; equal actuals still clear the estimate. Other copies and future
+estimates stay unchanged. Due-day changes, deactivation, deletion and conversion to Fixed retain old
+estimates and require explicit review before recording actuals for their original dates.
 
 ## Entry types
 

@@ -253,7 +253,9 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
     assertThat(oneTime.path("entries").get(0).path("amountMinor").asLong()).isEqualTo(11822);
     assertThat(
             jdbcTemplate.queryForObject(
-                "select count(*) from recurring_bill_occurrence_amounts", Long.class))
+                "select count(*) from recurring_bill_occurrence_amounts where definition_id = ?",
+                Long.class,
+                UUID.fromString(definition.path("id").asText())))
         .isZero();
 
     JsonNode savedImport =
@@ -469,6 +471,7 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
             "Changed after snapshot",
             RecurringBillAmountMode.FIXED,
             13000L,
+            null,
             EntryPaymentMethod.MANUAL,
             22,
             "Changed account",
@@ -810,6 +813,7 @@ class RecurringBillWorkflowTests extends AbstractIntegrationTest {
                 definition.path("version").asLong(),
                 LocalDate.parse(occurrenceDate),
                 amountMinor,
+                false,
                 updateTypicalAmount,
                 false,
                 null)));

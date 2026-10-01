@@ -6,6 +6,7 @@ import com.yuuka.backend.common.api.BusinessRuleException;
 import com.yuuka.backend.common.api.ConflictException;
 import com.yuuka.backend.common.api.ResourceNotFoundException;
 import com.yuuka.backend.payback.application.PaybackService;
+import com.yuuka.backend.paycheck.api.dto.DraftPaycheckEntryRequest;
 import com.yuuka.backend.paycheck.api.dto.EntryResponse;
 import com.yuuka.backend.paycheck.api.dto.PaycheckResponse;
 import com.yuuka.backend.paycheck.domain.AllocationLine;
@@ -17,6 +18,8 @@ import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckRepository;
 import com.yuuka.backend.recurring.api.dto.CreateRecurringBillFromEntryRequest;
 import com.yuuka.backend.recurring.api.dto.LinkRecurringBillRequest;
+import com.yuuka.backend.recurring.api.dto.RecordRecurringBillActualRequest;
+import com.yuuka.backend.recurring.api.dto.RecurringBillActualContextResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillOccurrenceAmountResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillResponse;
 import com.yuuka.backend.recurring.domain.MonthlyOccurrencePolicy;
@@ -83,10 +86,198 @@ public class RecurringBillEntryReconciliationService {
     this.clock = clock;
   }
 
+  @Transactional(readOnly = true)
+  public RecurringBillActualContextResponse actualContext(UUID ownerId, UUID entryId) {
+    PaycheckEntry entry =
+        entries
+            .findByIdAndOwnerIdAndDeletedAtIsNull(entryId, ownerId)
+            .orElseThrow(ResourceNotFoundException::new);
+    requireEstimate(entry);
+    RecurringBillDefinition definition =
+        definitions
+            .findByIdAndOwnerId(entry.getSourceRecurringBillDefinitionId(), ownerId)
+            .orElseThrow(ResourceNotFoundException::new);
+    RecurringBillOccurrenceAmount actual =
+        occurrenceAmounts
+            .findByOwnerIdAndDefinitionIdAndOccurrenceDate(
+                ownerId, definition.getId(), entry.getSourceRecurringOccurrenceDate())
+            .orElse(null);
+    return new RecurringBillActualContextResponse(
+        definition.getId(),
+        definition.getVersion(),
+        entry.getSourceRecurringOccurrenceDate(),
+        actual == null ? null : actual.getVersion(),
+        actual == null ? null : actual.getAmountMinor(),
+        definitionNeedsReview(definition, entry));
+  }
+
+  @Transactional
+  public PaycheckResponse recordActual(
+      UUID ownerId, UUID entryId, RecordRecurringBillActualRequest request) {
+    LockedEntry locked =
+        lockEntry(ownerId, entryId, request.entryVersion(), request.paycheckVersion());
+    PaycheckEntry entry = locked.entry();
+    requireEstimate(entry);
+    if (!request.definitionId().equals(entry.getSourceRecurringBillDefinitionId())
+        || !request.occurrenceDate().equals(entry.getSourceRecurringOccurrenceDate())) {
+      throw new ConflictException("This bill changed. Refresh it and try again.");
+    }
+    RecurringBillDefinition definition =
+        definitions
+            .findIncludingDeletedForUpdate(request.definitionId(), ownerId)
+            .orElseThrow(ResourceNotFoundException::new);
+    validations.assertVersion(definition.getVersion(), request.definitionVersion());
+    if (definitionNeedsReview(definition, entry) && !request.confirmDefinitionChanges()) {
+      throw new BusinessRuleException(
+          "This recurring bill changed. Review this bill before saving its actual amount.");
+    }
+    RecurringBillOccurrenceAmount actual =
+        occurrenceAmounts
+            .findForUpdate(ownerId, definition.getId(), request.occurrenceDate())
+            .orElse(null);
+    if (!Objects.equals(
+        actual == null ? null : actual.getVersion(), request.occurrenceAmountVersion())) {
+      throw new ConflictException("The actual bill amount changed. Refresh it and try again.");
+    }
+    assertAllocation(locked, request.amountMinor());
+    EntryResponse before = responseAssembler.toEntryResponse(entry);
+    RecurringBillOccurrenceAmountResponse actualBefore =
+        actual == null ? null : RecurringBillOccurrenceAmountResponse.from(actual);
+    if (actual == null)
+      actual =
+          new RecurringBillOccurrenceAmount(
+              ownerId, definition.getId(), request.occurrenceDate(), request.amountMinor());
+    else actual.updateAmount(request.amountMinor());
+    actual = occurrenceAmounts.saveAndFlush(actual);
+    long previousAmount = entry.getAmountMinor();
+    entry.recordActualAmount(request.amountMinor());
+    Instant now = clock.instant();
+    paybackService.syncAfterEntryUpdate(
+        ownerId, entry, entry.getPaybackId(), previousAmount, entry.getStatus(), now);
+    locked.paycheck().touch(now);
+    entries.flush();
+    auditService.append(
+        ownerId,
+        "RECURRING_BILL_OCCURRENCE_AMOUNT",
+        actual.getId(),
+        "ACTUAL_RECORDED_FROM_PAYCHECK",
+        null,
+        actualBefore,
+        RecurringBillOccurrenceAmountResponse.from(actual),
+        Map.of("entryId", entryId));
+    auditService.append(
+        ownerId,
+        "PAYCHECK_ENTRY",
+        entryId,
+        "ACTUAL_AMOUNT_RECORDED",
+        null,
+        before,
+        responseAssembler.toEntryResponse(entry),
+        Map.of("paycheckId", locked.paycheck().getId()));
+    lifecycleTransitions.closeAutomaticallyIfComplete(
+        ownerId,
+        locked.paycheck(),
+        locked.liveEntries(),
+        now,
+        ownerLocalDateService.currentDate(ownerId));
+    return responseAssembler.toResponse(locked.paycheck(), locked.liveEntries());
+  }
+
+  private void requireEstimate(PaycheckEntry entry) {
+    if (!entry.isAmountEstimated()) {
+      throw new BusinessRuleException("This bill is not waiting for an actual amount.");
+    }
+  }
+
+  private boolean definitionNeedsReview(RecurringBillDefinition definition, PaycheckEntry entry) {
+    return definition.getDeletedAt() != null
+        || !definition.isActive()
+        || definition.getAmountMode() != RecurringBillAmountMode.VARIABLE
+        || !occurrencePolicy
+            .occurrence(
+                YearMonth.from(entry.getSourceRecurringOccurrenceDate()), definition.getDueDay())
+            .equals(entry.getSourceRecurringOccurrenceDate());
+  }
+
+  // Called inside paycheck creation, before any draft entries are persisted.
+  public void validateDraftEntries(UUID ownerId, List<DraftPaycheckEntryRequest> draft) {
+    draft.stream()
+        .map(DraftPaycheckEntryRequest::paybackId)
+        .filter(Objects::nonNull)
+        .distinct()
+        .sorted()
+        .forEach(id -> paybackService.lockForRecurringReconciliation(ownerId, id));
+    Map<UUID, RecurringBillDefinition> loaded = new LinkedHashMap<>();
+    draft.stream()
+        .map(DraftPaycheckEntryRequest::sourceRecurringBillDefinitionId)
+        .filter(Objects::nonNull)
+        .distinct()
+        .sorted()
+        .forEach(
+            id ->
+                loaded.put(
+                    id,
+                    definitions
+                        .findByIdAndOwnerIdForUpdate(id, ownerId)
+                        .orElseThrow(ResourceNotFoundException::new)));
+    java.util.Set<String> selected = new java.util.HashSet<>();
+    for (DraftPaycheckEntryRequest item : draft) {
+      UUID id = item.sourceRecurringBillDefinitionId();
+      if (id == null) {
+        if (item.amountEstimated())
+          throw new BusinessRuleException("Choose a recurring bill for this estimate.");
+        continue;
+      }
+      RecurringBillDefinition definition = loaded.get(id);
+      requireActive(definition);
+      if (item.sourceRecurringOccurrenceDate() == null || item.entryType() != EntryType.BILL) {
+        throw new BusinessRuleException("Choose the bill date before creating this paycheck.");
+      }
+      validateOccurrence(definition.getDueDay(), item.sourceRecurringOccurrenceDate());
+      if (item.recurringDefinitionVersion() != null)
+        validations.assertVersion(definition.getVersion(), item.recurringDefinitionVersion());
+      requireDuplicateConfirmation(
+          ownerId,
+          null,
+          id,
+          item.sourceRecurringOccurrenceDate(),
+          item.confirmDuplicateOccurrence());
+      String key = id + ":" + item.sourceRecurringOccurrenceDate();
+      if (!selected.add(key) && !item.confirmDuplicateOccurrence()) {
+        throw new BusinessRuleException(
+            "This bill is already in this paycheck. Confirm another copy to continue.");
+      }
+      RecurringBillOccurrenceAmount actual =
+          occurrenceAmounts
+              .findForUpdate(ownerId, id, item.sourceRecurringOccurrenceDate())
+              .orElse(null);
+      if (item.recurringDefinitionVersion() != null) {
+        if (!Objects.equals(
+            actual == null ? null : actual.getVersion(), item.occurrenceAmountVersion())) {
+          throw new ConflictException("The bill amount changed. Review it and try again.");
+        }
+        boolean estimated =
+            definition.getAmountMode() == RecurringBillAmountMode.VARIABLE && actual == null;
+        if (item.amountEstimated() != estimated) {
+          throw new BusinessRuleException(
+              "Review whether this bill still needs its actual amount.");
+        }
+      }
+      if (item.amountEstimated()
+          && (definition.getAmountMode() != RecurringBillAmountMode.VARIABLE || actual != null)) {
+        throw new ConflictException("This bill now has an actual amount. Review it and try again.");
+      }
+    }
+  }
+
   @Transactional
   public PaycheckResponse link(UUID ownerId, UUID entryId, LinkRecurringBillRequest request) {
     LockedEntry locked =
         lockEntry(ownerId, entryId, request.entryVersion(), request.paycheckVersion());
+    if (locked.entry().isAmountEstimated()) {
+      throw new BusinessRuleException(
+          "Enter the actual bill amount before changing its recurring bill link.");
+    }
     RecurringBillDefinition definition =
         definitions
             .findByIdAndOwnerIdForUpdate(request.definitionId(), ownerId)
@@ -124,19 +315,20 @@ public class RecurringBillEntryReconciliationService {
     assertAllocation(locked, amountMinor);
 
     RecurringBillDefinition definition =
-        definitions.saveAndFlush(
-            new RecurringBillDefinition(
-                ownerId,
-                request.name().trim(),
-                request.amountMode(),
-                request.typicalAmountMinor(),
-                request.paymentMethod() == null
-                    ? com.yuuka.backend.paycheck.domain.EntryPaymentMethod.AUTOPAY
-                    : request.paymentMethod(),
-                request.dueDay(),
-                validations.normalizeOptional(request.accountName()),
-                validations.normalizeOptional(request.payee()),
-                validations.normalizeOptional(request.notes())));
+        new RecurringBillDefinition(
+            ownerId,
+            request.name().trim(),
+            request.amountMode(),
+            request.typicalAmountMinor(),
+            request.paymentMethod() == null
+                ? com.yuuka.backend.paycheck.domain.EntryPaymentMethod.AUTOPAY
+                : request.paymentMethod(),
+            request.dueDay(),
+            validations.normalizeOptional(request.accountName()),
+            validations.normalizeOptional(request.payee()),
+            validations.normalizeOptional(request.notes()));
+    definition.setPlanningAmountMinor(request.planningAmountMinor());
+    definitions.saveAndFlush(definition);
     RecurringBillResponse definitionAfter = RecurringBillResponse.from(definition);
     if (request.amountMode() == RecurringBillAmountMode.VARIABLE) {
       RecurringBillOccurrenceAmount occurrenceAmount =
@@ -178,6 +370,10 @@ public class RecurringBillEntryReconciliationService {
       UUID ownerId, UUID entryId, long entryVersion, long paycheckVersion) {
     LockedEntry locked = lockEntry(ownerId, entryId, entryVersion, paycheckVersion);
     PaycheckEntry entry = locked.entry();
+    if (entry.isAmountEstimated()) {
+      throw new BusinessRuleException(
+          "Enter the actual bill amount before removing its recurring bill link.");
+    }
     EntryResponse before = responseAssembler.toEntryResponse(entry);
     RecurringSource previous = RecurringSource.from(entry);
     if (previous.definitionId() == null) {
@@ -336,7 +532,7 @@ public class RecurringBillEntryReconciliationService {
   private void validateOccurrence(int dueDay, LocalDate occurrenceDate) {
     LocalDate expected = occurrencePolicy.occurrence(YearMonth.from(occurrenceDate), dueDay);
     if (!expected.equals(occurrenceDate)) {
-      throw new BusinessRuleException("The recurring Bill occurrence date is invalid.");
+      throw new BusinessRuleException("Choose a valid bill date.");
     }
   }
 
@@ -375,7 +571,7 @@ public class RecurringBillEntryReconciliationService {
     if (!assignments.isEmpty()) {
       throw new BusinessRuleException(
           "RECURRING_OCCURRENCE_ALREADY_ASSIGNED",
-          "This recurring Bill occurrence is already assigned. Confirm another assignment to continue.",
+          "This bill is already in another paycheck. Confirm another copy to continue.",
           Map.of(
               "definitionId", definitionId,
               "occurrenceDate", occurrenceDate,

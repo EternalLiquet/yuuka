@@ -38,6 +38,7 @@ export const entrySchema = z.object({
   paymentMethod: entryPaymentMethodSchema.nullable(),
   name: z.string(),
   amountMinor: minor.nonnegative(),
+  amountEstimated: z.boolean().optional(),
   status: entryStatusSchema,
   position: z.number().int().nonnegative(),
   dueDate: date.nullable(),
@@ -469,6 +470,7 @@ export const recurringBillSchema = z.object({
   name: z.string(),
   amountMode: recurringBillAmountModeSchema,
   typicalAmountMinor: minor.nonnegative().nullable(),
+  planningAmountMinor: minor.nonnegative().nullable().optional(),
   paymentMethod: entryPaymentMethodSchema,
   recurrenceType: recurringBillRecurrenceTypeSchema,
   dueDay: z.number().int().min(1).max(31),
@@ -498,6 +500,7 @@ export const recurringBillOccurrenceSchema = z.object({
   name: z.string(),
   amountMode: recurringBillAmountModeSchema,
   typicalAmountMinor: minor.nonnegative().nullable(),
+  planningAmountMinor: minor.nonnegative().nullable().optional(),
   amountMinor: minor.nonnegative().nullable(),
   amountEntered: z.boolean(),
   occurrenceAmountVersion: z.number().int().nonnegative().nullable(),
@@ -509,6 +512,15 @@ export const recurringBillOccurrenceSchema = z.object({
   imports: z.array(recurringBillImportSummarySchema),
 });
 export type RecurringBillOccurrence = z.infer<typeof recurringBillOccurrenceSchema>;
+
+export const recurringBillActualContextSchema = z.object({
+  definitionId: uuid,
+  definitionVersion: z.number().int().nonnegative(),
+  occurrenceDate: date,
+  occurrenceAmountVersion: z.number().int().nonnegative().nullable(),
+  actualAmountMinor: minor.nonnegative().nullable(),
+  definitionReviewRequired: z.boolean(),
+});
 
 export const recurringBillOccurrenceAmountSchema = z.object({
   definitionId: uuid,

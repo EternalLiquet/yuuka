@@ -3103,6 +3103,68 @@
           }
         }
       }
+    },
+    "/api/v1/entries/{entryId}/recurring-bill-actual" : {
+      "get" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "actualContext",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecurringBillActualContextResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [ "recurring-bill-controller" ],
+        "operationId" : "recordActual",
+        "parameters" : [ {
+          "name" : "entryId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecordRecurringBillActualRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaycheckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -3194,6 +3256,10 @@
           "version" : {
             "type" : "integer",
             "format" : "int64"
+          },
+          "planningAmountMinor" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
           }
         },
         "required" : [ "amountMode", "name" ]
@@ -3250,6 +3316,10 @@
           },
           "version" : {
             "type" : "integer",
+            "format" : "int64"
+          },
+          "planningAmountMinor" : {
+            "type" : [ "integer", "null" ],
             "format" : "int64"
           }
         }
@@ -3777,6 +3847,10 @@
             "type" : "string",
             "maxLength" : 2000,
             "minLength" : 0
+          },
+          "planningAmountMinor" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
           }
         },
         "required" : [ "amountMode", "name" ]
@@ -3907,6 +3981,9 @@
           "version" : {
             "type" : "integer",
             "format" : "int64"
+          },
+          "amountEstimated" : {
+            "type" : "boolean"
           }
         }
       },
@@ -4116,6 +4193,10 @@
           "occurrenceDate" : {
             "type" : "string",
             "format" : "date"
+          },
+          "planningAmountMinor" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
           }
         },
         "required" : [ "amountMode", "entryVersion", "name", "occurrenceDate", "paycheckVersion" ]
@@ -4148,6 +4229,9 @@
           "occurrenceAmountVersion" : {
             "type" : [ "integer", "null" ],
             "format" : "int64"
+          },
+          "amountEstimated" : {
+            "type" : "boolean"
           }
         },
         "required" : [ "amountMinor", "definitionId", "occurrenceDate" ]
@@ -4356,6 +4440,20 @@
           "sourceRecurringOccurrenceDate" : {
             "type" : "string",
             "format" : "date"
+          },
+          "recurringDefinitionVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "occurrenceAmountVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "amountEstimated" : {
+            "type" : "boolean"
+          },
+          "confirmDuplicateOccurrence" : {
+            "type" : "boolean"
           }
         },
         "required" : [ "entryType", "name" ]
@@ -4457,6 +4555,20 @@
           "sourceRecurringOccurrenceDate" : {
             "type" : "string",
             "format" : "date"
+          },
+          "recurringDefinitionVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "occurrenceAmountVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "amountEstimated" : {
+            "type" : "boolean"
+          },
+          "confirmDuplicateOccurrence" : {
+            "type" : "boolean"
           }
         },
         "required" : [ "amountMinor", "entryType", "name" ]
@@ -5711,6 +5823,10 @@
             "items" : {
               "$ref" : "#/components/schemas/RecurringBillImportSummaryResponse"
             }
+          },
+          "planningAmountMinor" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
           }
         }
       },
@@ -6187,6 +6303,71 @@
           },
           "expenseLists" : {
             "$ref" : "#/components/schemas/DashboardExpenseListSummaryResponse"
+          }
+        }
+      },
+      "RecordRecurringBillActualRequest" : {
+        "type" : "object",
+        "properties" : {
+          "definitionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "definitionVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "occurrenceDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "entryVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "paycheckVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "occurrenceAmountVersion" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "confirmDefinitionChanges" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "amountMinor", "definitionId", "definitionVersion", "entryVersion", "occurrenceDate", "paycheckVersion" ]
+      },
+      "RecurringBillActualContextResponse" : {
+        "type" : "object",
+        "properties" : {
+          "definitionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "definitionVersion" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "occurrenceDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "occurrenceAmountVersion" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "actualAmountMinor" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "definitionReviewRequired" : {
+            "type" : "boolean"
           }
         }
       }

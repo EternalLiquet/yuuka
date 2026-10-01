@@ -33,6 +33,7 @@ import {
   draftTotalMinor,
   TemplateApplicationDraftEntry,
 } from '@/features/templates/application-draft';
+import { refreshRecurringReconciliationQueries } from '@/features/recurring-bills/reconciliation';
 import { ImportRecurringBillsSheet } from '@/features/recurring-bills/import-recurring-bills-sheet';
 import { TemplateEntryEditor } from '@/features/templates/template-entry-editor';
 import type { TemplateEntryEditorEntry } from '@/features/templates/template-entry-editor';
@@ -115,7 +116,7 @@ export default function NewPaycheckScreen() {
         : api.createPaycheck(details);
     },
     onSuccess: async (paycheck) => {
-      await queryClient.invalidateQueries({ queryKey: ['paychecks'] });
+      await refreshRecurringReconciliationQueries(queryClient, paycheck.id, paycheck);
       router.replace(`/paychecks/${paycheck.id}`);
     },
     onSettled: () => {
@@ -137,7 +138,7 @@ export default function NewPaycheckScreen() {
       });
     },
     onSuccess: async (paycheck) => {
-      await queryClient.invalidateQueries({ queryKey: ['paychecks'] });
+      await refreshRecurringReconciliationQueries(queryClient, paycheck.id, paycheck);
       router.replace(`/paychecks/${paycheck.id}`);
     },
     onSettled: () => {
@@ -300,6 +301,9 @@ export default function NewPaycheckScreen() {
         onClose={() => setDraftEditorVisible(false)}
         onSubmit={(payload) => {
           const next: TemplateApplicationDraftEntry = {
+            ...editingDraftEntry,
+            amountEstimated:
+              payload.entryType === 'BILL' ? editingDraftEntry?.amountEstimated : false,
             accountName: payload.accountName,
             amountMinor: payload.defaultAmountMinor,
             clientId: editingDraftEntry?.clientId ?? newDraftClientId(),
@@ -335,6 +339,7 @@ export default function NewPaycheckScreen() {
       <ImportRecurringBillsSheet
         incomeDate={incomeDate}
         localDraft
+        existingDraftEntries={draftEntries}
         onClose={() => setRecurringImportVisible(false)}
         onImport={(items) => {
           setDraftEntries((current) => [...current, ...draftEntriesFromRecurringBills(items)]);

@@ -228,6 +228,7 @@ describe('quick recurring Bill assignment', () => {
     await waitFor(() =>
       expect(mockApi.importRecurringBills).toHaveBeenCalledWith(first.id, 3, [
         {
+          amountEstimated: false,
           amountMinor: 12000,
           definitionId: occurrence.definitionId,
           definitionVersion: 4,
@@ -664,6 +665,7 @@ describe('quick recurring Bill assignment', () => {
       7,
       [
         {
+          amountEstimated: false,
           amountMinor: 13000,
           definitionId: occurrence.definitionId,
           definitionVersion: 5,

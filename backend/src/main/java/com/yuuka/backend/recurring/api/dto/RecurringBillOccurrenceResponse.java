@@ -14,6 +14,7 @@ public record RecurringBillOccurrenceResponse(
     String name,
     RecurringBillAmountMode amountMode,
     @Schema(types = {"integer", "null"}) Long typicalAmountMinor,
+    @Schema(types = {"integer", "null"}) Long planningAmountMinor,
     @Schema(types = {"integer", "null"}) Long amountMinor,
     boolean amountEntered,
     @Schema(types = {"integer", "null"}) Long occurrenceAmountVersion,

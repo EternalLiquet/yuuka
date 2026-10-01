@@ -24,4 +24,30 @@ public record TemplateApplicationEntryRequest(
     UUID paybackId,
     UUID sinkingFundId,
     UUID sourceRecurringBillDefinitionId,
-    LocalDate sourceRecurringOccurrenceDate) {}
+    LocalDate sourceRecurringOccurrenceDate,
+    @PositiveOrZero Long recurringDefinitionVersion,
+    @PositiveOrZero Long occurrenceAmountVersion,
+    boolean amountEstimated,
+    boolean confirmDuplicateOccurrence) {
+  public DraftPaycheckEntryRequest toDraft() {
+    return new DraftPaycheckEntryRequest(
+        entryType,
+        name,
+        amountMinor,
+        paymentMethod,
+        dueDate,
+        accountName,
+        payee,
+        notes,
+        targetMinor,
+        targetDate,
+        paybackId,
+        sinkingFundId,
+        sourceRecurringBillDefinitionId,
+        sourceRecurringOccurrenceDate,
+        recurringDefinitionVersion,
+        occurrenceAmountVersion,
+        amountEstimated,
+        confirmDuplicateOccurrence);
+  }
+}

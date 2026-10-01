@@ -13,6 +13,7 @@ public record RecurringBillImportItemRequest(
     @NotNull(message = "Enter an amount.")
         @PositiveOrZero(message = "Amount must be greater than or equal to $0.00.")
         Long amountMinor,
+    boolean amountEstimated,
     boolean updateTypicalAmount,
     boolean saveOccurrenceAmount,
     @Schema(types = {"integer", "null"}) @PositiveOrZero Long occurrenceAmountVersion) {}

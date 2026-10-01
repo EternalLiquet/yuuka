@@ -50,7 +50,9 @@ export function QuickAssignRecurringBillSheet({
   const { colors } = useAppTheme();
   const { settings } = useSettings();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [amountMinor, setAmountMinor] = useState<number | null>(occurrence?.amountMinor ?? null);
+  const [amountMinor, setAmountMinor] = useState<number | null>(
+    occurrence?.amountMinor ?? occurrence?.planningAmountMinor ?? null,
+  );
   const [amountInput, setAmountInput] = useState('');
   const [editingAmount, setEditingAmount] = useState(false);
   const [updateTypicalAmount, setUpdateTypicalAmount] = useState(false);
@@ -263,6 +265,10 @@ export function QuickAssignRecurringBillSheet({
         result = await api.importRecurringBills(selected.id, selected.version, [
           {
             amountMinor,
+            amountEstimated:
+              eligibleOccurrence.amountMode === 'VARIABLE' &&
+              eligibleOccurrence.amountMinor == null &&
+              !saveOccurrenceAmount,
             definitionId: eligibleOccurrence.definitionId,
             definitionVersion: eligibleOccurrence.definitionVersion,
             occurrenceDate: eligibleOccurrence.occurrenceDate,

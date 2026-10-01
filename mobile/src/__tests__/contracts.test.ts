@@ -12,6 +12,7 @@ import {
   pageSchema,
   paycheckSchema,
   recurringBillOccurrenceAmountSchema,
+  recurringBillActualContextSchema,
   recurringBillOccurrenceSchema,
   recurringBillSchema,
   rollingSpendingBucketPerformanceSchema,
@@ -73,6 +74,25 @@ const templateEntry = {
 };
 
 describe('API response contracts', () => {
+  it('preserves estimate markers and validates exact actual-bill review context', () => {
+    expect(entrySchema.parse({ ...entry, amountEstimated: true }).amountEstimated).toBe(true);
+    expect(() => entrySchema.parse({ ...entry, amountEstimated: 'true' })).toThrow();
+    const context = {
+      definitionId: entry.id,
+      definitionVersion: 3,
+      occurrenceDate: '2028-02-29',
+      occurrenceAmountVersion: null,
+      actualAmountMinor: 0,
+      definitionReviewRequired: true,
+    };
+    expect(recurringBillActualContextSchema.parse(context)).toEqual(context);
+    expect(() =>
+      recurringBillActualContextSchema.parse({ ...context, actualAmountMinor: -1 }),
+    ).toThrow();
+    expect(() =>
+      recurringBillActualContextSchema.parse({ ...context, definitionVersion: -1 }),
+    ).toThrow();
+  });
   it('distinguishes a missing variable amount from a real zero amount', () => {
     const definition = {
       id: '11111111-1111-4111-8111-111111111130',
@@ -91,6 +111,10 @@ describe('API response contracts', () => {
       version: 0,
     } as const;
     expect(recurringBillSchema.parse(definition)).toMatchObject({ typicalAmountMinor: null });
+    expect(
+      recurringBillSchema.parse({ ...definition, planningAmountMinor: 0 }).planningAmountMinor,
+    ).toBe(0);
+    expect(() => recurringBillSchema.parse({ ...definition, planningAmountMinor: -1 })).toThrow();
     expect(
       recurringBillOccurrenceSchema.parse({
         definitionId: definition.id,

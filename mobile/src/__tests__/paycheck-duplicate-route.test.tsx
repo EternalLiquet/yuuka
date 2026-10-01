@@ -14,6 +14,7 @@ let mockParams: Record<string, string> = {};
 const mockApi = {
   createPaycheckFromDraft: jest.fn(),
   paycheck: jest.fn(),
+  recurringBillTimeline: jest.fn(),
 };
 const queryClients: QueryClient[] = [];
 
@@ -274,7 +275,7 @@ describe('duplicate paycheck route', () => {
     expect(view.queryByText('Cached failed bill')).toBeNull();
     expect(mockApi.createPaycheckFromDraft).not.toHaveBeenCalled();
 
-    fireEvent.press(view.getByLabelText('Retry'));
+    await fireEvent.press(view.getByLabelText('Retry'));
 
     await waitFor(() => expect(mockApi.paycheck).toHaveBeenCalledTimes(2));
     await waitFor(() =>
@@ -300,6 +301,7 @@ describe('duplicate paycheck route', () => {
     });
     queryClient.setQueryData(['paycheck', sourceId], stalePaycheck);
     queryClient.setQueryData(['paycheck', 'duplicate-source', sourceId], stalePaycheck);
+    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
     const authoritativePaycheck = sourcePaycheck();
     authoritativePaycheck.entries.push(
       entry({
@@ -311,25 +313,37 @@ describe('duplicate paycheck route', () => {
         sourceRecurringOccurrenceDate: '2026-07-21',
       }),
     );
+    mockApi.recurringBillTimeline.mockResolvedValue({
+      items: [
+        {
+          definitionId: '11111111-1111-4111-8111-111111111778',
+          definitionVersion: 0,
+          occurrenceDate: '2026-07-21',
+          amountMode: 'FIXED',
+          amountMinor: 0,
+          planningAmountMinor: null,
+          occurrenceAmountVersion: null,
+          importCount: 0,
+        },
+      ],
+    });
     mockApi.paycheck.mockResolvedValue(authoritativePaycheck);
     const view = await renderRoute(queryClient);
 
     await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
     expect(view.getByLabelText('Exact paycheck amount').props.value).toBe('1200.00');
-    fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-16');
-    fireEvent.press(view.getByText('Continue to entries'));
+    await fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-16');
+    await fireEvent.press(view.getByText('Continue to entries'));
     await flushReactWork();
 
     expect(await view.findByText('Draft entries')).toBeTruthy();
     expect(view.getByText('1 Payback assignment was not copied.')).toBeTruthy();
     expect(view.getByText('1 LEFTOVER entry was excluded.')).toBeTruthy();
-    expect(
-      view.getByText(
-        '1 recurring Bill was not copied. Add the occurrences that belong in this paycheck using Import recurring Bills.',
-      ),
-    ).toBeTruthy();
     expect(view.getByLabelText('Import recurring Bills')).toBeTruthy();
-    expect(view.queryByText('Linked Electric')).toBeNull();
+    expect(view.getByText('Linked Electric')).toBeTruthy();
+    await fireEvent.press(await view.findByLabelText('Choose 2026-07-21'));
+    await waitFor(() => expect(view.getByLabelText('Selected 2026-07-21')).toBeTruthy());
+    await flushReactWork();
     expect(view.queryByText('Stale submit bill')).toBeNull();
 
     await act(async () => {
@@ -353,8 +367,8 @@ describe('duplicate paycheck route', () => {
     expect(view.getByText('Rent')).toBeTruthy();
     expect(view.queryByText('Later server entry')).toBeNull();
 
-    fireEvent.press(view.getByLabelText('Create paycheck'));
-    fireEvent.press(view.getByLabelText('Create paycheck'));
+    await fireEvent.press(view.getByLabelText('Create paycheck'));
+    await fireEvent.press(view.getByLabelText('Create paycheck'));
     await flushReactWork();
 
     await waitFor(() =>
@@ -368,6 +382,8 @@ describe('duplicate paycheck route', () => {
       ),
     );
     expect(mockApi.createPaycheckFromDraft).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['recurring-bills'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dashboard'] });
     expect(mockApi.createPaycheckFromDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         entries: [
@@ -384,6 +400,11 @@ describe('duplicate paycheck route', () => {
             name: 'Insurance',
             targetDate: '2026-12-01',
             targetMinor: 120000,
+          }),
+          expect.objectContaining({
+            name: 'Linked Electric',
+            dueDate: '2026-07-21',
+            sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
           }),
         ],
       }),

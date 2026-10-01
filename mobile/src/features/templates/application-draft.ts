@@ -11,6 +11,14 @@ import type { RecurringBillImportSelection } from '@/features/recurring-bills/im
 export type TemplateApplicationDraftEntry = {
   accountName: string | null;
   amountMinor: number;
+  amountEstimated?: boolean;
+  recurringDefinitionVersion?: number;
+  occurrenceAmountVersion?: number | null;
+  confirmDuplicateOccurrence?: boolean;
+  duplicateConfirmationRequired?: boolean;
+  reviewedIncomeDate?: string;
+  sourceIncomeDate?: string;
+  sourceBillDate?: string | null;
   clientId: string;
   defaultDueOffsetDays: number | null;
   entryType: 'BILL' | 'SPENDING_BUCKET' | 'SINKING_FUND';
@@ -40,14 +48,14 @@ export function draftEntriesFromPaycheck(paycheck: Paycheck): {
 } {
   const liveEntries = [...paycheck.entries].sort((left, right) => left.position - right.position);
   const withoutLeftover = liveEntries.filter((entry) => !isGeneratedLeftover(entry));
-  const duplicateEntries = withoutLeftover.filter((entry) => !hasRecurringProvenance(entry));
+  const duplicateEntries = withoutLeftover;
   return {
     clearedPaybackCount: duplicateEntries.filter((entry) => entry.paybackId != null).length,
     entries: duplicateEntries.map((entry) =>
       draftEntryFromPaycheckEntry(entry, paycheck.incomeDate),
     ),
     omittedLeftoverCount: liveEntries.length - withoutLeftover.length,
-    omittedRecurringBillCount: withoutLeftover.length - duplicateEntries.length,
+    omittedRecurringBillCount: 0,
   };
 }
 
@@ -75,10 +83,12 @@ export function draftEntryFromPaycheckEntry(
 ): TemplateApplicationDraftEntry {
   return {
     accountName: entry.entryType === 'BILL' ? entry.accountName : null,
-    amountMinor: entry.amountMinor,
+    amountMinor: hasRecurringProvenance(entry) ? 0 : entry.amountMinor,
+    sourceIncomeDate,
+    sourceBillDate: entry.sourceRecurringOccurrenceDate,
     clientId: `paycheck-${entry.id}`,
     defaultDueOffsetDays:
-      entry.entryType === 'BILL' && entry.dueDate
+      entry.entryType === 'BILL' && !hasRecurringProvenance(entry) && entry.dueDate
         ? daysBetween(sourceIncomeDate, entry.dueDate)
         : null,
     entryType: entry.entryType,
@@ -86,7 +96,9 @@ export function draftEntryFromPaycheckEntry(
     notes: entry.notes,
     payee: entry.entryType === 'BILL' ? entry.payee : null,
     paymentMethod: entry.entryType === 'BILL' ? entry.paymentMethod : null,
-    sourceRecurringBillDefinitionId: null,
+    sourceRecurringBillDefinitionId: hasRecurringProvenance(entry)
+      ? entry.sourceRecurringBillDefinitionId
+      : null,
     sourceRecurringOccurrenceDate: null,
     targetDate: entry.entryType === 'SINKING_FUND' ? entry.targetDate : null,
     targetMinor: entry.entryType === 'SINKING_FUND' ? entry.targetMinor : null,
@@ -104,6 +116,10 @@ export function draftEntriesFromRecurringBills(
   return selections.map((item, index) => ({
     accountName: item.accountName,
     amountMinor: item.amountMinor,
+    amountEstimated: item.amountEstimated,
+    recurringDefinitionVersion: item.definitionVersion,
+    occurrenceAmountVersion: item.actualAmountVersion,
+    confirmDuplicateOccurrence: item.confirmDuplicateOccurrence,
     clientId: `recurring-${item.definitionId}-${item.occurrenceDate}-${batch}-${index}`,
     defaultDueOffsetDays: null,
     entryType: 'BILL',
@@ -134,6 +150,10 @@ export function applicationEntriesFromDraft(
     entryType: entry.entryType,
     name: entry.name,
     amountMinor: entry.amountMinor,
+    amountEstimated: entry.amountEstimated ?? false,
+    recurringDefinitionVersion: entry.recurringDefinitionVersion,
+    occurrenceAmountVersion: entry.occurrenceAmountVersion,
+    confirmDuplicateOccurrence: entry.confirmDuplicateOccurrence ?? false,
     paymentMethod: entry.entryType === 'BILL' ? (entry.paymentMethod ?? 'AUTOPAY') : null,
     dueDate:
       entry.entryType === 'BILL'

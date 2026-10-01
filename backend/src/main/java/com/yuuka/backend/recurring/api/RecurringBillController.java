@@ -7,6 +7,8 @@ import com.yuuka.backend.paycheck.application.RecurringBillEntryReconciliationSe
 import com.yuuka.backend.recurring.api.dto.CreateRecurringBillFromEntryRequest;
 import com.yuuka.backend.recurring.api.dto.CreateRecurringBillRequest;
 import com.yuuka.backend.recurring.api.dto.LinkRecurringBillRequest;
+import com.yuuka.backend.recurring.api.dto.RecordRecurringBillActualRequest;
+import com.yuuka.backend.recurring.api.dto.RecurringBillActualContextResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillImportRequest;
 import com.yuuka.backend.recurring.api.dto.RecurringBillListResponse;
 import com.yuuka.backend.recurring.api.dto.RecurringBillOccurrenceAmountResponse;
@@ -124,6 +126,20 @@ public class RecurringBillController {
       @PathVariable UUID paycheckId,
       @Valid @RequestBody RecurringBillImportRequest request) {
     return recurringBills.importIntoPaycheck(AuthenticatedOwner.id(jwt), paycheckId, request);
+  }
+
+  @GetMapping("/entries/{entryId}/recurring-bill-actual")
+  public RecurringBillActualContextResponse actualContext(
+      @AuthenticationPrincipal Jwt jwt, @PathVariable UUID entryId) {
+    return reconciliation.actualContext(AuthenticatedOwner.id(jwt), entryId);
+  }
+
+  @PutMapping("/entries/{entryId}/recurring-bill-actual")
+  public PaycheckResponse recordActual(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID entryId,
+      @Valid @RequestBody RecordRecurringBillActualRequest request) {
+    return reconciliation.recordActual(AuthenticatedOwner.id(jwt), entryId, request);
   }
 
   @PutMapping("/entries/{entryId}/recurring-bill-link")

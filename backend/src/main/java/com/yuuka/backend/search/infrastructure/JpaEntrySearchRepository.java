@@ -43,7 +43,7 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
                      where metricEntry.ownerId = paycheck.ownerId
                        and metricEntry.paycheckId = paycheck.id
                        and metricEntry.deletedAt is null
-                       and metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED
+                       and (metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED or metricEntry.amountEstimated = true)
                    )
                    then true
                    else false
@@ -81,7 +81,7 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
                     where metricEntry.ownerId = paycheck.ownerId
                       and metricEntry.paycheckId = paycheck.id
                       and metricEntry.deletedAt is null
-                      and metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED
+                      and (metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED or metricEntry.amountEstimated = true)
                   )
                 )
               )
@@ -111,7 +111,7 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
                   where metricEntry.ownerId = paycheck.ownerId
                     and metricEntry.paycheckId = paycheck.id
                     and metricEntry.deletedAt is null
-                    and metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED
+                    and (metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED or metricEntry.amountEstimated = true)
                 )
               )
             )
@@ -168,7 +168,7 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
                     where metricEntry.ownerId = paycheck.ownerId
                       and metricEntry.paycheckId = paycheck.id
                       and metricEntry.deletedAt is null
-                      and metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED
+                      and (metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED or metricEntry.amountEstimated = true)
                   )
                 )
               )
@@ -198,7 +198,7 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
                   where metricEntry.ownerId = paycheck.ownerId
                     and metricEntry.paycheckId = paycheck.id
                     and metricEntry.deletedAt is null
-                    and metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED
+                    and (metricEntry.status <> com.yuuka.backend.paycheck.domain.EntryStatus.POSTED or metricEntry.amountEstimated = true)
                 )
               )
             )

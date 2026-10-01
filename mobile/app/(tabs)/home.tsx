@@ -540,7 +540,7 @@ function RecurringBillRow({
   return (
     <Pressable
       accessibilityHint={recurringCoverageAction(item)}
-      accessibilityLabel={`${item.name}, ${item.amountMinor == null ? 'Amount not entered' : formatMoney(item.amountMinor, settings.currencyCode)}, due ${formatDate(item.occurrenceDate)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}, ${recurringCoverageLabel(item)}`}
+      accessibilityLabel={`${item.name}, ${item.amountMinor == null ? (item.planningAmountMinor != null ? `Estimated: ${formatMoney(item.planningAmountMinor, settings.currencyCode)}` : 'Amount not entered') : formatMoney(item.amountMinor, settings.currencyCode)}, due ${formatDate(item.occurrenceDate)}, ${item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}, ${recurringCoverageLabel(item)}`}
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
@@ -559,7 +559,9 @@ function RecurringBillRow({
       </View>
       <AppText style={styles.amount} variant="caption">
         {item.amountMinor == null
-          ? 'Amount not entered'
+          ? item.planningAmountMinor != null
+            ? `Estimated: ${formatMoney(item.planningAmountMinor, settings.currencyCode)}`
+            : 'Amount not entered'
           : formatMoney(item.amountMinor, settings.currencyCode)}
       </AppText>
       <ChevronRight color={colors.muted} size={18} />

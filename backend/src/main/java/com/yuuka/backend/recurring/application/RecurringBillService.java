@@ -96,17 +96,18 @@ public class RecurringBillService {
   public RecurringBillResponse create(UUID ownerId, CreateRecurringBillRequest request) {
     validateDefinitionAmount(request.amountMode(), request.typicalAmountMinor());
     RecurringBillDefinition definition =
-        definitions.saveAndFlush(
-            new RecurringBillDefinition(
-                ownerId,
-                request.name().trim(),
-                request.amountMode(),
-                request.typicalAmountMinor(),
-                paymentMethod(request.paymentMethod()),
-                request.dueDay(),
-                normalizeOptional(request.accountName()),
-                normalizeOptional(request.payee()),
-                normalizeOptional(request.notes())));
+        new RecurringBillDefinition(
+            ownerId,
+            request.name().trim(),
+            request.amountMode(),
+            request.typicalAmountMinor(),
+            paymentMethod(request.paymentMethod()),
+            request.dueDay(),
+            normalizeOptional(request.accountName()),
+            normalizeOptional(request.payee()),
+            normalizeOptional(request.notes()));
+    definition.setPlanningAmountMinor(request.planningAmountMinor());
+    definitions.saveAndFlush(definition);
     RecurringBillResponse response = RecurringBillResponse.from(definition);
     auditService.append(
         ownerId,
@@ -159,6 +160,7 @@ public class RecurringBillService {
         normalizeOptional(request.accountName()),
         normalizeOptional(request.payee()),
         normalizeOptional(request.notes()));
+    definition.setPlanningAmountMinor(request.planningAmountMinor());
     RecurringBillResponse after = RecurringBillResponse.from(definitions.saveAndFlush(definition));
     auditService.append(
         ownerId, "RECURRING_BILL_DEFINITION", definitionId, "UPDATED", null, before, after, null);
@@ -258,6 +260,7 @@ public class RecurringBillService {
                 definition.getName(),
                 definition.getAmountMode(),
                 definition.getTypicalAmountMinor(),
+                definition.getPlanningAmountMinor(),
                 effectiveAmount,
                 effectiveAmount != null,
                 savedAmount == null ? null : savedAmount.getVersion(),
@@ -355,7 +358,7 @@ public class RecurringBillService {
           occurrencePolicy.occurrence(
               YearMonth.from(item.occurrenceDate()), definition.getDueDay());
       if (!expected.equals(item.occurrenceDate())) {
-        throw new BusinessRuleException("The recurring Bill occurrence date is invalid.");
+        throw new BusinessRuleException("Choose a valid bill date.");
       }
       assertVersion(definition.getVersion(), item.definitionVersion());
     }
@@ -379,6 +382,16 @@ public class RecurringBillService {
     List<PaycheckEntry> created = new ArrayList<>();
     for (RecurringBillImportItemRequest item : request.items()) {
       RecurringBillDefinition definition = loaded.get(item.definitionId());
+      if (item.amountEstimated()) {
+        if (definition.getAmountMode() != RecurringBillAmountMode.VARIABLE
+            || item.saveOccurrenceAmount()
+            || occurrenceAmounts
+                .findForUpdate(ownerId, definition.getId(), item.occurrenceDate())
+                .isPresent()) {
+          throw new ConflictException(
+              "This bill now has an actual amount. Review it and try again.");
+        }
+      }
       if (item.saveOccurrenceAmount()) {
         OccurrenceKey key = new OccurrenceKey(item.definitionId(), item.occurrenceDate());
         RecurringBillOccurrenceAmount saved =
@@ -425,6 +438,7 @@ public class RecurringBillService {
               null,
               null);
       entry.setRecurringSource(definition.getId(), item.occurrenceDate());
+      entry.setAmountEstimated(item.amountEstimated());
       entry = entries.saveAndFlush(entry);
       created.add(entry);
       statusEvents.save(
@@ -540,7 +554,7 @@ public class RecurringBillService {
     LocalDate expected =
         occurrencePolicy.occurrence(YearMonth.from(occurrenceDate), definition.getDueDay());
     if (!expected.equals(occurrenceDate)) {
-      throw new BusinessRuleException("The recurring Bill occurrence date is invalid.");
+      throw new BusinessRuleException("Choose a valid bill date.");
     }
   }
 

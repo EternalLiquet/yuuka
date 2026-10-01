@@ -650,6 +650,7 @@ describe('Home dashboard', () => {
       [
         {
           amountMinor: 7000,
+          amountEstimated: false,
           definitionId,
           definitionVersion: 5,
           occurrenceAmountVersion: null,

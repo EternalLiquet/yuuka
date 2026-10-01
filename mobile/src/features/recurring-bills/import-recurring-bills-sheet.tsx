@@ -16,6 +16,9 @@ import { useAppTheme } from '@/theme/use-app-theme';
 
 export type RecurringBillImportSelection = RecurringBillOccurrence & {
   amountMinor: number;
+  amountEstimated?: boolean;
+  actualAmountVersion?: number | null;
+  confirmDuplicateOccurrence?: boolean;
   occurrenceAmountVersion: number | null;
   saveOccurrenceAmount: boolean;
   updateTypicalAmount: boolean;
@@ -23,12 +26,17 @@ export type RecurringBillImportSelection = RecurringBillOccurrence & {
 
 export function ImportRecurringBillsSheet({
   incomeDate,
+  existingDraftEntries = [],
   localDraft = false,
   onClose,
   onImport,
   visible,
 }: {
   incomeDate: string;
+  existingDraftEntries?: {
+    sourceRecurringBillDefinitionId: string | null;
+    sourceRecurringOccurrenceDate: string | null;
+  }[];
   localDraft?: boolean;
   onClose: () => void;
   onImport: (items: RecurringBillImportSelection[]) => Promise<void>;
@@ -78,6 +86,18 @@ export function ImportRecurringBillsSheet({
     [definitions.data?.items, effectiveIncomeDate, timeline.data?.items],
   );
 
+  function duplicateCount(item: RecurringBillOccurrence) {
+    const latest = timeline.data?.items.find((value) => selectionKey(value) === selectionKey(item));
+    return (
+      (latest?.importCount ?? item.importCount) +
+      existingDraftEntries.filter(
+        (entry) =>
+          entry.sourceRecurringBillDefinitionId === item.definitionId &&
+          entry.sourceRecurringOccurrenceDate === item.occurrenceDate,
+      ).length
+    );
+  }
+
   function resetAndClose() {
     setSelected({});
     setEditing(null);
@@ -87,7 +107,7 @@ export function ImportRecurringBillsSheet({
 
   function toggle(item: RecurringBillOccurrence) {
     const key = selectionKey(item);
-    if (!selected[key] && item.amountMinor == null) {
+    if (!selected[key] && (item.amountMinor ?? item.planningAmountMinor) == null) {
       editAmount(item);
       return;
     }
@@ -99,14 +119,15 @@ export function ImportRecurringBillsSheet({
       }
       return {
         ...current,
-        [key]: recurringImportSelection(item, item.amountMinor!, false),
+        [key]: recurringImportSelection(item, item.amountMinor ?? item.planningAmountMinor!, false),
       };
     });
   }
 
   function editAmount(item: RecurringBillOccurrence) {
     setEditing(item);
-    const currentAmount = selected[selectionKey(item)]?.amountMinor ?? item.amountMinor;
+    const currentAmount =
+      selected[selectionKey(item)]?.amountMinor ?? item.amountMinor ?? item.planningAmountMinor;
     setAmount(currentAmount == null ? '' : minorToInput(currentAmount));
   }
 
@@ -132,7 +153,12 @@ export function ImportRecurringBillsSheet({
 
   async function importSelected() {
     const items = Object.values(selected);
-    if (!items.length || saving) return;
+    if (
+      !items.length ||
+      saving ||
+      items.some((item) => duplicateCount(item) > 0 && !item.confirmDuplicateOccurrence)
+    )
+      return;
     setSaving(true);
     setError('');
     try {
@@ -151,10 +177,11 @@ export function ImportRecurringBillsSheet({
           );
           if (!definition)
             throw new Error('Refresh recurring Bills before updating a typical amount.');
-          await api.updateRecurringBill(definition.id, {
+          const savedDefinition = await api.updateRecurringBill(definition.id, {
             name: definition.name,
             amountMode: definition.amountMode,
             typicalAmountMinor: item.amountMinor,
+            planningAmountMinor: definition.planningAmountMinor ?? null,
             paymentMethod: definition.paymentMethod,
             dueDay: definition.dueDay,
             accountName: definition.accountName,
@@ -162,21 +189,25 @@ export function ImportRecurringBillsSheet({
             notes: definition.notes,
             version: definition.version,
           });
+          item.definitionVersion = savedDefinition.version;
         }
         if (persistedUpdate?.saveOccurrenceAmount) {
           const item = persistedUpdate;
-          await api.updateRecurringBillOccurrenceAmount(
+          const savedAmount = await api.updateRecurringBillOccurrenceAmount(
             item.definitionId,
             item.occurrenceDate,
             item.amountMinor,
             item.occurrenceAmountVersion,
           );
+          item.actualAmountVersion = savedAmount.version;
+          item.amountEstimated = false;
         }
       }
       await onImport(items);
       if (localDraft) await queryClient.invalidateQueries({ queryKey: ['recurring-bills'] });
       resetAndClose();
     } catch (importError) {
+      void timeline.refetch();
       setError(
         displayError(importError, settings.currencyCode, 'Recurring Bills were not imported.'),
       );
@@ -267,13 +298,44 @@ export function ImportRecurringBillsSheet({
                 selected={selected}
                 title="All recurring Bills"
               />
+              {Object.values(selected)
+                .filter((item) => duplicateCount(item) > 0)
+                .map((item) => (
+                  <View key={selectionKey(item)} style={{ gap: 8 }}>
+                    <AppText>
+                      {item.name}: This bill is already in another paycheck or in this draft.
+                    </AppText>
+                    <Button
+                      variant="secondary"
+                      label={
+                        item.confirmDuplicateOccurrence
+                          ? `Another copy of ${item.name} confirmed`
+                          : `Add another copy of ${item.name}`
+                      }
+                      onPress={() =>
+                        setSelected((current) => ({
+                          ...current,
+                          [selectionKey(item)]: {
+                            ...item,
+                            confirmDuplicateOccurrence: !item.confirmDuplicateOccurrence,
+                          },
+                        }))
+                      }
+                    />
+                  </View>
+                ))}
               {error ? (
                 <AppText style={{ color: colors.danger }} variant="error">
                   {error}
                 </AppText>
               ) : null}
               <Button
-                disabled={!Object.keys(selected).length}
+                disabled={
+                  !Object.keys(selected).length ||
+                  Object.values(selected).some(
+                    (item) => duplicateCount(item) > 0 && !item.confirmDuplicateOccurrence,
+                  )
+                }
                 icon={Plus}
                 label={`Add selected Bills (${Object.keys(selected).length})`}
                 loading={saving}
@@ -386,9 +448,16 @@ function OccurrenceSection({
                   Due {formatDate(item.occurrenceDate)} ·{' '}
                   {item.paymentMethod === 'MANUAL' ? 'Manual' : 'Autopay'}
                 </AppText>
-                {selectedItem?.amountMinor != null || item.amountMinor != null ? (
+                {selectedItem?.amountMinor != null ||
+                item.amountMinor != null ||
+                item.planningAmountMinor != null ? (
                   <AppText variant="money">
-                    {formatMoney(selectedItem?.amountMinor ?? item.amountMinor!)}
+                    {item.amountMinor == null && item.planningAmountMinor != null
+                      ? 'Estimated: '
+                      : ''}
+                    {formatMoney(
+                      selectedItem?.amountMinor ?? item.amountMinor ?? item.planningAmountMinor!,
+                    )}
                   </AppText>
                 ) : (
                   <AppText style={{ color: colors.muted }} variant="caption">
@@ -452,13 +521,18 @@ function selectionKey(item: RecurringBillOccurrence) {
 
 export function recurringImportSelection(
   occurrence: RecurringBillOccurrence,
-  amountMinor = occurrence.amountMinor!,
+  amountMinor = (occurrence.amountMinor ?? occurrence.planningAmountMinor)!,
   saveDefinitionAmount = false,
 ): RecurringBillImportSelection {
   if (amountMinor == null) throw new Error('Enter an amount before selecting this occurrence.');
   return {
     ...occurrence,
+    actualAmountVersion: occurrence.occurrenceAmountVersion,
     amountMinor,
+    amountEstimated:
+      occurrence.amountMode === 'VARIABLE' &&
+      occurrence.amountMinor == null &&
+      !saveDefinitionAmount,
     occurrenceAmountVersion:
       occurrence.amountMode === 'VARIABLE' && saveDefinitionAmount
         ? occurrence.occurrenceAmountVersion
@@ -487,6 +561,7 @@ export function updateRecurringAmountSelection(
         ? {
             ...item,
             occurrenceAmountVersion: null,
+            amountEstimated: item.amountMode === 'VARIABLE' && !item.amountEntered,
             saveOccurrenceAmount: false,
             updateTypicalAmount: false,
           }

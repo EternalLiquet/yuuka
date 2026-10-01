@@ -14,6 +14,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface JpaRecurringBillOccurrenceAmountRepository
     extends JpaRepository<RecurringBillOccurrenceAmount, UUID> {
+  Optional<RecurringBillOccurrenceAmount> findByOwnerIdAndDefinitionIdAndOccurrenceDate(
+      UUID ownerId, UUID definitionId, LocalDate occurrenceDate);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       "select amount from RecurringBillOccurrenceAmount amount "

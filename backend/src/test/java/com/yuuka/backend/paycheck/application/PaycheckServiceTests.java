@@ -100,7 +100,8 @@ class PaycheckServiceTests {
         paybackService,
         sinkingFundService,
         auditService,
-        Clock.fixed(Instant.parse("2026-07-15T02:00:00Z"), ZoneOffset.UTC));
+        Clock.fixed(Instant.parse("2026-07-15T02:00:00Z"), ZoneOffset.UTC),
+        mock(RecurringBillEntryReconciliationService.class));
   }
 
   private Paycheck paycheck(UUID ownerId, UUID paycheckId, String name) {
