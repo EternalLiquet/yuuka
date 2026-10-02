@@ -8,7 +8,7 @@ import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { ErrorState, YuukaLoadingState } from '@/components/states';
 import { TextField } from '@/components/text-field';
-import { formatMoney, parseMoneyToMinor } from '@/domain/money';
+import { formatMoney, minorToInput, parseMoneyToMinor } from '@/domain/money';
 import type { TemplateApplicationDraftEntry } from '@/features/templates/application-draft';
 import { useSettings } from '@/settings/settings-provider';
 
@@ -27,7 +27,7 @@ export function DuplicateRecurringBill({
 }) {
   const api = useYuukaApi();
   const { settings } = useSettings();
-  const [manualAmount, setManualAmount] = useState('');
+  const [manualAmount, setManualAmount] = useState(minorToInput(entry.amountMinor));
   const [error, setError] = useState('');
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(incomeDate) && !Number.isNaN(Date.parse(incomeDate));
   const range = timelineRange(validDate ? incomeDate : '2000-01-01');
@@ -48,12 +48,15 @@ export function DuplicateRecurringBill({
     selected && (selected.importCount > 0 || duplicateInDraft(selected.occurrenceDate));
   function choose(item: RecurringBillOccurrence) {
     setError('');
+    setManualAmount(
+      minorToInput(item.amountMinor ?? item.planningAmountMinor ?? entry.amountMinor),
+    );
     onChange({
       ...entry,
       sourceRecurringOccurrenceDate: item.occurrenceDate,
       recurringDefinitionVersion: item.definitionVersion,
       occurrenceAmountVersion: item.occurrenceAmountVersion,
-      amountMinor: item.amountMinor ?? item.planningAmountMinor ?? 0,
+      amountMinor: item.amountMinor ?? item.planningAmountMinor ?? entry.amountMinor,
       amountEstimated: item.amountMode === 'VARIABLE' && item.amountMinor == null,
       reviewedIncomeDate:
         item.amountMinor != null || item.planningAmountMinor != null ? incomeDate : undefined,
@@ -63,9 +66,27 @@ export function DuplicateRecurringBill({
     });
   }
   function saveManual() {
+    if (
+      query.isFetching ||
+      query.isError ||
+      !pending ||
+      pending.amountMinor != null ||
+      pending.planningAmountMinor != null
+    )
+      return;
     try {
       const amountMinor = parseMoneyToMinor(manualAmount);
-      onChange({ ...entry, amountMinor, amountEstimated: true, reviewedIncomeDate: incomeDate });
+      onChange({
+        ...entry,
+        amountMinor,
+        amountEstimated: true,
+        recurringDefinitionVersion: pending.definitionVersion,
+        occurrenceAmountVersion: pending.occurrenceAmountVersion,
+        duplicateConfirmationRequired:
+          pending.importCount > 0 || duplicateInDraft(pending.occurrenceDate),
+        confirmDuplicateOccurrence: false,
+        reviewedIncomeDate: incomeDate,
+      });
       setError('');
     } catch {
       setError('Enter a valid estimated amount.');
@@ -75,7 +96,8 @@ export function DuplicateRecurringBill({
     (item) => item.occurrenceDate === entry.sourceRecurringOccurrenceDate,
   );
   if (!validDate) return <AppText>Enter a valid income date first.</AppText>;
-  if (query.isPending) return <YuukaLoadingState message="Loading bill dates..." />;
+  if (query.isPending)
+    return <YuukaLoadingState message="Loading bill dates..." minHeight={100} size={40} />;
   if (query.isError)
     return <ErrorState message="Bill dates could not be loaded." retry={() => query.refetch()} />;
   return (
@@ -119,7 +141,7 @@ export function DuplicateRecurringBill({
             value={manualAmount}
             onChangeText={setManualAmount}
           />
-          <Button label="Use this estimate" onPress={saveManual} />
+          <Button disabled={query.isFetching} label="Use this estimate" onPress={saveManual} />
         </>
       ) : null}
       {selected ? (

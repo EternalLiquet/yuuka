@@ -109,6 +109,15 @@ Springdoc and requires byte-for-byte structural equality. The version contract m
 `/health/version` outside `/api/v1`, unauthenticated, JSON-only, and limited to a required nonblank
 `version` string.
 
+Duplicate recurring Bill regression coverage checks nonzero previous amounts, loading/failure and
+income-date invalidation, missing actual/estimate resolution, and a genuinely reviewed zero amount.
+Jest component trees do not run Android's native text measurement or layout engine. The recurring
+Maestro journey also opens the imported paycheck's duplicate draft and captures the recurring review
+card without saving it. For layout changes, inspect that rendered card at a narrow phone width and
+increased font size, including loading, failure, five date choices, long names, and multiple entries.
+Verify that the name, previous amount, date controls and actions have visible usable bounds, with no
+large blank gap; screenshots and native bounds are required evidence alongside passing Jest tests.
+
 ## Android end to end
 
 The current critical Maestro flows are:

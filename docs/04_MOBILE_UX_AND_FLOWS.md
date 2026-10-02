@@ -222,6 +222,13 @@ explicit choice. Changing the income date requires reviewing the selection again
 bill date's actual, then its estimated amount, then a typed estimate. Duplicate assignments require
 confirmation. Failed creation keeps the local draft, and repeated taps create only one paycheck.
 
+While recurring dates or amounts need review, each Bill shows its previous amount as context. The
+draft summary says **Needs review** instead of showing a final total or claiming money is left
+unallocated. Loading, unavailable dates, refresh, and income-date changes keep that incomplete state;
+Create paycheck stays disabled until the required review and duplicate confirmation are complete.
+Each entry places its recurring review controls below the name and amount, above wrapping actions,
+so the controls retain the full card width on small screens.
+
 Estimated Bills show **Estimated amount · Waiting for the actual bill** and **Enter actual bill**.
 The Actual bill sheet names the selected paycheck and date, explains that future estimates stay
 unchanged, and asks for review if the recurring bill changed or was removed. It preserves typed

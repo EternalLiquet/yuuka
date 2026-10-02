@@ -114,7 +114,7 @@ describe('template application draft helpers', () => {
     expect(draftTotalMinor(draft.entries)).toBe(119000);
   });
 
-  it('omits linked recurring Bills while preserving unlinked entry order', () => {
+  it('retains linked recurring Bills and their previous amounts while requiring a new date review', () => {
     const source = paycheck();
     source.entries.splice(
       1,
@@ -122,6 +122,7 @@ describe('template application draft helpers', () => {
       paycheckEntry({
         id: 'entry-recurring',
         name: 'Electric',
+        amountMinor: 10000,
         position: 1,
         sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
         sourceRecurringOccurrenceDate: '2026-07-21',
@@ -142,7 +143,7 @@ describe('template application draft helpers', () => {
       expect.objectContaining({
         sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
         sourceRecurringOccurrenceDate: null,
-        amountMinor: 0,
+        amountMinor: 10000,
       }),
     );
     expect(source.entries[1].sourceRecurringOccurrenceDate).toBe('2026-07-21');
