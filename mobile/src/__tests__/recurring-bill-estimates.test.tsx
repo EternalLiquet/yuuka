@@ -206,6 +206,83 @@ it('asks explicitly before another copy of an already assigned bill', async () =
   await fireEvent.press(view.getByLabelText('Add another copy of this bill'));
   expect(onChange.mock.lastCall?.[0].confirmDuplicateOccurrence).toBe(true);
 });
+
+it('retains the previous amount when the chosen bill has no actual or planning amount until an estimate is confirmed', async () => {
+  mockApi.recurringBillTimeline.mockResolvedValue({
+    items: [{ ...occurrence, planningAmountMinor: null }],
+  });
+  function PreviousAmountDraft() {
+    const [value, setValue] = useState({ ...draft, amountMinor: 10000 });
+    return (
+      <DuplicateRecurringBill
+        entry={value}
+        incomeDate="2028-02-01"
+        duplicateInDraft={() => false}
+        onChange={(next) => {
+          setValue(next);
+          onChange(next);
+        }}
+      />
+    );
+  }
+  const view = await render(<PreviousAmountDraft />, { wrapper });
+  await fireEvent.press(await view.findByLabelText('Choose 2028-02-29 (suggested)'));
+  expect(onChange).toHaveBeenLastCalledWith(
+    expect.objectContaining({ amountMinor: 10000, reviewedIncomeDate: undefined }),
+  );
+  expect(view.getByLabelText('Estimated amount for Power').props.value).toBe('100.00');
+  await fireEvent.changeText(view.getByLabelText('Estimated amount for Power'), '125.00');
+  await fireEvent.press(view.getByLabelText('Use this estimate'));
+  expect(onChange).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      amountMinor: 12500,
+      amountEstimated: true,
+      reviewedIncomeDate: '2028-02-01',
+    }),
+  );
+});
+
+it('accepts an explicitly reviewed zero actual without treating it as a missing amount', async () => {
+  mockApi.recurringBillTimeline.mockResolvedValue({
+    items: [{ ...occurrence, amountMinor: 0, planningAmountMinor: 10000 }],
+  });
+  const view = await render(<Draft />, { wrapper });
+  await fireEvent.press(await view.findByLabelText('Choose 2028-02-29 (suggested)'));
+  expect(onChange).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      amountMinor: 0,
+      amountEstimated: false,
+      reviewedIncomeDate: '2028-02-01',
+    }),
+  );
+});
+
+it('confirms a manual estimate using refreshed definition and duplicate information', async () => {
+  mockApi.recurringBillTimeline.mockResolvedValue({
+    items: [{ ...occurrence, planningAmountMinor: null }],
+  });
+  const view = await render(<Draft />, { wrapper });
+  await fireEvent.press(await view.findByLabelText('Choose 2028-02-29 (suggested)'));
+  await fireEvent.changeText(view.getByLabelText('Estimated amount for Power'), '100.00');
+  await fireEvent.press(view.getByLabelText('Use this estimate'));
+  mockApi.recurringBillTimeline.mockResolvedValue({
+    items: [{ ...occurrence, planningAmountMinor: null, definitionVersion: 9, importCount: 1 }],
+  });
+  await fireEvent.press(view.getByLabelText('Refresh bill dates'));
+  await waitFor(() =>
+    expect(view.getByLabelText('Use this estimate').props.accessibilityState.disabled).toBe(false),
+  );
+  await fireEvent.press(view.getByLabelText('Use this estimate'));
+  expect(onChange).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      amountMinor: 10000,
+      reviewedIncomeDate: '2028-02-01',
+      recurringDefinitionVersion: 9,
+      duplicateConfirmationRequired: true,
+      confirmDuplicateOccurrence: false,
+    }),
+  );
+});
 it('records actual on only the selected bill and reports returned money after success', async () => {
   const onChanged = jest.fn().mockResolvedValue(undefined);
   const view = await render(

@@ -28,6 +28,7 @@ import {
   applicationEntriesFromDraft,
   draftEntriesFromRecurringBills,
   draftEntriesFromPaycheck,
+  draftEntryNeedsAmountReview,
   draftTotalMinor,
   TemplateApplicationDraftEntry,
 } from '@/features/templates/application-draft';
@@ -149,8 +150,7 @@ export default function DuplicatePaycheckScreen() {
   const needsBillReview = draftEntries.some(
     (entry) =>
       entry.sourceRecurringBillDefinitionId &&
-      (!entry.sourceRecurringOccurrenceDate ||
-        entry.reviewedIncomeDate !== incomeDate ||
+      (draftEntryNeedsAmountReview(entry, incomeDate) ||
         (entry.duplicateConfirmationRequired && !entry.confirmDuplicateOccurrence)),
   );
   const createDisabled =
@@ -190,17 +190,21 @@ export default function DuplicatePaycheckScreen() {
 
   const draftSummary = useMemo(
     () => ({
-      allocation:
-        differenceMinor == null
+      allocation: needsBillReview
+        ? 'Review recurring Bills to finish allocation.'
+        : differenceMinor == null
           ? 'Enter a paycheck amount to check allocation.'
           : differenceMinor === 0
             ? 'Fully allocated.'
             : differenceMinor > 0
               ? `${formatMoney(differenceMinor, settings.currencyCode)} left unallocated.`
               : `${formatMoney(Math.abs(differenceMinor), settings.currencyCode)} over-allocated.`,
-      tone: differenceMinor != null && differenceMinor < 0 ? colors.danger : colors.muted,
+      tone:
+        !needsBillReview && differenceMinor != null && differenceMinor < 0
+          ? colors.danger
+          : colors.muted,
     }),
-    [colors.danger, colors.muted, differenceMinor, settings.currencyCode],
+    [colors.danger, colors.muted, differenceMinor, needsBillReview, settings.currencyCode],
   );
 
   if (!sourceInitialized && query.isError && !query.isFetching) {
@@ -281,6 +285,7 @@ export default function DuplicatePaycheckScreen() {
               draftEntries={draftEntries}
               incomeDate={incomeDate}
               omittedLeftoverCount={omittedLeftoverCount}
+              needsBillReview={needsBillReview}
               onChange={(next) =>
                 setDraftEntries((current) =>
                   current.map((entry) => (entry.clientId === next.clientId ? next : entry)),
@@ -376,7 +381,13 @@ export default function DuplicatePaycheckScreen() {
         existingDraftEntries={draftEntries}
         onClose={() => setRecurringImportVisible(false)}
         onImport={(items) => {
-          setDraftEntries((current) => [...current, ...draftEntriesFromRecurringBills(items)]);
+          setDraftEntries((current) => [
+            ...current,
+            ...draftEntriesFromRecurringBills(items).map((entry) => ({
+              ...entry,
+              reviewedIncomeDate: incomeDate,
+            })),
+          ]);
           return Promise.resolve();
         }}
         visible={recurringImportVisible}
@@ -392,6 +403,7 @@ function DraftSummary({
   draftEntries,
   incomeDate,
   omittedLeftoverCount,
+  needsBillReview,
   onAdd,
   onChange,
   onEdit,
@@ -406,6 +418,7 @@ function DraftSummary({
   draftEntries: TemplateApplicationDraftEntry[];
   incomeDate: string;
   omittedLeftoverCount: number;
+  needsBillReview: boolean;
   onAdd: () => void;
   onChange: (entry: TemplateApplicationDraftEntry) => void;
   onEdit: (entry: TemplateApplicationDraftEntry) => void;
@@ -425,7 +438,9 @@ function DraftSummary({
             {draftEntries.length} entries copied locally before creation
           </AppText>
         </View>
-        <AppText variant="money">{formatMoney(totalMinor, settings.currencyCode)}</AppText>
+        <AppText variant="money">
+          {needsBillReview ? 'Needs review' : formatMoney(totalMinor, settings.currencyCode)}
+        </AppText>
       </View>
       <AppText style={{ color: differenceTone }} variant="caption">
         {differenceMessage}
@@ -453,39 +468,40 @@ function DraftSummary({
       </View>
       {draftEntries.map((entry, index) => (
         <View key={entry.clientId} style={[styles.previewEntry, { borderTopColor: colors.border }]}>
-          <View style={styles.entryText}>
-            <AppText numberOfLines={1} variant="caption">
-              {entry.name}
+          <View style={styles.entryHeader}>
+            <View style={styles.entryText}>
+              <AppText variant="label">{entry.name}</AppText>
+              <AppText style={{ color: colors.muted }} variant="caption">
+                {entryDescription(entry, incomeDate)}
+              </AppText>
+            </View>
+            <AppText variant="caption">
+              {draftEntryNeedsAmountReview(entry, incomeDate) ? 'Previous amount: ' : ''}
+              {formatMoney(entry.amountMinor, settings.currencyCode)}
             </AppText>
-            <AppText style={{ color: colors.muted }} variant="caption">
-              {entryDescription(entry, incomeDate)}
-            </AppText>
-            {entry.sourceRecurringBillDefinitionId ? (
-              <DuplicateRecurringBill
-                entry={entry}
-                incomeDate={incomeDate}
-                onChange={onChange}
-                duplicateInDraft={(date) =>
-                  draftEntries.some(
-                    (other) =>
-                      other.clientId !== entry.clientId &&
-                      other.sourceRecurringBillDefinitionId ===
-                        entry.sourceRecurringBillDefinitionId &&
-                      other.sourceRecurringOccurrenceDate === date,
-                  )
-                }
-              />
-            ) : null}
           </View>
-          <AppText variant="caption">
-            {formatMoney(entry.amountMinor, settings.currencyCode)}
-          </AppText>
+          {entry.sourceRecurringBillDefinitionId ? (
+            <DuplicateRecurringBill
+              entry={entry}
+              incomeDate={incomeDate}
+              onChange={onChange}
+              duplicateInDraft={(date) =>
+                draftEntries.some(
+                  (other) =>
+                    other.clientId !== entry.clientId &&
+                    other.sourceRecurringBillDefinitionId ===
+                      entry.sourceRecurringBillDefinitionId &&
+                    other.sourceRecurringOccurrenceDate === date,
+                )
+              }
+            />
+          ) : null}
           <View style={styles.draftActions}>
             <Button
               accessibilityLabel={`Move ${entry.name} up`}
               disabled={index === 0}
               icon={ArrowUp}
-              label={`Move ${entry.name} up`}
+              label="Up"
               onPress={() => onMove(index, -1)}
               variant="ghost"
             />
@@ -493,14 +509,14 @@ function DraftSummary({
               accessibilityLabel={`Move ${entry.name} down`}
               disabled={index === draftEntries.length - 1}
               icon={ArrowDown}
-              label={`Move ${entry.name} down`}
+              label="Down"
               onPress={() => onMove(index, 1)}
               variant="ghost"
             />
             <Button
               accessibilityLabel={`Edit ${entry.name}`}
               icon={Pencil}
-              label={`Edit ${entry.name}`}
+              label="Edit"
               disabled={Boolean(entry.sourceRecurringBillDefinitionId)}
               onPress={() => onEdit(entry)}
               variant="ghost"
@@ -508,7 +524,7 @@ function DraftSummary({
             <Button
               accessibilityLabel={`Remove ${entry.name}`}
               icon={Trash2}
-              label={`Remove ${entry.name}`}
+              label="Remove"
               onPress={() => onRemove(entry.clientId)}
               variant="ghost"
             />
@@ -607,15 +623,14 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   content: { gap: 20, paddingBottom: 36 },
   draftActions: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  entryText: { flex: 1, gap: 3 },
+  entryHeader: { alignItems: 'flex-start', flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  entryText: { flexBasis: 160, flexGrow: 1, gap: 3 },
   form: { gap: 16 },
   preview: { borderRadius: 8, borderWidth: 1, gap: 8, padding: 14 },
   previewEntry: {
-    alignItems: 'center',
+    alignItems: 'stretch',
     borderTopWidth: 1,
-    flexDirection: 'row',
     gap: 10,
-    justifyContent: 'space-between',
     paddingTop: 10,
   },
   previewHeader: {

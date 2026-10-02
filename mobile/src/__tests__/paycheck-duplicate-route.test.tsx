@@ -148,6 +148,146 @@ describe('duplicate paycheck route', () => {
     mockApi.createPaycheckFromDraft.mockResolvedValue(createdPaycheck);
   });
 
+  it('preserves a recurring bill previous amount and withholds allocation until the occurrence is reviewed', async () => {
+    const source = sourcePaycheck({
+      amountMinor: 194204,
+      entries: [
+        entry({
+          name: 'ChatGPT Premium',
+          amountMinor: 10000,
+          sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+          sourceRecurringOccurrenceDate: '2026-06-21',
+        }),
+        entry({
+          id: '11111111-1111-4111-8111-111111111102',
+          position: 1,
+          name: 'Other bills',
+          amountMinor: 77237,
+        }),
+      ],
+    });
+    const timeline = deferred<{ items: Record<string, unknown>[] }>();
+    mockApi.paycheck.mockResolvedValue(source);
+    mockApi.recurringBillTimeline.mockReturnValue(timeline.promise);
+    const view = await renderRoute();
+    await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe(source.name));
+    await fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-16');
+    await fireEvent.press(view.getByLabelText('Continue to entries'));
+    expect(await view.findByText('Previous amount: $100.00')).toBeTruthy();
+    expect(view.getByText('Needs review')).toBeTruthy();
+    expect(view.getByText('Review recurring Bills to finish allocation.')).toBeTruthy();
+    expect(view.queryByText('$1,169.67 left unallocated.')).toBeNull();
+    expect(view.queryByText('$0.00')).toBeNull();
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(true);
+    expect(mockApi.createPaycheckFromDraft).not.toHaveBeenCalled();
+
+    await act(async () => {
+      timeline.resolve({
+        items: [
+          {
+            definitionId: '11111111-1111-4111-8111-111111111778',
+            definitionVersion: 0,
+            occurrenceDate: '2026-07-21',
+            amountMode: 'FIXED',
+            amountMinor: 12000,
+            planningAmountMinor: null,
+            occurrenceAmountVersion: null,
+            importCount: 0,
+          },
+        ],
+      });
+      await timeline.promise;
+    });
+    await fireEvent.press(await view.findByLabelText('Choose 2026-07-21'));
+    expect(await view.findByText('$892.37')).toBeTruthy();
+    expect(view.getByText('$1,049.67 left unallocated.')).toBeTruthy();
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(false);
+    expect(source.entries[0].amountMinor).toBe(10000);
+
+    await fireEvent.changeText(view.getByLabelText('Income date'), '2026-08-16');
+    expect(await view.findByText('Needs review')).toBeTruthy();
+    expect(view.queryByText('$1,049.67 left unallocated.')).toBeNull();
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(true);
+  });
+
+  it('keeps previous amounts and incomplete allocation visible when recurring dates fail to load', async () => {
+    mockApi.paycheck.mockResolvedValue(
+      sourcePaycheck({
+        entries: [
+          entry({
+            name: 'ChatGPT Premium',
+            amountMinor: 10000,
+            sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+            sourceRecurringOccurrenceDate: '2026-06-21',
+          }),
+        ],
+      }),
+    );
+    mockApi.recurringBillTimeline.mockRejectedValue(new Error('timeline unavailable'));
+    const view = await renderRoute();
+    await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
+    await fireEvent.press(view.getByLabelText('Continue to entries'));
+    expect(await view.findByText('Bill dates could not be loaded.')).toBeTruthy();
+    expect(view.getByText('Previous amount: $100.00')).toBeTruthy();
+    expect(view.getByText('Needs review')).toBeTruthy();
+    expect(view.queryByText(/left unallocated/)).toBeNull();
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(true);
+  });
+
+  it('keeps allocation incomplete during a manual estimate refresh even when that refresh fails', async () => {
+    mockApi.paycheck.mockResolvedValue(
+      sourcePaycheck({
+        entries: [
+          entry({
+            name: 'ChatGPT Premium',
+            amountMinor: 10000,
+            sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+            sourceRecurringOccurrenceDate: '2026-06-21',
+          }),
+        ],
+      }),
+    );
+    const refresh = deferred<{ items: Record<string, unknown>[] }>();
+    mockApi.recurringBillTimeline
+      .mockResolvedValueOnce({
+        items: [
+          {
+            definitionId: '11111111-1111-4111-8111-111111111778',
+            definitionVersion: 0,
+            occurrenceDate: '2026-07-21',
+            amountMode: 'VARIABLE',
+            amountMinor: null,
+            planningAmountMinor: null,
+            occurrenceAmountVersion: null,
+            importCount: 0,
+          },
+        ],
+      })
+      .mockReturnValue(refresh.promise);
+    const view = await renderRoute();
+    await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
+    await fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-16');
+    await fireEvent.press(view.getByLabelText('Continue to entries'));
+    await fireEvent.press(await view.findByLabelText('Choose 2026-07-21'));
+    await fireEvent.press(view.getByLabelText('Use this estimate'));
+    expect(await view.findByText('$1,100.00 left unallocated.')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Refresh bill dates'));
+    expect(await view.findByText('Needs review')).toBeTruthy();
+    expect(view.getByLabelText('Use this estimate').props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(view.getByLabelText('Use this estimate'));
+    expect(view.queryByText('$1,100.00 left unallocated.')).toBeNull();
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(true);
+    await act(async () => {
+      refresh.reject(new Error('refresh failed'));
+      await refresh.promise.catch(() => undefined);
+    });
+    expect(await view.findByText('Bill dates could not be loaded.')).toBeTruthy();
+    expect(view.getByText('Needs review')).toBeTruthy();
+    expect(view.queryByText(/left unallocated/)).toBeNull();
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(true);
+    expect(mockApi.createPaycheckFromDraft).not.toHaveBeenCalled();
+  });
+
   it('ignores stale detail-cache data and initializes from the fresh duplicate source', async () => {
     const sourceId = sourcePaycheck().id;
     const queryClient = createQueryClient();
