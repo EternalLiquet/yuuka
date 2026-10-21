@@ -104,6 +104,33 @@ When deploying from a checked-out release tag, `docker compose build backend` in
 in the build stage so Gradle can package that tag version automatically. Untagged `master` builds
 report `0.0.0-dev` unless `YUUKA_VERSION` is deliberately supplied for a CI or diagnostic build.
 
+## Read-only MCP access (disabled by default)
+
+Nothing in this repository enables or deploys MCP access. It is off unless `YUUKA_MCP_ENABLED=true`,
+and enabling it in production also requires the separately gated prerequisites from the ADR
+(`docs/mcp-read-access-adr.md`): P1 an owner-approved external OAuth provider and P2 private
+connectivity. Do not enable it before both are done.
+
+Environment names (values are deployment secrets-adjacent; keep them in the mode-600 env file, never
+in Git):
+
+- `YUUKA_MCP_ENABLED` (default `false`)
+- `YUUKA_MCP_RESOURCE_URI` (`https`, path `/mcp`)
+- `YUUKA_MCP_ISSUER`
+- `YUUKA_MCP_JWK_SET_URI`
+- `YUUKA_MCP_OWNERMAPPINGS_0_ISSUER`, `YUUKA_MCP_OWNERMAPPINGS_0_SUBJECT`,
+  `YUUKA_MCP_OWNERMAPPINGS_0_OWNERID` (no underscore inside `OWNERMAPPINGS`)
+- optional `YUUKA_MCP_CLOCK_SKEW` (default `PT60S`, maximum `PT5M`)
+
+`ops/prod-preflight.sh` checks, by name only, that when `YUUKA_MCP_ENABLED=true` the resource URI,
+issuer and JWKS URI are non-loopback `https` and that one complete owner mapping exists. The backend
+also refuses to start when enabled with incomplete or invalid configuration. When disabled, no MCP
+settings are required.
+
+Roll back by setting `YUUKA_MCP_ENABLED=false` (or removing the owner mapping) in the env file and
+restarting the backend (`docker compose up -d backend`); there is no hot reload. After the restart
+every previously issued token is denied. Revoking the grant at the provider stops new tokens only.
+
 ## Android installation
 
 For development, `npm start` in `mobile/` opens Expo and can be launched in Expo Go. For an installable APK, set `EXPO_PUBLIC_API_BASE_URL` to the Tailscale HTTPS API URL and use the `preview` profile:

@@ -40,6 +40,21 @@ This document tracks foundation-level security controls. It does not define budg
 - PostgreSQL rejects updates and deletes on status-event and audit-event tables.
 - Docker Compose keeps PostgreSQL on an internal network and binds the API to loopback by default.
 
+## Read-only MCP access (disabled by default)
+
+- Off unless `yuuka.mcp.enabled=true`; enabling with incomplete configuration fails startup.
+- `/mcp` has its own chain and accepts only asymmetric (RS256/ES256/PS256) bearer JWTs from the
+  configured issuer, with the canonical resource URI in `aud` and scope `yuuka:budget:read`. The
+  owner HS256 token and `alg=none` are rejected; MCP tokens cannot call `/api/v1`.
+- Cookies, sessions, query/form tokens and Basic are ignored on `/mcp`; this is why CSRF is disabled
+  there (`McpBrowserCredentialTests`).
+- Revocation window: provider-side revocation stops new tokens only; an issued access token stays
+  valid up to its lifetime plus the clock skew (about 16 minutes at 15 minutes and 60 s). Immediate
+  local denial means removing the owner mapping or disabling the feature and restarting the backend
+  (no hot reload). Signing-key rotation is not revocation: a removed key can verify until the
+  5 minute JWK cache refreshes.
+- The unauthenticated metadata document is static and contains no owner data.
+
 ## Known Follow-Up
 
 - The mobile dependency graph pins patched transitive releases for `image-size`, `@xmldom/xmldom`,

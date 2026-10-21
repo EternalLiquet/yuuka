@@ -2,26 +2,30 @@
 
 ## Status
 
-Five read-only budgeting tools exist behind a disabled-by-default feature flag. **They cannot run in
-production.** Authentication for MCP access (issue #146) is not approved, so main code ships no
-token decoder: with `yuuka.mcp.enabled=true` and no approved `McpTokenDecoder` bean, application
-startup fails ("MCP read access requires the approved authentication configuration (#146)") in
-every profile. Production issuer/JWKS wiring, OAuth client configuration and the
-protected-resource metadata endpoint (including the `resource_metadata` challenge parameter) are
-deliberately absent and belong to the post-approval wiring step.
+Five read-only budgeting tools exist behind a disabled-by-default feature flag. **Nothing here enables or
+deploys them.** The authentication architecture is approved (ADR, issue #146) and the production
+wiring exists (see "Authentication and discovery"), but the feature stays disabled until the
+separately gated provider and connectivity prerequisites (P1/P2) are done. With
+`yuuka.mcp.enabled=true` and incomplete or invalid configuration, application startup fails in
+every profile.
 
 ## Configuration
 
 | Property | Default | Meaning |
 | --- | --- | --- |
 | `yuuka.mcp.enabled` (`YUUKA_MCP_ENABLED`) | `false` | Master switch. |
-| `yuuka.mcp.resource-uri` | none | Audience that tokens must carry. Required when enabled. |
-| `yuuka.mcp.owner-mappings[]` | empty | Exact `(issuer, subject) -> ownerId`. Required when enabled. |
+| `yuuka.mcp.resource-uri` | none | Canonical resource URI and token audience. Required when enabled; `https`, path exactly `/mcp`. |
+| `yuuka.mcp.issuer` (`YUUKA_MCP_ISSUER`) | none | Expected `iss`. Required when enabled; `https`. |
+| `yuuka.mcp.jwk-set-uri` (`YUUKA_MCP_JWK_SET_URI`) | none | Provider JWKS. Required when enabled; `https`. |
+| `yuuka.mcp.authorization-servers` | `[issuer]` | Advertised in the metadata document. |
+| `yuuka.mcp.clock-skew` (`YUUKA_MCP_CLOCK_SKEW`) | `PT60S` | Explicit `exp`/`nbf` tolerance, 0 to 5 minutes. |
+| `yuuka.mcp.owner-mappings[]` | empty | Exact `(issuer, subject) -> ownerId`. Required when enabled; each mapping issuer must equal `issuer`. |
 | `yuuka.mcp.allowed-origins` | empty | Allowed `Origin` values; any other present `Origin` gets 403. |
 
 ## Security model
 
-* A second filter chain (`@Order(1)`, matcher `/mcp/**`) is independent of the owner-JWT chain.
+* A second filter chain (`@Order(1)`, matcher `/mcp/**`; see "Authentication and discovery" for the
+  `@Order(0)` metadata chain) is independent of the owner-JWT chain.
   Disabled, or enabled without a `McpTokenDecoder` bean: `denyAll` (401 with `WWW-Authenticate:
   Bearer`). The controller and tools are not registered.
 * `McpTokenDecoder` is intentionally not a Spring `JwtDecoder` bean. The chain wraps it in a
@@ -35,6 +39,56 @@ deliberately absent and belong to the post-approval wiring step.
   scope="yuuka:budget:read"` and JSON-RPC `-32000` `Forbidden`, echoing the request id.
 * Owner HS256 tokens are rejected at `/mcp`; MCP tokens are rejected (401) by every REST route.
 * The `/mcp` endpoint is `@Hidden` from OpenAPI; `docs/openapi.json` is unchanged.
+
+## Authentication and discovery
+
+Production wiring for ADR section 4.3 (issue #147, step P3). All values below are configuration;
+no credentials, clients or grants are created by Yuuka.
+
+* **Decoder.** `JwksMcpTokenDecoder` is registered only when `yuuka.mcp.enabled=true` and both
+  `issuer` and `jwk-set-uri` are set. It uses `NimbusJwtDecoder.withJwkSetUri` restricted to
+  `RS256`, `ES256` and `PS256`; `HS256` (including the Yuuka owner secret) and `alg=none` are
+  rejected. Validators: issuer equals `yuuka.mcp.issuer`; `aud` contains `resource-uri`; `exp`
+  required; `exp`/`nbf` checked with `JwtTimestampValidator` using the explicit `clock-skew` and the
+  application `Clock`. JWT `typ` may be absent, `JWT` or `at+jwt` (RFC 9068). The JWKS HTTP client
+  has 3 s connect and 5 s read timeouts. The decoder is not a Spring `JwtDecoder` bean.
+* **JWK cache.** Spring Security 6.5's default is kept: Nimbus' in-memory cache with a **5 minute
+  TTL**, no refresh-ahead, plus an immediate re-fetch when a token names an unknown `kid`. The TTL is
+  not configurable (the supported `.cache(Cache)` hook replaces it with a Spring cache that has no
+  TTL, which would be worse) and no cache is hand-rolled. The JWKS is fetched lazily on the first
+  token, so startup has no provider dependency. A provider outage rejects tokens (401) once the
+  cache is empty or a new `kid` appears.
+* **Rotation is not revocation.** Observed (see `JwksMcpTokenDecoderTests`): K2 is accepted
+  immediately; if K1 is removed from the JWKS, K1 tokens are still accepted while the cached set
+  lives (up to 5 minutes, or until any unknown-`kid` token forces a refresh) and are rejected
+  afterwards. TTL expiry itself is wall-clock and is not asserted in tests (no sleeping).
+* **Metadata (RFC 9728).** `GET /.well-known/oauth-protected-resource/mcp` is served by a separate
+  `@Order(0)` chain registered only when enabled: exact path and method, `permitAll`, no resource
+  server (a garbage `Authorization` header is ignored), stateless, CSRF left at the Spring default
+  (safe methods are not checked). The Origin filter is intentionally not applied there: the
+  document is static and public, and Origin validation protects `/mcp`. Body: `resource`,
+  `authorization_servers`, `scopes_supported: ["yuuka:budget:read"]`,
+  `bearer_methods_supported: ["header"]`, with `Cache-Control: no-store`. No owner data. The root
+  `/.well-known/oauth-protected-resource` is not served. Disabled: no chain, no handler; the path
+  falls to the REST chain (401). Yuuka serves no authorization-server metadata; clients fetch it
+  from `authorization_servers[0]`.
+* **Challenge.** 401 on `/mcp`: `WWW-Authenticate: Bearer resource_metadata="<scheme>://<authority>/.well-known/oauth-protected-resource/mcp", scope="yuuka:budget:read"`,
+  with `error="invalid_token"` added when a token was presented but is invalid. The 403
+  `insufficient_scope` challenge is unchanged.
+* **Owner mappings from the environment.** Spring only discovers list elements from environment
+  variables when the list name has no underscore, so use
+  `YUUKA_MCP_OWNERMAPPINGS_0_ISSUER`, `YUUKA_MCP_OWNERMAPPINGS_0_SUBJECT` and
+  `YUUKA_MCP_OWNERMAPPINGS_0_OWNERID` (and `_1_...` for more). `YUUKA_MCP_OWNER_MAPPINGS_0_*` does
+  **not** bind. `docker-compose.yml` passes through index 0 only; extra mappings need a Compose
+  override. Verified in `McpEnvironmentBindingTests`.
+* **Startup validation (enabled only).** `https` `resource-uri` with path `/mcp`; `https` issuer,
+  JWKS URI and authorization servers (plain `http` is accepted only for loopback hosts, solely so
+  tests can use a loopback stub JWKS; never use it in production); non-empty owner mappings, each
+  with subject, owner id and issuer equal to `yuuka.mcp.issuer`; skew within 0 to 5 minutes; an
+  approved decoder bean.
+* **Why CSRF is disabled on `/mcp`.** Only a bearer token in the `Authorization` header
+  authenticates; the chain is stateless, query/form tokens are not read, CORS is off and
+  disallowed Origins are rejected first. `McpBrowserCredentialTests` proves each point.
 
 ## Transport
 
