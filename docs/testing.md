@@ -90,7 +90,7 @@ npm run test:coverage
 npx expo export --platform android --output-dir dist/android
 ```
 
-Jest enforces 85% line/function/statement and 80% branch coverage for money, API contracts/parsing, session expiry, settings storage, validation, and list behavior. Expo Router page wiring is validated through React Native Testing Library and Maestro rather than counted as isolated unit logic. The resulting targeted threshold exceeds the required 85/80 core-logic and 75 overall minima for the code under the unit coverage gate.
+Jest enforces 85% line/function/statement and 80% branch coverage for money, API contracts/parsing, session expiry, auth session provider/storage and refresh-failure classification, settings storage, validation, and list behavior. Expo Router page wiring is validated through React Native Testing Library and Maestro rather than counted as isolated unit logic. The resulting targeted threshold exceeds the required 85/80 core-logic and 75 overall minima for the code under the unit coverage gate.
 
 Mobile Expense List checks cover runtime contracts, OpenAPI endpoint presence, Bill/Payback target
 routing, and mocked multi-page list behavior through ledger 101. Full rapid-entry and settlement

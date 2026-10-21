@@ -109,6 +109,14 @@ function SettingsDraft() {
     }
   }
 
+  async function signOutSafely() {
+    try {
+      await signOut();
+    } catch {
+      setError('Signed out on this device, but saved sign-in data could not be fully cleared.');
+    }
+  }
+
   function checkNow() {
     void Promise.allSettled([health.refetch(), version.refetch()]);
   }
@@ -191,7 +199,7 @@ function SettingsDraft() {
         </AppText>
       ) : null}
       <Button icon={Save} label="Save settings" loading={saving} onPress={save} />
-      <Button icon={LogOut} label="Sign out" onPress={signOut} variant="danger" />
+      <Button icon={LogOut} label="Sign out" onPress={signOutSafely} variant="danger" />
       <YuukaVersionFooter
         label={
           version.isPending

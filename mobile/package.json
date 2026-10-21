@@ -76,7 +76,7 @@
     ],
     "collectCoverageFrom": [
       "src/api/{api-client,api-error,contracts}.ts",
-      "src/auth/{schemas,session}.ts",
+      "src/auth/{auth-provider.tsx,auth-storage.ts,auth-storage-error.ts,refresh-failure.ts,schemas.ts,session.ts}",
       "src/config/env.ts",
       "src/domain/**/*.ts",
       "src/features/paychecks/{entry-list,form-schemas}.ts",

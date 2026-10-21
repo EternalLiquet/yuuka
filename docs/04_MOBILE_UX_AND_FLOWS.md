@@ -22,9 +22,26 @@ A prominent create action is available from Active.
 ## Authentication flow
 
 - Sign in
-- Session expired state
+- Session expired state (only when the server rejects the refresh token with 401 or the saved
+  refresh token has expired locally; credentials and private cache are then cleared)
+- Connection recovery state
 - Sign out
 - Public registration not required
+
+If the saved access token has expired and the startup refresh cannot confirm the sign-in because
+Yuuka is unreachable (timeout, DNS, TLS, or connectivity failure), the app keeps the saved sign-in
+and shows a recovery screen instead of the sign-in form or any protected data: "Cannot connect to
+Yuuka. Turn on Tailscale, then return here and tap Retry. Your saved sign-in has not been
+removed." Retry validates with the server, stores the rotated session, and only then opens Home.
+Retry shows a busy state and ignores repeat taps; returning the app to the foreground while
+recovering triggers one shared retry. HTTP 403, 429, 5xx, malformed successful responses, and
+secure-storage failures use generic wording ("Yuuka couldn't confirm your sign-in right now") and
+also keep the saved sign-in. Sign out is always available, works offline, and clears local
+credentials and cached data even when the server cannot be reached.
+
+An already-open session whose refresh cannot connect keeps its screens, forms, and cached data;
+the failed request shows its normal error and Retry, and no expired token is sent. A rotated token
+whose response was lost legitimately fails with 401 and requires signing in again.
 
 After authentication, open Home.
 
