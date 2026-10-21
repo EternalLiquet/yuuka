@@ -366,5 +366,8 @@ estimate-aware code first; do not drop pending estimate state from production da
 ## MCP read tools (disabled by default)
 
 Six read-only MCP tools exist behind `yuuka.mcp.enabled` (default `false`). They are not part of
-the `/api/v1` contract or `docs/openapi.json`, fail closed, and cannot be enabled in production
-until the MCP authentication architecture (#146) is approved. See `docs/mcp-read-tools.md`.
+the `/api/v1` contract or `docs/openapi.json` and fail closed. Production authentication wiring
+(asymmetric JWKS bearer tokens, `GET /.well-known/oauth-protected-resource/mcp` metadata, and the
+`resource_metadata` challenge) exists but the feature stays disabled until the separately gated
+provider and connectivity prerequisites are complete. See `docs/mcp-read-tools.md` and
+`docs/deployment.md`.

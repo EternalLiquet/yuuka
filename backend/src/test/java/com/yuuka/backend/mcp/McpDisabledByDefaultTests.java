@@ -79,6 +79,22 @@ class McpDisabledByDefaultTests extends AbstractIntegrationTest {
   }
 
   @Test
+  void metadataPathIsNotServedAndFallsToTheRestChainWhileDisabled() throws Exception {
+    assertThat(
+            context.getBeansOfType(
+                com.yuuka.backend.mcp.api.McpProtectedResourceMetadataController.class))
+        .isEmpty();
+    for (String authorization : new String[] {null, "Bearer garbage"}) {
+      var request = get("/.well-known/oauth-protected-resource/mcp");
+      if (authorization != null) {
+        request.header("Authorization", authorization);
+      }
+      MvcResult result = mockMvc.perform(request).andExpect(status().isUnauthorized()).andReturn();
+      assertThat(result.getResponse().getContentAsString()).doesNotContain("resource");
+    }
+  }
+
+  @Test
   void disallowedOriginIsForbiddenEvenWhenDisabled() throws Exception {
     mockMvc
         .perform(

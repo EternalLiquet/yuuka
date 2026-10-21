@@ -32,6 +32,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
       "yuuka.mcp.enabled=true",
       "yuuka.mcp.resource-uri=" + SyntheticMcpTokens.RESOURCE_URI,
       "yuuka.mcp.allowed-origins=https://allowed.test.invalid",
+      "yuuka.mcp.issuer=" + SyntheticMcpTokens.ISSUER,
+      "yuuka.mcp.jwk-set-uri=" + SyntheticMcpTokens.ISSUER + "/jwks",
       "yuuka.mcp.owner-mappings[0].issuer=" + SyntheticMcpTokens.ISSUER,
       "yuuka.mcp.owner-mappings[0].subject=subject-1",
       "yuuka.mcp.owner-mappings[0].owner-id=00000000-0000-0000-0000-0000000000a1",

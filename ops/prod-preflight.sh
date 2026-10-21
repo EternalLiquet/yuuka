@@ -142,9 +142,11 @@ run_effective_config_validation() {
   validation_output=$(
     docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config --format json 2>/dev/null \
       | python3 -c '
+import ipaddress
 import json
 import re
 import sys
+from urllib.parse import urlparse
 
 DEVELOPMENT_DATABASE_PASSWORD = "yuuka_dev_password"
 DEVELOPMENT_JWT_SECRET = "change-me-to-a-32-byte-minimum-secret"
@@ -213,6 +215,58 @@ def validate_cors(value):
             emit("YUUKA_CORS_ALLOWED_ORIGINS must contain HTTPS origins only")
         if "localhost" in origin or "127.0.0.1" in origin or "[::1]" in origin:
             emit("YUUKA_CORS_ALLOWED_ORIGINS must not contain localhost origins")
+
+
+def is_loopback_host(host):
+    if host is None:
+        return True
+    host = host.lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_unspecified
+
+
+def validate_mcp_https_url(environment, key):
+    value = env_value(environment, key).strip()
+    if value == "":
+        emit(f"{key} is required when YUUKA_MCP_ENABLED is true")
+        return
+    try:
+        parsed = urlparse(value)
+        host = parsed.hostname
+    except ValueError:
+        emit(f"{key} must be an HTTPS URL")
+        return
+    if parsed.scheme != "https" or not host:
+        emit(f"{key} must be an HTTPS URL")
+    elif is_loopback_host(host):
+        emit(f"{key} must not be a loopback host")
+
+
+def validate_mcp(environment):
+    if env_value(environment, "YUUKA_MCP_ENABLED").strip().lower() != "true":
+        return
+    for key in ("YUUKA_MCP_RESOURCE_URI", "YUUKA_MCP_ISSUER", "YUUKA_MCP_JWK_SET_URI"):
+        validate_mcp_https_url(environment, key)
+    indexes = set()
+    for key in environment:
+        match = re.match(r"^YUUKA_MCP_OWNERMAPPINGS_(\d+)_(ISSUER|SUBJECT|OWNERID)$", key)
+        if match:
+            indexes.add(match.group(1))
+    complete = [
+        index
+        for index in indexes
+        if all(
+            not is_blank(env_value(environment, f"YUUKA_MCP_OWNERMAPPINGS_{index}_{part}"))
+            for part in ("ISSUER", "SUBJECT", "OWNERID")
+        )
+    ]
+    if not complete:
+        emit("YUUKA_MCP_OWNERMAPPINGS_0_ISSUER, _SUBJECT and _OWNERID are required when YUUKA_MCP_ENABLED is true")
 
 
 def port_target(port):
@@ -311,6 +365,8 @@ elif len(jwt_secret.encode("utf-8")) < 32:
     emit("YUUKA_JWT_SECRET must be at least 32 UTF-8 bytes")
 
 validate_cors(env_value(backend_environment, "YUUKA_CORS_ALLOWED_ORIGINS"))
+
+validate_mcp(backend_environment)
 
 postgres_password = env_value(postgres_environment, "POSTGRES_PASSWORD")
 datasource_password = env_value(backend_environment, "SPRING_DATASOURCE_PASSWORD")
