@@ -29,6 +29,7 @@ import com.yuuka.backend.paycheck.domain.Paycheck;
 import com.yuuka.backend.paycheck.domain.PaycheckCalculator;
 import com.yuuka.backend.paycheck.domain.PaycheckEntry;
 import com.yuuka.backend.paycheck.domain.PaycheckMetrics;
+import com.yuuka.backend.paycheck.domain.ProcessingAgePolicy;
 import com.yuuka.backend.paycheck.infrastructure.JpaEntryStatusEventRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckEntryRepository;
 import com.yuuka.backend.paycheck.infrastructure.JpaPaycheckRepository;
@@ -64,6 +65,7 @@ public class DashboardService {
   private final JpaExpenseLedgerItemRepository expenseItems;
   private final PaycheckCalculator paycheckCalculator;
   private final BucketCalculator bucketCalculator;
+  private final ProcessingAgePolicy processingAgePolicy;
   private final PaybackService paybackService;
   private final SinkingFundService sinkingFundService;
   private final OwnerLocalDateService ownerLocalDateService;
@@ -78,6 +80,7 @@ public class DashboardService {
       JpaExpenseLedgerItemRepository expenseItems,
       PaycheckCalculator paycheckCalculator,
       BucketCalculator bucketCalculator,
+      ProcessingAgePolicy processingAgePolicy,
       PaybackService paybackService,
       SinkingFundService sinkingFundService,
       OwnerLocalDateService ownerLocalDateService,
@@ -90,6 +93,7 @@ public class DashboardService {
     this.expenseItems = expenseItems;
     this.paycheckCalculator = paycheckCalculator;
     this.bucketCalculator = bucketCalculator;
+    this.processingAgePolicy = processingAgePolicy;
     this.paybackService = paybackService;
     this.sinkingFundService = sinkingFundService;
     this.ownerLocalDateService = ownerLocalDateService;
@@ -295,7 +299,7 @@ public class DashboardService {
         continue;
       }
       LocalDate processingSince = LocalDate.ofInstant(event.getEffectiveAt(), ownerZone);
-      if (processingSince.isAfter(today.minusDays(3))) {
+      if (!processingAgePolicy.isAged(processingSince, today)) {
         continue;
       }
       candidates.add(

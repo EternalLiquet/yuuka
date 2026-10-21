@@ -168,6 +168,7 @@ pitest {
       "com.yuuka.backend.bucket.domain.BucketCalculator",
       "com.yuuka.backend.paycheck.domain.PaycheckVisibilityPolicy",
       "com.yuuka.backend.paycheck.domain.StatusTransitionPolicy",
+      "com.yuuka.backend.paycheck.domain.ProcessingAgePolicy",
     ),
   )
   targetTests.set(
@@ -176,6 +177,7 @@ pitest {
       "com.yuuka.backend.bucket.domain.BucketCalculatorTests",
       "com.yuuka.backend.paycheck.domain.PaycheckVisibilityPolicyTests",
       "com.yuuka.backend.paycheck.domain.StatusTransitionPolicyTests",
+      "com.yuuka.backend.paycheck.domain.ProcessingAgePolicyTests",
     ),
   )
   junit5PluginVersion.set("1.2.3")

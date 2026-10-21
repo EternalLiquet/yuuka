@@ -30,7 +30,7 @@ class McpAuthTests extends AbstractMcpTest {
     ensureOwner(1);
     MvcResult result = list(mcpToken(1), 200);
     JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
-    assertThat(body.at("/result/tools")).hasSize(5);
+    assertThat(body.at("/result/tools")).hasSize(6);
   }
 
   @Test

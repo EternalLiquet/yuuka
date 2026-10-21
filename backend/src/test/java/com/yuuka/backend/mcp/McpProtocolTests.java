@@ -23,6 +23,7 @@ class McpProtocolTests extends AbstractMcpTest {
           "yuuka_get_budget_context",
           "yuuka_get_paycheck",
           "yuuka_get_recurring_coverage",
+          "yuuka_get_review_queue",
           "yuuka_list_paychecks",
           "yuuka_search_entries");
 
@@ -74,7 +75,7 @@ class McpProtocolTests extends AbstractMcpTest {
   }
 
   @Test
-  void toolsListHasExactlyFiveReadOnlyStrictTools() throws Exception {
+  void toolsListHasExactlySixReadOnlyStrictTools() throws Exception {
     ensureOwner(1);
     JsonNode body =
         send(
@@ -222,7 +223,7 @@ class McpProtocolTests extends AbstractMcpTest {
 
     JsonNode tools =
         send(legacy("2025-06-18", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/list\"}"), 200);
-    assertThat(tools.at("/result/tools")).hasSize(5);
+    assertThat(tools.at("/result/tools")).hasSize(6);
 
     JsonNode call =
         send(
