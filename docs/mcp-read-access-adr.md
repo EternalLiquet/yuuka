@@ -1,11 +1,13 @@
 # ADR: Private read-only MCP access
 
-- Status: **Proposed — awaiting owner architecture approval** (issue #146)
+- Status: **Accepted by the owner for design and implementation** (issue #146), approved at
+  `bc0044f` on 2026-10-21. This approval does not cover deployment, creating credentials or OAuth
+  grants, installing tunnels, or live financial access; each stays separately gated.
 - Scope: architecture and feasibility only. This document does not authorize deploying, installing
   a tunnel, creating credentials or OAuth grants, changing Tailscale/network/security settings,
   publishing a plugin, live financial reads, or writes.
-- Related: #147 (read tools), #148 (review queue). Both stay disabled by default and draft until
-  this ADR is approved.
+- Related: #147 (read tools), #148 (review queue). Both stay disabled by default; enabling them in
+  production needs the separately gated prerequisites P1 and P2.
 
 ## 1. Question
 
