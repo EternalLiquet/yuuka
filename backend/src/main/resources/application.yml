@@ -46,6 +46,8 @@ server:
     max-swallow-size: 16KB
 
 yuuka:
+  mcp:
+    enabled: ${YUUKA_MCP_ENABLED:false}
   cors:
     allowed-origins: ${YUUKA_CORS_ALLOWED_ORIGINS:http://localhost:8081,http://localhost:19006,http://127.0.0.1:8081,http://127.0.0.1:19006}
   http:
