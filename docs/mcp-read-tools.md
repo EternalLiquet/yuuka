@@ -103,6 +103,9 @@ Streamable HTTP, JSON responses only, no SSE, no sessions (`Mcp-Session-Id` is n
   `resultType: "complete"`; `server/discover` and `tools/list` add `ttlMs: 0`, `cacheScope:
   "private"`; all carry `_meta` serverInfo.
 * **2025-11-25 / 2025-06-18**: `initialize` needs no header (version negotiated in the body).
+  Its params must be an object with a string `protocolVersion`; invalid params return HTTP 200
+  with JSON-RPC `-32602` and the original request ID. Unsupported string versions still negotiate
+  the latest supported legacy version.
   Every later request and notification (`ping`, `tools/list`, `tools/call`,
   `notifications/initialized`) must send a supported `MCP-Protocol-Version`; absent gives 400
   `-32022` with `data.supported` (2025-03-26 is not supported). `Mcp-Method`/`Mcp-Name` are not
@@ -127,6 +130,12 @@ Money and optimistic-lock versions are exact decimal strings (`^-?[0-9]{1,19}$`)
 representation (JSON number). Search `amountMinor` is an input string parsed with checked 64-bit
 parsing (overflow is `INVALID_ARGUMENTS`). REST contracts are unchanged. No tool returns notes or
 owner email.
+
+Paycheck summaries include `estimatedEntryCount`, the number of live entries whose amounts are
+estimates included in the authoritative totals. The totals are not recalculated or adjusted.
+Search candidates include `amountEstimated` alongside each exact amount, including when estimated
+and confirmed entries have equal values. These markers are required by the MCP output schemas;
+the existing REST search representation remains unchanged.
 
 ## Tools
 

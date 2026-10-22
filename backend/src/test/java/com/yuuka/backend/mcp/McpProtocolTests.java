@@ -13,6 +13,8 @@ import com.yuuka.backend.mcp.support.AbstractMcpTest;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -236,6 +238,36 @@ class McpProtocolTests extends AbstractMcpTest {
     assertThat(call.at("/result/content/0/type").asText()).isEqualTo("text");
     assertThat(objectMapper.readTree(call.at("/result/content/0/text").asText()))
         .isEqualTo(call.at("/result/structuredContent"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "missing",
+        "null",
+        "[]",
+        "42",
+        "\"bad\"",
+        "{}",
+        "{\"protocolVersion\":null}",
+        "{\"protocolVersion\":42}",
+        "{\"protocolVersion\":true}",
+        "{\"protocolVersion\":{}}"
+      })
+  void initializeRejectsInvalidParamsWithTheRequestId(String params) throws Exception {
+    ensureOwner(1);
+    ObjectNode request = objectMapper.createObjectNode();
+    request.put("jsonrpc", "2.0");
+    request.put("id", "initialize-validation");
+    request.put("method", "initialize");
+    if (!params.equals("missing")) {
+      request.set("params", objectMapper.readTree(params));
+    }
+    JsonNode response = send(legacy(null, request.toString()), 200);
+    assertThat(response.path("jsonrpc").asText()).isEqualTo("2.0");
+    assertThat(response.path("id").asText()).isEqualTo("initialize-validation");
+    assertThat(response.at("/error/code").asInt()).isEqualTo(McpProtocol.INVALID_PARAMS);
+    assertThat(response.has("result")).isFalse();
   }
 
   @Test

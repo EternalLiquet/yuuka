@@ -12,6 +12,7 @@ import com.yuuka.backend.recurring.api.dto.RecurringBillTimelineResponse;
 import com.yuuka.backend.recurring.application.RecurringBillService;
 import com.yuuka.backend.recurring.domain.RecurringBillAmountMode;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,6 +100,9 @@ public class RecurringCoverageTool implements McpTool {
     McpArguments args = McpArguments.of(arguments, Set.of("from", "through"));
     LocalDate from = args.date("from", true);
     LocalDate through = args.date("through", true);
+    if (ChronoUnit.DAYS.between(from, through) >= 366) {
+      throw McpToolFailure.invalid("$.through: inclusive range must not exceed 366 days.");
+    }
     ReadContext context = support.begin(ownerId);
     RecurringBillTimelineResponse timeline;
     try {

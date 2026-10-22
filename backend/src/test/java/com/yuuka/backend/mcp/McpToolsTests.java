@@ -21,6 +21,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.MediaType;
 
 /** Tool behavior against PostgreSQL: parity with REST, ownership, precision, schemas. */
@@ -403,6 +405,78 @@ class McpToolsTests extends AbstractMcpTest {
   }
 
   @Test
+  void compactSummariesDistinguishEqualEstimatedAndConfirmedAmounts() throws Exception {
+    int owner = 5;
+    JsonNode confirmed = createPaycheck(owner, "Confirmed", 20000, "2026-08-01");
+    addEntry(owner, confirmed.path("id").asText(), "BILL", "Electric", 12000);
+    addEntry(owner, confirmed.path("id").asText(), "BILL", "Water", 4500);
+    JsonNode estimatedSummary =
+        ok(A, "yuuka_list_paychecks", "{\"view\":\"ACTIVE\"}").at("/data/items/0");
+    assertThat(estimatedSummary.path("id").asText()).isEqualTo(pEstimated.path("id").asText());
+    JsonNode confirmedSummary =
+        ok(owner, "yuuka_list_paychecks", "{\"view\":\"ACTIVE\"}").at("/data/items/0");
+    for (String field :
+        List.of("amount", "allocated", "unallocated", "posted", "processing", "notPaid")) {
+      assertThat(estimatedSummary.path(field)).as(field).isEqualTo(confirmedSummary.path(field));
+    }
+    assertThat(estimatedSummary.path("estimatedEntryCount").isIntegralNumber()).isTrue();
+    assertThat(estimatedSummary.path("estimatedEntryCount").asLong()).isEqualTo(1);
+    assertThat(confirmedSummary.path("estimatedEntryCount").isIntegralNumber()).isTrue();
+    assertThat(confirmedSummary.path("estimatedEntryCount").asLong()).isZero();
+    com.fasterxml.jackson.databind.node.ObjectNode missingCount = estimatedSummary.deepCopy();
+    missingCount.remove("estimatedEntryCount");
+    com.fasterxml.jackson.databind.node.ObjectNode invalidList =
+        ok(A, "yuuka_list_paychecks", "{\"view\":\"ACTIVE\"}").deepCopy();
+    ((com.fasterxml.jackson.databind.node.ArrayNode) invalidList.at("/data/items"))
+        .set(0, missingCount);
+    assertThat(outputSchema("yuuka_list_paychecks").validate(invalidList)).isNotEmpty();
+  }
+
+  @Test
+  void candidatesDistinguishEqualEstimatedAndConfirmedAmounts() throws Exception {
+    int owner = 6;
+    JsonNode confirmed = createPaycheck(owner, "Confirmed search", 20000, "2026-08-01");
+    addEntry(owner, confirmed.path("id").asText(), "BILL", "Electric", 12000);
+    JsonNode estimated =
+        ok(A, "yuuka_search_entries", "{\"amountMinor\":\"12000\"}").at("/data/items/0");
+    JsonNode actual =
+        ok(owner, "yuuka_search_entries", "{\"amountMinor\":\"12000\"}").at("/data/items/0");
+    assertThat(estimated.path("amount")).isEqualTo(actual.path("amount"));
+    assertThat(estimated.path("amountEstimated").isBoolean()).isTrue();
+    assertThat(estimated.path("amountEstimated").asBoolean()).isTrue();
+    assertThat(actual.path("amountEstimated").isBoolean()).isTrue();
+    assertThat(actual.path("amountEstimated").asBoolean()).isFalse();
+    JsonNode restSearch = restGet(A, "/api/v1/search/entries?amountMinor=12000");
+    assertThat(restSearch.at("/items/0").has("amountEstimated")).isFalse();
+    com.fasterxml.jackson.databind.node.ObjectNode missingCertainty =
+        ok(A, "yuuka_search_entries", "{\"amountMinor\":\"12000\"}").deepCopy();
+    ((com.fasterxml.jackson.databind.node.ObjectNode) missingCertainty.at("/data/items/0"))
+        .remove("amountEstimated");
+    assertThat(outputSchema("yuuka_search_entries").validate(missingCertainty)).isNotEmpty();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "2026-01-01,2026-01-01,true",
+    "2026-01-01,2027-01-01,true",
+    "2026-01-01,2027-01-02,false",
+    "2024-01-01,2024-12-31,true",
+    "2024-01-01,2025-01-01,false"
+  })
+  void recurringCoverageEnforcesInclusiveDayLimit(String from, String through, boolean accepted)
+      throws Exception {
+    String args = objectMapper.writeValueAsString(Map.of("from", from, "through", through));
+    if (accepted) {
+      ok(A, "yuuka_get_recurring_coverage", args);
+    } else {
+      JsonNode failure = failed(A, "yuuka_get_recurring_coverage", args, "INVALID_ARGUMENTS");
+      assertThat(failure.at("/failure/message").asText()).contains("$.through", "366");
+      // The existing REST contract still permits a 366-day exclusive difference.
+      restGet(A, "/api/v1/recurring-bills/timeline?from=" + from + "&through=" + through);
+    }
+  }
+
+  @Test
   void missingAndCrossOwnerPaychecksAreIndistinguishable() throws Exception {
     String foreign = "{\"paycheckId\":\"" + p1.path("id").asText() + "\"}";
     String random = "{\"paycheckId\":\"" + UUID.randomUUID() + "\"}";
@@ -582,7 +656,8 @@ class McpToolsTests extends AbstractMcpTest {
         A, coverage, "{\"from\":\"2026-02-01\",\"through\":\"2026-01-01\"}", "INVALID_ARGUMENTS");
     failed(
         A, coverage, "{\"from\":\"2026-01-01\",\"through\":\"2027-01-03\"}", "INVALID_ARGUMENTS");
-    ok(A, coverage, "{\"from\":\"2026-01-01\",\"through\":\"2027-01-02\"}");
+    failed(
+        A, coverage, "{\"from\":\"2026-01-01\",\"through\":\"2027-01-02\"}", "INVALID_ARGUMENTS");
 
     String search = "yuuka_search_entries";
     failed(A, search, "{}", "INVALID_ARGUMENTS");

@@ -31,6 +31,13 @@ final class McpPaycheckSchemas {
         .required("processingCount", integer())
         .required("postedCount", integer())
         .required("entryCount", integer())
+        .required(
+            "estimatedEntryCount",
+            integer()
+                .put("minimum", 0)
+                .put(
+                    "description",
+                    "Live entries whose amounts are estimates included in the totals."))
         .required("requiresAttention", bool())
         .required("templateSourceId", nullableUuid())
         .required("createdAt", instant())
