@@ -24,6 +24,7 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.MediaType;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Tool behavior against PostgreSQL: parity with REST, ownership, precision, schemas. */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -405,6 +406,7 @@ class McpToolsTests extends AbstractMcpTest {
   }
 
   @Test
+  @Transactional // Roll back owner 5's fixture; the review-queue suite also uses this owner.
   void compactSummariesDistinguishEqualEstimatedAndConfirmedAmounts() throws Exception {
     int owner = 5;
     JsonNode confirmed = createPaycheck(owner, "Confirmed", 20000, "2026-08-01");

@@ -24,6 +24,10 @@ public interface JpaRecurringBillDefinitionRepository
 
   Optional<RecurringBillDefinition> findByIdAndOwnerId(UUID id, UUID ownerId);
 
+  /** Includes inactive and soft-deleted definitions so provenance can show their state. */
+  List<RecurringBillDefinition> findAllByIdInAndOwnerId(
+      java.util.Collection<UUID> ids, UUID ownerId);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select d from RecurringBillDefinition d where d.id = :id and d.ownerId = :ownerId")
   Optional<RecurringBillDefinition> findIncludingDeletedForUpdate(

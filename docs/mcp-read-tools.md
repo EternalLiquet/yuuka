@@ -2,7 +2,7 @@
 
 ## Status
 
-Five read-only budgeting tools exist behind a disabled-by-default feature flag. **Nothing here enables or
+Six read-only budgeting tools exist behind a disabled-by-default feature flag. **Nothing here enables or
 deploys them.** The authentication architecture is approved (ADR, issue #146) and the production
 wiring exists (see "Authentication and discovery"), but the feature stays disabled until the
 separately gated provider and connectivity prerequisites (P1/P2) are done. With
@@ -118,8 +118,10 @@ Streamable HTTP, JSON responses only, no SSE, no sessions (`Mcp-Session-Id` is n
 
 `schemaVersion "1"`, `tool`, `readStartedAt`, `readCompletedAt`, `asOfDate`, `timeZone`,
 `currency`, `consistency`, `coverage{scope, limitations[]}`, `filters`, `page|null`, `truncated`,
-`failure|null`, `bankFeed: false`, `data|null`. `consistency` is always `MULTI_READ`: each tool
-performs several reads, so no cross-read snapshot or reconciliation is claimed. No global revision
+`failure|null`, `bankFeed: false`, `data|null`. `consistency` is `MULTI_READ` for every tool except
+`yuuka_get_review_queue`: those tools perform several reads, so no cross-read snapshot or
+reconciliation is claimed. The review queue reports `SNAPSHOT` because its whole response is computed
+inside one read-only REPEATABLE READ transaction (see "Review queue"). No global revision
 or bank-sync timestamp exists. Source timestamps and versions are preserved per entity.
 
 ## Precision rules
@@ -145,6 +147,7 @@ the existing REST search representation remains unchanged.
 | `yuuka_list_paychecks` | `view` ACTIVE/HISTORY, `page`>=0, `size` 1..100 (default 25, never clamped), `from`/`through` (HISTORY only) | Summaries only, no entries. |
 | `yuuka_get_paycheck` | `paycheckId` | Live entries in custom order; missing and cross-owner ids give identical `NOT_FOUND`. |
 | `yuuka_get_recurring_coverage` | `from`, `through` (inclusive, <=366 days) | Active definitions only; `linkStatus` LINKED/UNLINKED. |
+| `yuuka_get_review_queue` | `from`, `through` (inclusive, <=93 days), `page`>=0, `size` 1..100 (default 25, never clamped) | Derived bookkeeping questions with evidence; `consistency: SNAPSHOT`. See "Review queue". |
 | `yuuka_search_entries` | `query` (1..200, trimmed) and/or `amountMinor`, `scope` ALL/ACTIVE/HISTORY, `page`, `size` | Candidates only, `matchKind: "CANDIDATE"`. |
 
 All inputs have `additionalProperties: false`, outputs have strict schemas, and annotations are
@@ -152,7 +155,69 @@ All inputs have `additionalProperties: false`, outputs have strict schemas, and 
 (truthful metadata, never used for access control). Tools are alphabetical by name. New tools are
 added by registering another `McpTool` bean.
 
+## Review queue
+
+`yuuka_get_review_queue({from, through, page, size})` is a thin MCP mapping of
+`BudgetReviewService.review(ownerId, from, through, page, size)` (package `review`, not conditional
+on MCP). It turns existing records into a short list of bookkeeping **questions**. It never imports,
+links, marks Posted, deletes, merges, or creates a recurring definition; it writes no review state,
+audit event, or status event and needs no migration. It does not reconcile against a bank.
+
+**Scopes.** Recurring checks cover occurrences dated `from..through` inclusive (at most 93 days;
+`through >= from`). Paycheck checks cover **all** Active paychecks (same membership as
+`PaycheckService.active`) regardless of the window, and every response says so
+(`data.paycheckScope = ALL_ACTIVE_PAYCHECKS`, `scope` on every finding, and a coverage limitation).
+
+| `checkCode` | Rule | Severity | Scope |
+| --- | --- | --- | --- |
+| `RECURRING_OCCURRENCE_UNLINKED` | Occurrence of an *active* definition (month-end clamping from `MonthlyOccurrencePolicy`) with no live linked entry in a live paycheck. Lists up to 10 `possibleMatches` (live BILL entries whose due date or paycheck income date is within 7 days; same name ignoring case, amount equal to the recorded occurrence amount or Fixed-mode typical amount, or same definition as provenance) and `candidateSearch{criteria, limit, returned, complete}`. | MEDIUM | window |
+| `RECURRING_OCCURRENCE_MULTIPLE_LINKS` | More than one live linked entry. All are listed with id, paycheck, status, amount, version. May be intentional. | LOW | window |
+| `VARIABLE_AMOUNT_NEEDS_REVIEW` | (a) VARIABLE occurrence whose amount was never entered (`amountBasis UNKNOWN`, amount `null`), reported even if a linked entry carries its own amount; (b) a live entry with `amountEstimated` in an Active paycheck, or linked to a window occurrence (`ESTIMATED`). | MEDIUM | window / all Active |
+| `MANUAL_BILL_NOT_PAID_DUE` | Live `BILL`, `MANUAL`, `NOT_PAID`, **dated** `dueDate <= owner-local today`, in an Active paycheck. Past due is HIGH, due today is MEDIUM. | HIGH / MEDIUM | all Active |
+| `PROCESSING_AGED` | Latest status event is a move to `PROCESSING` and its owner-local *effective* date is on or before today minus 3 days (`ProcessingAgePolicy`, shared with Home). Evidence carries `effectiveAt` (user-selected) and `recordedAt` (system) separately. | MEDIUM | all Active |
+| `PAYCHECK_UNALLOCATED` | Active paycheck with `unallocated > 0` from `PaycheckCalculator`. Statuses never affect it: a fully allocated paycheck with unpaid entries is not flagged here. | LOW | all Active |
+| `BUCKET_OVER_BUDGET` | Live `SPENDING_BUCKET` in an Active paycheck, `remaining < 0` from `BucketCalculator`, status not `POSTED`. | MEDIUM | all Active |
+
+**Reuse and deliberate differences from Home attention.** Manual-bill, Processing-age and
+over-budget logic follow `DashboardService`. Home also lists undated and future-dated manual Bills
+(lowest rank); the review queue lists only dated manual Bills due today or earlier, because its
+purpose is "due". The posted-bucket exclusion is copied from Home. Home caps results at 5; the
+review queue never caps silently.
+
+**Provenance.** Entries store no snapshot of their recurring definition, so evidence shows the
+definition *as it is now*: `definitionState` ACTIVE/INACTIVE/DELETED, current version and name,
+and `definitionUpdatedAfterEntryCreated` (approximate: definition `updated_at` after entry
+`created_at`). Inactive and deleted definitions generate no occurrences, and no historical
+occurrences are inferred. Entry `amountBasis` is `ESTIMATED` only when its persisted estimate marker
+is set; otherwise it is `null`, because no historical definition amount mode is stored. A current
+definition's `amountMode` remains a separate fact and never establishes an entry's historical basis.
+
+**Possible amount matches.** Variable definitions use only the actual recorded for that occurrence;
+dormant Fixed amounts and planning estimates do not establish an amount match. A match using an
+estimated entry amount carries `ESTIMATED_AMOUNT_EQUALS_OCCURRENCE_OR_TYPICAL`, separately from
+`AMOUNT_EQUALS_OCCURRENCE_OR_TYPICAL` for non-estimated entries. Both remain unconfirmed candidates.
+
+**Ordering and paging.** Findings sort by severity (HIGH, MEDIUM, LOW), then primary date ascending
+(occurrence date, due date, processing-since date, or income date; nulls last), then `checkCode`
+declaration order, then `paycheckId`, `entryId`, `definitionId` compared as UUID strings. `page.totalItems`
+and `data.summary` (counts per `checkCode`) describe the whole snapshot, not the page. A page past the
+end is empty. `truncated` is always `false`; an incomplete possible-match search is reported on the
+finding (`candidateSearch.complete=false`) and as a coverage limitation.
+
+**Consistency.** The service method is `@Transactional(readOnly = true, isolation =
+REPEATABLE_READ)` and computes the owner context, every query, the full sorted list, the total and
+the page slice inside it; the tool reads nothing outside it, so the envelope reports `SNAPSHOT`.
+Each page is its own transaction: separate pages may reflect different data, and a limitation says
+so.
+
+**Failures.** Invalid arguments are `INVALID_ARGUMENTS`. If any Active paycheck's amounts cannot be
+summed without 64-bit overflow the whole call fails with `MONEY_AMOUNT_OVERFLOW` instead of
+returning wrapped values.
+
 ## Known limitations
+
+* No bank feed: findings are not verified against bank activity, and unsaved, unsynchronized or
+  unentered activity may exist.
 
 * The dashboard caps needs-attention at 5 items; `needsAttentionMayBeTruncated` and `truncated`
   are set when 5 are returned, and the limitation is listed in `coverage.limitations`.

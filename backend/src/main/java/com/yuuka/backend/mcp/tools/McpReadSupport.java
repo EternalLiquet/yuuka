@@ -44,6 +44,33 @@ public class McpReadSupport {
       McpReadEnvelope.Page page,
       boolean truncated,
       T data) {
+    return success(
+        context,
+        tool,
+        scope,
+        limitations,
+        filters,
+        page,
+        truncated,
+        McpReadEnvelope.MULTI_READ,
+        data);
+  }
+
+  /**
+   * Same as the default overload but states the consistency the caller can actually guarantee.
+   * {@code SNAPSHOT} is only truthful when every read behind {@code data} ran inside one
+   * repeatable-read transaction.
+   */
+  public <T> McpReadEnvelope<T> success(
+      ReadContext context,
+      String tool,
+      String scope,
+      List<String> limitations,
+      Map<String, Object> filters,
+      McpReadEnvelope.Page page,
+      boolean truncated,
+      String consistency,
+      T data) {
     return new McpReadEnvelope<>(
         McpReadEnvelope.SCHEMA_VERSION,
         tool,
@@ -52,7 +79,7 @@ public class McpReadSupport {
         context.asOfDate(),
         context.timeZone(),
         context.currency(),
-        McpReadEnvelope.MULTI_READ,
+        consistency,
         new McpReadEnvelope.Coverage(scope, List.copyOf(limitations)),
         filters,
         page,

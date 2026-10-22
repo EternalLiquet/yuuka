@@ -90,6 +90,24 @@ public interface JpaPaycheckEntryRepository extends JpaRepository<PaycheckEntry,
       @Param("from") java.time.LocalDate from,
       @Param("through") java.time.LocalDate through);
 
+  /**
+   * Live Bill entries of live paychecks whose due date or paycheck income date falls inside the
+   * inclusive range. Read-only candidate source for review possible-match lists.
+   */
+  @Query(
+      "select entry from PaycheckEntry entry, Paycheck paycheck "
+          + "where paycheck.id = entry.paycheckId and paycheck.ownerId = :ownerId "
+          + "and entry.ownerId = :ownerId and entry.deletedAt is null "
+          + "and paycheck.deletedAt is null "
+          + "and entry.entryType = com.yuuka.backend.paycheck.domain.EntryType.BILL "
+          + "and ((entry.dueDate between :from and :through) "
+          + "or (paycheck.incomeDate between :from and :through)) "
+          + "order by entry.id")
+  List<PaycheckEntry> findLiveBillCandidatesInRange(
+      @Param("ownerId") UUID ownerId,
+      @Param("from") java.time.LocalDate from,
+      @Param("through") java.time.LocalDate through);
+
   List<PaycheckEntry>
       findAllByOwnerIdAndSourceRecurringBillDefinitionIdAndSourceRecurringOccurrenceDateAndDeletedAtIsNullOrderByPaycheckIdAscPositionAscIdAsc(
           UUID ownerId, UUID definitionId, java.time.LocalDate occurrenceDate);
