@@ -73,7 +73,8 @@ public class EntrySearchService {
         result.getStatus(),
         result.getPaycheckName(),
         result.getPaycheckIncomeDate(),
-        paycheckContext);
+        paycheckContext,
+        result.getAmountEstimated());
   }
 
   private String normalizeQuery(String query) {

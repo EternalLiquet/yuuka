@@ -290,4 +290,61 @@ write_valid_env "$secret_output_env"
 append_env "$secret_output_env" "YUUKA_OWNER_BOOTSTRAP_PASSWORD=$BOOTSTRAP_SECRET"
 expect_fail failure_output_omits_dummy_secrets "$secret_output_env" "$CANONICAL_COMPOSE" "YUUKA_OWNER_BOOTSTRAP_PASSWORD"
 
+# Read-only MCP access: no new requirements while disabled, strict requirements when enabled.
+mcp_disabled_env="$TMP_DIR/mcp-disabled.env"
+write_valid_env "$mcp_disabled_env"
+append_env "$mcp_disabled_env" "YUUKA_MCP_ENABLED=false"
+append_env "$mcp_disabled_env" "YUUKA_MCP_ISSUER=http://localhost/ignored-while-disabled"
+expect_pass mcp_disabled_needs_nothing "$mcp_disabled_env" "$CANONICAL_COMPOSE"
+
+write_valid_mcp_env() {
+  path=$1
+  write_valid_env "$path"
+  append_env "$path" "YUUKA_MCP_ENABLED=true"
+  append_env "$path" "YUUKA_MCP_RESOURCE_URI=https://yuuka.example.test/mcp"
+  append_env "$path" "YUUKA_MCP_ISSUER=https://issuer.example.test"
+  append_env "$path" "YUUKA_MCP_JWK_SET_URI=https://issuer.example.test/jwks"
+  append_env "$path" "YUUKA_MCP_OWNERMAPPINGS_0_ISSUER=https://issuer.example.test"
+  append_env "$path" "YUUKA_MCP_OWNERMAPPINGS_0_SUBJECT=synthetic-subject-value"
+  append_env "$path" "YUUKA_MCP_OWNERMAPPINGS_0_OWNERID=00000000-0000-0000-0000-0000000000a1"
+}
+
+mcp_valid_env="$TMP_DIR/mcp-valid.env"
+write_valid_mcp_env "$mcp_valid_env"
+expect_pass mcp_enabled_complete_configuration "$mcp_valid_env" "$CANONICAL_COMPOSE"
+
+mcp_missing_env="$TMP_DIR/mcp-missing.env"
+write_valid_env "$mcp_missing_env"
+append_env "$mcp_missing_env" "YUUKA_MCP_ENABLED=true"
+expect_fail mcp_enabled_requires_resource_uri "$mcp_missing_env" "$CANONICAL_COMPOSE" "YUUKA_MCP_RESOURCE_URI is required when YUUKA_MCP_ENABLED is true"
+expect_fail mcp_enabled_requires_issuer "$mcp_missing_env" "$CANONICAL_COMPOSE" "YUUKA_MCP_ISSUER is required when YUUKA_MCP_ENABLED is true"
+expect_fail mcp_enabled_requires_jwk_set_uri "$mcp_missing_env" "$CANONICAL_COMPOSE" "YUUKA_MCP_JWK_SET_URI is required when YUUKA_MCP_ENABLED is true"
+expect_fail mcp_enabled_requires_owner_mapping "$mcp_missing_env" "$CANONICAL_COMPOSE" "YUUKA_MCP_OWNERMAPPINGS_0_ISSUER, _SUBJECT and _OWNERID are required"
+
+mcp_http_env="$TMP_DIR/mcp-http.env"
+write_valid_mcp_env "$mcp_http_env"
+append_env "$mcp_http_env" "YUUKA_MCP_JWK_SET_URI=http://issuer.example.test/jwks"
+expect_fail mcp_rejects_http_jwk_set_uri "$mcp_http_env" "$CANONICAL_COMPOSE" "YUUKA_MCP_JWK_SET_URI must be an HTTPS URL"
+
+mcp_loopback_env="$TMP_DIR/mcp-loopback.env"
+write_valid_mcp_env "$mcp_loopback_env"
+append_env "$mcp_loopback_env" "YUUKA_MCP_ISSUER=https://localhost:9000"
+expect_fail mcp_rejects_loopback_issuer "$mcp_loopback_env" "$CANONICAL_COMPOSE" "YUUKA_MCP_ISSUER must not be a loopback host"
+
+mcp_http_loopback_env="$TMP_DIR/mcp-http-loopback.env"
+write_valid_mcp_env "$mcp_http_loopback_env"
+append_env "$mcp_http_loopback_env" "YUUKA_MCP_RESOURCE_URI=http://127.0.0.1:8080/mcp"
+expect_fail mcp_rejects_http_loopback_resource_uri "$mcp_http_loopback_env" "$CANONICAL_COMPOSE" "YUUKA_MCP_RESOURCE_URI must be an HTTPS URL"
+
+mcp_partial_env="$TMP_DIR/mcp-partial.env"
+write_valid_mcp_env "$mcp_partial_env"
+append_env "$mcp_partial_env" "YUUKA_MCP_OWNERMAPPINGS_0_SUBJECT="
+expect_fail mcp_rejects_incomplete_owner_mapping "$mcp_partial_env" "$CANONICAL_COMPOSE" "_SUBJECT and _OWNERID are required"
+
+if output=$(run_preflight "$mcp_http_env" "$CANONICAL_COMPOSE" 2>&1) || printf '%s' "$output" | grep -E 'issuer\.example\.test|synthetic-subject-value|0000000000a1' >/dev/null; then
+  printf 'FAIL mcp_failure_output_omits_values\n%s\n' "$output" >&2
+  exit 1
+fi
+printf 'ok mcp_failure_output_omits_values\n'
+
 printf 'Yuuka production preflight validation tests passed.\n'

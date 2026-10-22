@@ -362,3 +362,12 @@ Bill's amount/estimate marker, preserves status history, audits both changes and
 apply/reverse behavior. Allocation failure or stale versions roll back both changes. Definitions
 and future planning amounts are never changed by this action. Reverting V16 requires removing
 estimate-aware code first; do not drop pending estimate state from production data.
+
+## MCP read tools (disabled by default)
+
+Five read-only MCP tools exist behind `yuuka.mcp.enabled` (default `false`). They are not part of
+the `/api/v1` contract or `docs/openapi.json` and fail closed. Production authentication wiring
+(asymmetric JWKS bearer tokens, `GET /.well-known/oauth-protected-resource/mcp` metadata, and the
+`resource_metadata` challenge) exists but the feature stays disabled until the separately gated
+provider and connectivity prerequisites are complete. See `docs/mcp-read-tools.md` and
+`docs/deployment.md`.

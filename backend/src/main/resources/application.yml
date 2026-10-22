@@ -46,6 +46,12 @@ server:
     max-swallow-size: 16KB
 
 yuuka:
+  mcp:
+    enabled: ${YUUKA_MCP_ENABLED:false}
+    # Everything below is only read when enabled=true; see docs/mcp-read-tools.md. Owner mappings
+    # bind from YUUKA_MCP_OWNERMAPPINGS_<n>_ISSUER/_SUBJECT/_OWNERID (no underscore inside the list name).
+    # YUUKA_MCP_RESOURCE_URI, YUUKA_MCP_ISSUER and YUUKA_MCP_JWK_SET_URI bind by relaxed binding.
+    clock-skew: ${YUUKA_MCP_CLOCK_SKEW:PT60S}
   cors:
     allowed-origins: ${YUUKA_CORS_ALLOWED_ORIGINS:http://localhost:8081,http://localhost:19006,http://127.0.0.1:8081,http://127.0.0.1:19006}
   http:
