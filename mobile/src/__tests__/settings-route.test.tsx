@@ -7,6 +7,7 @@ import SettingsScreen from '../../app/(tabs)/settings';
 
 const mockSignOut = jest.fn();
 const mockUpdateSettings = jest.fn();
+const mockUpdateOwnerSettings = jest.fn();
 const mockSettings = {
   apiBaseUrl: 'https://yuuka.test/api/v1',
   currencyCode: 'USD',
@@ -16,6 +17,13 @@ const mockSettings = {
 
 jest.mock('@/auth/auth-provider', () => ({
   useAuth: () => ({ signOut: mockSignOut }),
+}));
+
+jest.mock('@/api/use-yuuka-api', () => ({
+  useYuukaApi: () => ({
+    me: async () => ({ recurringBillSuggestionDays: 7 }),
+    updateOwnerSettings: (...args: unknown[]) => mockUpdateOwnerSettings(...args),
+  }),
 }));
 
 jest.mock('@/settings/settings-provider', () => ({
@@ -60,6 +68,8 @@ describe('Settings route version footer', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    mockUpdateOwnerSettings.mockResolvedValue(undefined);
+    mockUpdateSettings.mockResolvedValue(undefined);
     fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const target = String(url);
       if (target === 'https://yuuka.test/health/ready') return response({ status: 'UP' });
@@ -72,6 +82,35 @@ describe('Settings route version footer', () => {
     jest.useRealTimers();
     jest.restoreAllMocks();
   });
+
+  it.each([false, true])(
+    'waits for credential cleanup before saving a new server (failure: %s)',
+    async (fails) => {
+      let finish: () => void = () => undefined;
+      mockSignOut.mockImplementation(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            finish = () => (fails ? reject(new Error('Sign-out incomplete')) : resolve());
+          }),
+      );
+      const client = queryClient();
+      const view = await render(<SettingsScreen />, { wrapper: wrapper(client) });
+      await waitFor(() => expect(view.getByText('Yuuka v1.2.3')).toBeTruthy());
+      await fireEvent.changeText(
+        view.getByLabelText('API base URL'),
+        'https://replacement.test/api/v1',
+      );
+      await act(async () => {
+        void view.getByRole('button', { name: 'Save settings' }).props.onClick();
+      });
+      await waitFor(() => expect(mockSignOut).toHaveBeenCalledTimes(1));
+      const savesBeforeCleanup = mockUpdateSettings.mock.calls.length;
+      await act(async () => finish());
+      expect(savesBeforeCleanup).toBe(0);
+      expect(mockUpdateSettings).toHaveBeenCalledTimes(fails ? 0 : 1);
+      client.clear();
+    },
+  );
 
   it('loads the backend version from the API origin and formats a normal release', async () => {
     const client = queryClient();

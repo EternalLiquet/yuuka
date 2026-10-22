@@ -95,17 +95,26 @@ function SettingsDraft() {
         throw new Error('Recurring Bill suggestion window must be from 1 through 31 days.');
       }
       await api.updateOwnerSettings(parsedSuggestionDays);
+      // Clear even legacy, unbound credentials before persisting a different issuer.
+      if (changedServer) await signOut();
       await updateSettings({
         apiBaseUrl: normalized,
         timezone: timezone.trim(),
         currencyCode: currencyCode.trim().toUpperCase(),
         recurringBillSuggestionDays: parsedSuggestionDays,
       });
-      if (changedServer) await signOut();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Settings were not saved.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function signOutSafely() {
+    try {
+      await signOut();
+    } catch {
+      // AuthProvider owns the surviving cleanup warning and retry screen.
     }
   }
 
@@ -191,7 +200,7 @@ function SettingsDraft() {
         </AppText>
       ) : null}
       <Button icon={Save} label="Save settings" loading={saving} onPress={save} />
-      <Button icon={LogOut} label="Sign out" onPress={signOut} variant="danger" />
+      <Button icon={LogOut} label="Sign out" onPress={signOutSafely} variant="danger" />
       <YuukaVersionFooter
         label={
           version.isPending
