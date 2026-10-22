@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import type { PropsWithChildren, ReactNode } from 'react';
+import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -15,6 +16,8 @@ const mockApi = {
   createPaycheckFromDraft: jest.fn(),
   paycheck: jest.fn(),
   recurringBillTimeline: jest.fn(),
+  recurringBills: jest.fn(),
+  me: jest.fn(),
 };
 const queryClients: QueryClient[] = [];
 
@@ -146,6 +149,288 @@ describe('duplicate paycheck route', () => {
     );
     mockApi.paycheck.mockResolvedValue(authoritativeSource);
     mockApi.createPaycheckFromDraft.mockResolvedValue(createdPaycheck);
+  });
+
+  it('retains previous recurring amounts without presenting final allocation during loading or failure', async () => {
+    mockApi.paycheck.mockResolvedValue(
+      sourcePaycheck({
+        entries: [
+          entry({
+            name: 'Sample recurring bill',
+            amountMinor: 4675,
+            amountEstimated: true,
+            sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+            sourceRecurringOccurrenceDate: '2026-06-21',
+          }),
+        ],
+      }),
+    );
+    const timeline = deferred<{ items: [] }>();
+    mockApi.recurringBillTimeline.mockReturnValue(timeline.promise);
+    const view = await renderRoute();
+    await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
+    await fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-16');
+    await fireEvent.press(view.getByLabelText('Continue to entries'));
+    expect(await view.findByText('Previous amount: $46.75')).toBeTruthy();
+    expect(view.getByText('Needs review')).toBeTruthy();
+    expect(view.getByText('Review recurring Bills to finish allocation.')).toBeTruthy();
+    expect(view.queryByText(/left unallocated|over-allocated|Fully allocated/)).toBeNull();
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(true);
+    await act(async () => {
+      timeline.reject(new Error('Unavailable'));
+      await timeline.promise.catch(() => undefined);
+    });
+    expect(await view.findByText('Bill dates could not be loaded.')).toBeTruthy();
+    expect(view.getByText('Previous amount: $46.75')).toBeTruthy();
+    expect(view.getByText('Needs review')).toBeTruthy();
+    expect(mockApi.createPaycheckFromDraft).not.toHaveBeenCalled();
+  });
+
+  it('disables Create when confirmation is revoked after another draft entry selects the same bill', async () => {
+    mockApi.paycheck.mockResolvedValue(
+      sourcePaycheck({
+        entries: [0, 1].map((position) =>
+          entry({
+            id: `11111111-1111-4111-8111-11111111188${position}`,
+            name: `Sample recurring bill ${position + 1}`,
+            amountMinor: 4675,
+            position,
+            sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+            sourceRecurringOccurrenceDate: '2026-06-21',
+          }),
+        ),
+      }),
+    );
+    mockApi.recurringBillTimeline.mockResolvedValue({
+      items: [
+        {
+          definitionId: '11111111-1111-4111-8111-111111111778',
+          definitionVersion: 2,
+          occurrenceDate: '2026-07-21',
+          amountMode: 'FIXED',
+          amountMinor: 5000,
+          planningAmountMinor: null,
+          occurrenceAmountVersion: null,
+          importCount: 0,
+        },
+      ],
+    });
+    const view = await renderRoute();
+    await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
+    await fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-16');
+    await fireEvent.press(view.getByLabelText('Continue to entries'));
+    await view.findAllByLabelText('Choose 2026-07-21');
+    await fireEvent.press(view.getAllByLabelText('Choose 2026-07-21')[0]);
+    await fireEvent.press(view.getByLabelText('Choose 2026-07-21'));
+    await fireEvent.press(view.getAllByLabelText('Add another copy of this bill')[1]);
+    await fireEvent.press(view.getByLabelText('Add another copy of this bill'));
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(false);
+    await fireEvent.press(view.getAllByLabelText('Another copy confirmed')[0]);
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(true);
+    expect(view.getByText('Needs review')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Create paycheck'));
+    expect(mockApi.createPaycheckFromDraft).not.toHaveBeenCalled();
+  });
+
+  it('accepts a reviewed actual zero and requires new review when the income date changes', async () => {
+    mockApi.paycheck.mockResolvedValue(
+      sourcePaycheck({
+        entries: [
+          entry({
+            name: 'Sample recurring bill',
+            amountMinor: 4675,
+            amountEstimated: true,
+            sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+            sourceRecurringOccurrenceDate: '2026-06-21',
+          }),
+        ],
+      }),
+    );
+    mockApi.recurringBillTimeline.mockResolvedValue({
+      items: [
+        {
+          definitionId: '11111111-1111-4111-8111-111111111778',
+          definitionVersion: 2,
+          occurrenceDate: '2026-07-21',
+          amountMode: 'VARIABLE',
+          amountMinor: 0,
+          planningAmountMinor: 9000,
+          occurrenceAmountVersion: 0,
+          importCount: 0,
+        },
+      ],
+    });
+    const view = await renderRoute();
+    await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
+    await fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-16');
+    await fireEvent.press(view.getByLabelText('Continue to entries'));
+    await fireEvent.press(await view.findByLabelText('Choose 2026-07-21'));
+    expect(view.getByText('$1,200.00 left unallocated.')).toBeTruthy();
+    expect(view.getByText('Bill amount: $0.00')).toBeTruthy();
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(false);
+    await fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-17');
+    expect(view.getByText('Needs review')).toBeTruthy();
+    expect(view.getByText('Previous amount: $0.00')).toBeTruthy();
+    expect(view.queryByText(/left unallocated/)).toBeNull();
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(true);
+  });
+
+  it('keeps imported duplicate confirmation required after it is revoked', async () => {
+    mockApi.paycheck.mockResolvedValue(sourcePaycheck({ entries: [] }));
+    mockApi.recurringBills.mockResolvedValue({ items: [] });
+    mockApi.me.mockResolvedValue({ recurringBillSuggestionDays: 7 });
+    mockApi.recurringBillTimeline.mockResolvedValue({
+      items: [
+        {
+          definitionId: '11111111-1111-4111-8111-111111111778',
+          definitionVersion: 2,
+          occurrenceDate: '2026-07-21',
+          name: 'Sample imported bill',
+          amountMode: 'FIXED',
+          amountMinor: 5000,
+          typicalAmountMinor: 5000,
+          planningAmountMinor: null,
+          occurrenceAmountVersion: null,
+          amountEntered: true,
+          importCount: 1,
+          imports: [],
+          paymentMethod: 'AUTOPAY',
+          accountName: null,
+          payee: null,
+          notes: null,
+        },
+      ],
+    });
+    const view = await renderRoute();
+    await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
+    await fireEvent.changeText(view.getByLabelText('Income date'), '2026-07-16');
+    await fireEvent.press(view.getByLabelText('Continue to entries'));
+    await fireEvent.press(view.getByLabelText('Import recurring Bills'));
+    await fireEvent.press(await view.findByLabelText(/Select Sample imported bill, due/));
+    await fireEvent.press(view.getByLabelText('Add another copy of Sample imported bill'));
+    await fireEvent.press(view.getByLabelText('Add selected Bills (1)'));
+    await view.findByLabelText('Another copy confirmed');
+    await waitFor(() =>
+      expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(false),
+    );
+    await fireEvent.press(view.getByLabelText('Another copy confirmed'));
+    expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(true);
+    expect(view.getByText('Needs review')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Create paycheck'));
+    expect(mockApi.createPaycheckFromDraft).not.toHaveBeenCalled();
+  });
+
+  it('uses compact draft actions while retaining entry-specific accessible names and touch targets', async () => {
+    const longName = 'Synthetic household utility with a long descriptive name';
+    mockApi.paycheck.mockResolvedValue(
+      sourcePaycheck({
+        entries: [
+          entry({ name: longName, id: '11111111-1111-4111-8111-111111111801' }),
+          entry({
+            name: 'Synthetic grocery budget',
+            id: '11111111-1111-4111-8111-111111111802',
+            position: 1,
+          }),
+        ],
+      }),
+    );
+    const view = await renderRoute();
+    await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
+    await fireEvent.press(view.getByLabelText('Continue to entries'));
+    for (const [accessible, visible] of [
+      [`Move ${longName} up`, 'Up'],
+      [`Move ${longName} down`, 'Down'],
+      [`Edit ${longName}`, 'Edit'],
+      [`Remove ${longName}`, 'Remove'],
+    ]) {
+      const action = view.getByLabelText(accessible);
+      expect(within(action).getByText(visible)).toBeTruthy();
+      expect(StyleSheet.flatten(action.props.style).minHeight).toBeGreaterThanOrEqual(46);
+    }
+    const summaryTitle = view.getByText('Draft entries').parent;
+    expect(StyleSheet.flatten(summaryTitle?.props.style)).toEqual(
+      expect.objectContaining({ flexBasis: 160, flexGrow: 1 }),
+    );
+    expect(StyleSheet.flatten(summaryTitle?.parent?.props.style)).toEqual(
+      expect.objectContaining({ flexWrap: 'wrap' }),
+    );
+    const entryHeader = view.getByText(longName).parent?.parent;
+    expect(StyleSheet.flatten(entryHeader?.props.style)).toEqual(
+      expect.objectContaining({ flexWrap: 'wrap' }),
+    );
+    const entryStyle = StyleSheet.flatten(entryHeader?.parent?.props.style);
+    expect(entryStyle.alignItems).toBe('stretch');
+    expect(entryStyle.flexDirection).not.toBe('row');
+    expect(view.getByText(longName).props.numberOfLines).toBeUndefined();
+    expect(view.getByText(longName).props.allowFontScaling).not.toBe(false);
+    expect(view.queryByText(`Remove ${longName}`)).toBeNull();
+  });
+
+  it('preserves draft edits, ordering and removal through details navigation and failed creation', async () => {
+    mockApi.paycheck.mockResolvedValue(
+      sourcePaycheck({
+        entries: [
+          entry({
+            name: 'Synthetic utility',
+            amountMinor: 10000,
+            id: '11111111-1111-4111-8111-111111111801',
+            position: 0,
+          }),
+          entry({
+            name: 'Synthetic grocery budget',
+            entryType: 'SPENDING_BUCKET',
+            amountMinor: 20000,
+            id: '11111111-1111-4111-8111-111111111802',
+            position: 1,
+          }),
+        ],
+      }),
+    );
+    mockApi.createPaycheckFromDraft.mockRejectedValue(new Error('Synthetic save failure'));
+    const view = await renderRoute();
+    await waitFor(() => expect(view.getByLabelText('Name').props.value).toBe('Rent 1/2'));
+    await fireEvent.press(view.getByLabelText('Continue to entries'));
+    expect(view.getByLabelText('Move Synthetic utility up').props.accessibilityState.disabled).toBe(
+      true,
+    );
+    await fireEvent.press(view.getByLabelText('Move Synthetic utility down'));
+    expect(
+      view.getByLabelText('Move Synthetic utility down').props.accessibilityState.disabled,
+    ).toBe(true);
+    expect(
+      view.getByLabelText('Move Synthetic grocery budget up').props.accessibilityState.disabled,
+    ).toBe(true);
+    await fireEvent.press(view.getByLabelText('Edit Synthetic utility'));
+    await fireEvent.changeText(view.getByLabelText('Amount'), '125.00');
+    await fireEvent.press(view.getByLabelText('Save template entry'));
+    await waitFor(() => expect(view.queryByLabelText('Close template entry editor')).toBeNull());
+    expect(view.getByText('$125.00')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Edit Synthetic utility'));
+    await fireEvent.changeText(view.getByLabelText('Amount'), '999.00');
+    await fireEvent.press(view.getByLabelText('Close template entry editor'));
+    expect(view.getByText('$125.00')).toBeTruthy();
+    expect(view.queryByText('$999.00')).toBeNull();
+    await fireEvent.press(view.getByLabelText('Back to details'));
+    await fireEvent.press(view.getByLabelText('Continue to entries'));
+    expect(
+      view.getByLabelText('Move Synthetic utility down').props.accessibilityState.disabled,
+    ).toBe(true);
+    expect(view.getByText('$125.00')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Remove Synthetic grocery budget'));
+    expect(view.queryByLabelText('Edit Synthetic grocery budget')).toBeNull();
+    await fireEvent.press(view.getByLabelText('Create paycheck'));
+    await waitFor(() => expect(mockApi.createPaycheckFromDraft).toHaveBeenCalledTimes(1));
+    expect(mockApi.createPaycheckFromDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entries: [expect.objectContaining({ name: 'Synthetic utility', amountMinor: 12500 })],
+      }),
+    );
+    await waitFor(() =>
+      expect(view.getByLabelText('Create paycheck').props.accessibilityState.disabled).toBe(false),
+    );
+    expect(view.getAllByText('$125.00')).toHaveLength(2);
+    expect(view.queryByLabelText('Edit Synthetic grocery budget')).toBeNull();
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it('ignores stale detail-cache data and initializes from the fresh duplicate source', async () => {

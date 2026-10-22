@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useState, type PropsWithChildren } from 'react';
 
 import type { Entry, Paycheck, RecurringBillOccurrence } from '@/api/contracts';
@@ -104,7 +104,7 @@ const occurrence: RecurringBillOccurrence = {
 };
 const draft: TemplateApplicationDraftEntry = {
   accountName: null,
-  amountMinor: 0,
+  amountMinor: 4675,
   clientId: 'draft',
   defaultDueOffsetDays: null,
   entryType: 'BILL',
@@ -188,6 +188,8 @@ it('requires a typed estimate when neither actual nor estimate exists', async ()
   const view = await render(<Draft />, { wrapper });
   await fireEvent.press(await view.findByLabelText('Choose 2028-02-29 (suggested)'));
   expect(onChange.mock.lastCall?.[0].reviewedIncomeDate).toBeUndefined();
+  expect(onChange.mock.lastCall?.[0].amountMinor).toBe(4675);
+  expect(view.getByLabelText('Estimated amount for Power').props.value).toBe('46.75');
   await fireEvent.changeText(view.getByLabelText('Estimated amount for Power'), '42.25');
   await fireEvent.press(view.getByLabelText('Use this estimate'));
   expect(onChange).toHaveBeenLastCalledWith(
@@ -288,4 +290,88 @@ it('refreshes a stale chosen bill and uses the newly saved actual instead of its
       occurrenceAmountVersion: 0,
     }),
   );
+});
+
+it.each([
+  ['fixed', 'FIXED', 7250, null, 7250, false],
+  ['actual', 'VARIABLE', 8150, 13000, 8150, false],
+  ['actual zero', 'VARIABLE', 0, 13000, 0, false],
+  ['estimated zero', 'VARIABLE', null, 0, 0, true],
+] as const)(
+  'uses current %s rather than the previous copied amount',
+  async (_name, amountMode, amountMinor, planningAmountMinor, expected, estimated) => {
+    mockApi.recurringBillTimeline.mockResolvedValue({
+      items: [{ ...occurrence, amountMode, amountMinor, planningAmountMinor }],
+    });
+    const view = await render(<Draft />, { wrapper });
+    await fireEvent.press(await view.findByLabelText('Choose 2028-02-29 (suggested)'));
+    expect(onChange.mock.lastCall?.[0]).toMatchObject({
+      amountMinor: expected,
+      amountEstimated: estimated,
+      reviewedIncomeDate: '2028-02-01',
+    });
+  },
+);
+
+it('preserves an explicit manual zero without using the dormant fixed amount', async () => {
+  mockApi.recurringBillTimeline.mockResolvedValue({
+    items: [{ ...occurrence, planningAmountMinor: undefined }],
+  });
+  const view = await render(<Draft />, { wrapper });
+  await fireEvent.press(await view.findByLabelText('Choose 2028-02-29 (suggested)'));
+  expect(onChange.mock.lastCall?.[0].amountMinor).toBe(4675);
+  expect(onChange.mock.lastCall?.[0].reviewedIncomeDate).toBeUndefined();
+  await fireEvent.changeText(view.getByLabelText('Estimated amount for Power'), '0');
+  await fireEvent.press(view.getByLabelText('Use this estimate'));
+  expect(onChange.mock.lastCall?.[0]).toMatchObject({
+    amountMinor: 0,
+    amountEstimated: true,
+    reviewedIncomeDate: '2028-02-01',
+  });
+});
+
+it('keeps the typed estimate during refresh and confirms using refreshed versions and duplicate requirements', async () => {
+  mockApi.recurringBillTimeline.mockResolvedValueOnce({
+    items: [{ ...occurrence, planningAmountMinor: null }],
+  });
+  let resolveRefresh!: (value: { items: RecurringBillOccurrence[] }) => void;
+  const refresh = new Promise<{ items: RecurringBillOccurrence[] }>((resolve) => {
+    resolveRefresh = resolve;
+  });
+  mockApi.recurringBillTimeline.mockReturnValueOnce(refresh);
+  const view = await render(<Draft />, { wrapper });
+  await fireEvent.press(await view.findByLabelText('Choose 2028-02-29 (suggested)'));
+  await fireEvent.changeText(view.getByLabelText('Estimated amount for Power'), '63.25');
+  await fireEvent.press(view.getByLabelText('Refresh bill dates'));
+  expect(view.getByLabelText('Use this estimate').props.accessibilityState.disabled).toBe(true);
+  await fireEvent.press(view.getByLabelText('Use this estimate'));
+  expect(onChange.mock.lastCall?.[0].reviewedIncomeDate).toBeUndefined();
+  await act(async () => {
+    resolveRefresh({
+      items: [
+        {
+          ...occurrence,
+          planningAmountMinor: null,
+          definitionVersion: 8,
+          occurrenceAmountVersion: 4,
+          importCount: 1,
+        },
+      ],
+    });
+    await refresh;
+  });
+  await waitFor(() =>
+    expect(view.getByLabelText('Use this estimate').props.accessibilityState.disabled).toBe(false),
+  );
+  expect(view.getByLabelText('Estimated amount for Power').props.value).toBe('63.25');
+  await fireEvent.press(view.getByLabelText('Use this estimate'));
+  expect(onChange.mock.lastCall?.[0]).toMatchObject({
+    amountMinor: 6325,
+    amountEstimated: true,
+    recurringDefinitionVersion: 8,
+    occurrenceAmountVersion: 4,
+    duplicateConfirmationRequired: true,
+    confirmDuplicateOccurrence: false,
+    reviewedIncomeDate: '2028-02-01',
+  });
 });

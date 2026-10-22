@@ -83,7 +83,8 @@ export function draftEntryFromPaycheckEntry(
 ): TemplateApplicationDraftEntry {
   return {
     accountName: entry.entryType === 'BILL' ? entry.accountName : null,
-    amountMinor: hasRecurringProvenance(entry) ? 0 : entry.amountMinor,
+    amountMinor: entry.amountMinor,
+    amountEstimated: hasRecurringProvenance(entry) && (entry.amountEstimated ?? false),
     sourceIncomeDate,
     sourceBillDate: entry.sourceRecurringOccurrenceDate,
     clientId: `paycheck-${entry.id}`,
@@ -109,6 +110,16 @@ export function draftTotalMinor(entries: TemplateApplicationDraftEntry[]) {
   return entries.reduce((total, entry) => total + entry.amountMinor, 0);
 }
 
+export function draftEntryNeedsAmountReview(
+  entry: TemplateApplicationDraftEntry,
+  incomeDate: string,
+) {
+  return Boolean(
+    entry.sourceRecurringBillDefinitionId &&
+    (!entry.sourceRecurringOccurrenceDate || entry.reviewedIncomeDate !== incomeDate),
+  );
+}
+
 export function draftEntriesFromRecurringBills(
   selections: RecurringBillImportSelection[],
 ): TemplateApplicationDraftEntry[] {
@@ -120,6 +131,7 @@ export function draftEntriesFromRecurringBills(
     recurringDefinitionVersion: item.definitionVersion,
     occurrenceAmountVersion: item.actualAmountVersion,
     confirmDuplicateOccurrence: item.confirmDuplicateOccurrence,
+    duplicateConfirmationRequired: Boolean(item.confirmDuplicateOccurrence || item.importCount > 0),
     clientId: `recurring-${item.definitionId}-${item.occurrenceDate}-${batch}-${index}`,
     defaultDueOffsetDays: null,
     entryType: 'BILL',
