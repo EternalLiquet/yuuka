@@ -161,7 +161,7 @@ audit event, or status event and needs no migration. It does not reconcile again
 
 | `checkCode` | Rule | Severity | Scope |
 | --- | --- | --- | --- |
-| `RECURRING_OCCURRENCE_UNLINKED` | Occurrence of an *active* definition (month-end clamping from `MonthlyOccurrencePolicy`) with no live linked entry in a live paycheck. Lists up to 10 `possibleMatches` (live BILL entries whose due date or paycheck income date is within 7 days; same name ignoring case, amount equal to the occurrence or typical amount, or same definition as provenance) and `candidateSearch{criteria, limit, returned, complete}`. | MEDIUM | window |
+| `RECURRING_OCCURRENCE_UNLINKED` | Occurrence of an *active* definition (month-end clamping from `MonthlyOccurrencePolicy`) with no live linked entry in a live paycheck. Lists up to 10 `possibleMatches` (live BILL entries whose due date or paycheck income date is within 7 days; same name ignoring case, amount equal to the recorded occurrence amount or Fixed-mode typical amount, or same definition as provenance) and `candidateSearch{criteria, limit, returned, complete}`. | MEDIUM | window |
 | `RECURRING_OCCURRENCE_MULTIPLE_LINKS` | More than one live linked entry. All are listed with id, paycheck, status, amount, version. May be intentional. | LOW | window |
 | `VARIABLE_AMOUNT_NEEDS_REVIEW` | (a) VARIABLE occurrence whose amount was never entered (`amountBasis UNKNOWN`, amount `null`), reported even if a linked entry carries its own amount; (b) a live entry with `amountEstimated` in an Active paycheck, or linked to a window occurrence (`ESTIMATED`). | MEDIUM | window / all Active |
 | `MANUAL_BILL_NOT_PAID_DUE` | Live `BILL`, `MANUAL`, `NOT_PAID`, **dated** `dueDate <= owner-local today`, in an Active paycheck. Past due is HIGH, due today is MEDIUM. | HIGH / MEDIUM | all Active |
@@ -179,7 +179,14 @@ review queue never caps silently.
 definition *as it is now*: `definitionState` ACTIVE/INACTIVE/DELETED, current version and name,
 and `definitionUpdatedAfterEntryCreated` (approximate: definition `updated_at` after entry
 `created_at`). Inactive and deleted definitions generate no occurrences, and no historical
-occurrences are inferred.
+occurrences are inferred. Entry `amountBasis` is `ESTIMATED` only when its persisted estimate marker
+is set; otherwise it is `null`, because no historical definition amount mode is stored. A current
+definition's `amountMode` remains a separate fact and never establishes an entry's historical basis.
+
+**Possible amount matches.** Variable definitions use only the actual recorded for that occurrence;
+dormant Fixed amounts and planning estimates do not establish an amount match. A match using an
+estimated entry amount carries `ESTIMATED_AMOUNT_EQUALS_OCCURRENCE_OR_TYPICAL`, separately from
+`AMOUNT_EQUALS_OCCURRENCE_OR_TYPICAL` for non-estimated entries. Both remain unconfirmed candidates.
 
 **Ordering and paging.** Findings sort by severity (HIGH, MEDIUM, LOW), then primary date ascending
 (occurrence date, due date, processing-since date, or income date; nulls last), then `checkCode`

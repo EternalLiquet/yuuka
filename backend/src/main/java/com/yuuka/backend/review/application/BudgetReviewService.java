@@ -92,7 +92,9 @@ public class BudgetReviewService {
       "Live Bill entries in live paychecks whose due date or paycheck income date is within "
           + MATCH_WINDOW_DAYS
           + " days of the occurrence and that have the same name ignoring case, an amount equal to"
-          + " the occurrence or typical amount, or the same recurring definition as provenance.";
+          + " the recorded occurrence amount (or typical amount in Fixed mode only), or the same"
+          + " recurring definition as provenance. Matches on estimated entry amounts are labeled"
+          + " separately; planning estimates are not used for amount matching.";
 
   private final JpaUserAccountRepository users;
   private final OwnerLocalDateService ownerLocalDateService;
@@ -433,9 +435,13 @@ public class BudgetReviewService {
           reasons.add(ReviewMatchReason.NAME_EQUALS_IGNORING_CASE);
         }
         if ((occurrence.amountMinor() != null && entry.getAmountMinor() == occurrence.amountMinor())
-            || (occurrence.typicalAmountMinor() != null
+            || (occurrence.amountMode() == RecurringBillAmountMode.FIXED
+                && occurrence.typicalAmountMinor() != null
                 && entry.getAmountMinor() == occurrence.typicalAmountMinor())) {
-          reasons.add(ReviewMatchReason.AMOUNT_EQUALS_OCCURRENCE_OR_TYPICAL);
+          reasons.add(
+              entry.isAmountEstimated()
+                  ? ReviewMatchReason.ESTIMATED_AMOUNT_EQUALS_OCCURRENCE_OR_TYPICAL
+                  : ReviewMatchReason.AMOUNT_EQUALS_OCCURRENCE_OR_TYPICAL);
         }
         if (occurrence.definitionId().equals(entry.getSourceRecurringBillDefinitionId())) {
           reasons.add(ReviewMatchReason.SAME_RECURRING_DEFINITION);
@@ -709,16 +715,9 @@ public class BudgetReviewService {
       if (entry.isAmountEstimated()) {
         return ReviewAmountBasis.ESTIMATED;
       }
-      RecurringBillDefinition definition =
-          entry.getSourceRecurringBillDefinitionId() == null
-              ? null
-              : definitionById.get(entry.getSourceRecurringBillDefinitionId());
-      if (definition == null) {
-        return null;
-      }
-      return definition.getAmountMode() == RecurringBillAmountMode.FIXED
-          ? ReviewAmountBasis.FIXED
-          : ReviewAmountBasis.VARIABLE;
+      // The entry persists its estimate marker, but no import-time definition amount mode.
+      // Current definition facts cannot establish the basis of this independent snapshot.
+      return null;
     }
 
     private Provenance provenance(PaycheckEntry entry) {

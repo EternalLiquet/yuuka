@@ -6,6 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.yuuka.backend.common.api.BusinessRuleException;
 import com.yuuka.backend.paycheck.domain.EntryStatus;
 import com.yuuka.backend.paycheck.domain.PaycheckState;
+import com.yuuka.backend.recurring.api.dto.UpdateRecurringBillRequest;
+import com.yuuka.backend.recurring.application.RecurringBillService;
+import com.yuuka.backend.recurring.domain.RecurringBillAmountMode;
 import com.yuuka.backend.review.domain.ReviewAmountBasis;
 import com.yuuka.backend.review.domain.ReviewCheck;
 import com.yuuka.backend.review.domain.ReviewDefinitionState;
@@ -28,6 +31,10 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -42,6 +49,7 @@ class BudgetReviewServiceTests extends AbstractIntegrationTest {
   private static final LocalDate JULY_END = LocalDate.of(2026, 7, 31);
 
   @Autowired private BudgetReviewService review;
+  @Autowired private RecurringBillService recurring;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private ProbeClock clock;
 
@@ -186,6 +194,160 @@ class BudgetReviewServiceTests extends AbstractIntegrationTest {
         .isEqualTo(LocalDate.of(2026, 7, 15));
     assertThat(staleMatch.entry().provenance().definitionState())
         .isEqualTo(ReviewDefinitionState.ACTIVE);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"FIXED, VARIABLE", "VARIABLE, FIXED"})
+  void nonEstimatedEntryBasisDoesNotFollowDefinitionModeChanges(
+      RecurringBillAmountMode originalMode, RecurringBillAmountMode currentMode) {
+    UUID owner = newOwner();
+    UUID bill = definition(owner, "Water", originalMode.name(), 4500L, 28, true, false, 0);
+    UUID paycheck = paycheck(owner, "Pay", 100000, "2026-07-20", "ACTIVE", false);
+    UUID imported =
+        entry(
+            owner,
+            paycheck,
+            "BILL",
+            "Water",
+            4500,
+            "NOT_PAID",
+            "AUTOPAY",
+            "2026-07-28",
+            bill,
+            "2026-07-28",
+            false,
+            false);
+    entry(
+        owner,
+        paycheck,
+        "BILL",
+        "Water split",
+        100,
+        "NOT_PAID",
+        "AUTOPAY",
+        "2026-07-28",
+        bill,
+        "2026-07-28",
+        false,
+        false);
+    Map<String, Object> entryBefore =
+        jdbc.queryForMap(
+            "select * from paycheck_entries where owner_id = ? and id = ?", owner, imported);
+
+    recurring.update(
+        owner,
+        bill,
+        new UpdateRecurringBillRequest(
+            "Water", currentMode, 9000L, null, null, 28, null, null, null, 0));
+    Map<String, Object> beforeReview = snapshot(owner);
+
+    ReviewFinding finding =
+        only(all(owner, JULY_START, JULY_END), ReviewCheck.RECURRING_OCCURRENCE_MULTIPLE_LINKS);
+
+    assertThat(finding.evidence().definition().amountMode()).isEqualTo(currentMode);
+    assertThat(finding.evidence().linkedEntries())
+        .allSatisfy(
+            link -> {
+              assertThat(link.amountEstimated()).isFalse();
+              assertThat(link.amountBasis()).isNull();
+            });
+    ReviewFinding.EntryEvidence evidence =
+        finding.evidence().linkedEntries().stream()
+            .filter(link -> link.entryId().equals(imported))
+            .findFirst()
+            .orElseThrow();
+    assertThat(evidence.amountMinor()).isEqualTo(4500L);
+    assertThat(evidence.version()).isZero();
+    assertThat(evidence.provenance().definitionUpdatedAfterEntryCreated()).isTrue();
+    assertThat(
+            jdbc.queryForMap(
+                "select * from paycheck_entries where owner_id = ? and id = ?", owner, imported))
+        .isEqualTo(entryBefore);
+    assertThat(snapshot(owner)).isEqualTo(beforeReview);
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(longs = {0, 9900})
+  void convertedVariableDefinitionNeverMatchesDormantFixedAmount(Long actual) {
+    UUID owner = newOwner();
+    UUID bill = definition(owner, "Water", "FIXED", 4500L, 28, true, false, 0);
+    recurring.update(
+        owner,
+        bill,
+        new UpdateRecurringBillRequest(
+            "Water", RecurringBillAmountMode.VARIABLE, null, 7000L, null, 28, null, null, null, 0));
+    if (actual != null) {
+      occurrenceAmount(owner, bill, "2026-07-28", actual);
+    }
+    UUID paycheck = paycheck(owner, "Pay", 1000000, "2026-07-20", "ACTIVE", false);
+    // The unrelated bill is closer than every legitimate candidate, so it would consume a slot.
+    UUID unrelated =
+        entry(owner, paycheck, "BILL", "Gym", 4500, "NOT_PAID", "AUTOPAY", "2026-07-28");
+    entry(owner, paycheck, "BILL", "Other estimate", 7000, "NOT_PAID", "AUTOPAY", "2026-07-28");
+    List<UUID> expected = new ArrayList<>();
+    for (int i = 0; i < BudgetReviewService.MATCH_LIMIT; i++) {
+      expected.add(
+          entry(
+              owner,
+              paycheck,
+              "BILL",
+              actual == null ? "Water" : "Utility " + i,
+              actual == null ? 100 + i : actual,
+              "NOT_PAID",
+              "AUTOPAY",
+              "2026-07-27"));
+    }
+
+    ReviewFinding finding =
+        only(all(owner, JULY_START, JULY_END), ReviewCheck.RECURRING_OCCURRENCE_UNLINKED);
+
+    assertThat(finding.evidence().definition().typicalAmountMinor()).isEqualTo(4500L);
+    assertThat(finding.evidence().occurrence().amountMinor()).isEqualTo(actual);
+    assertThat(finding.evidence().possibleMatches())
+        .extracting(match -> match.entry().entryId())
+        .doesNotContain(unrelated)
+        .containsExactlyInAnyOrderElementsOf(expected);
+    assertThat(finding.evidence().candidateSearch().returned())
+        .isEqualTo(BudgetReviewService.MATCH_LIMIT);
+    assertThat(finding.evidence().candidateSearch().complete()).isTrue();
+  }
+
+  @Test
+  void amountMatchOnAnEstimatedEntryIsLabeledAsEstimated() {
+    UUID owner = newOwner();
+    UUID bill = definition(owner, "Water", "VARIABLE", null, 28, true, false, 0);
+    UUID source = definition(owner, "Old utility", "VARIABLE", null, 27, false, false, 0);
+    occurrenceAmount(owner, bill, "2026-07-28", 9900);
+    UUID paycheck = paycheck(owner, "Pay", 100000, "2026-07-20", "ACTIVE", false);
+    UUID estimated =
+        entry(
+            owner,
+            paycheck,
+            "BILL",
+            "Utility",
+            9900,
+            "NOT_PAID",
+            "AUTOPAY",
+            "2026-07-27",
+            source,
+            "2026-07-27",
+            true,
+            false);
+
+    ReviewFinding finding =
+        only(all(owner, JULY_START, JULY_END), ReviewCheck.RECURRING_OCCURRENCE_UNLINKED);
+
+    assertThat(finding.evidence().possibleMatches())
+        .singleElement()
+        .satisfies(
+            match -> {
+              assertThat(match.entry().entryId()).isEqualTo(estimated);
+              assertThat(match.entry().amountBasis()).isEqualTo(ReviewAmountBasis.ESTIMATED);
+              assertThat(match.reasons())
+                  .extracting(Enum::name)
+                  .containsExactly("ESTIMATED_AMOUNT_EQUALS_OCCURRENCE_OR_TYPICAL");
+            });
   }
 
   @Test
