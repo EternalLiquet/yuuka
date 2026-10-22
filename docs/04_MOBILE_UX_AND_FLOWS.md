@@ -245,6 +245,18 @@ matched its income month and the destination month differs. Same-month/weekly pa
 explicit choice. Changing the income date requires reviewing the selection again. Amounts use that
 bill date's actual, then its estimated amount, then a typed estimate. Duplicate assignments require
 confirmation. Failed creation keeps the local draft, and repeated taps create only one paycheck.
+Draft entries stack their header, full-width recurring review, and wrapping action row. Visible
+Up, Down, Edit, and Remove labels stay compact while accessibility labels identify the entry.
+Entry names wrap, font scaling remains enabled, and actions retain their normal touch targets.
+
+Until recurring date and amount review is complete, each Bill shows its previous amount as context
+and the draft summary says **Needs review** rather than presenting a final total or allocation
+claim. Loading, failed refreshes and income-date changes keep creation blocked until review
+completes. A missing actual and estimate prefill the manual estimate with the previous amount,
+but require explicit confirmation; a reviewed zero is valid. Typed estimates survive refresh,
+confirmation is disabled during refresh or failure, and successful review uses current occurrence
+versions. Revoking another-copy confirmation restores the review requirement, including for Bills
+already confirmed in the import sheet.
 
 Estimated Bills show **Estimated amount · Waiting for the actual bill** and **Enter actual bill**.
 The Actual bill sheet names the selected paycheck and date, explains that future estimates stay

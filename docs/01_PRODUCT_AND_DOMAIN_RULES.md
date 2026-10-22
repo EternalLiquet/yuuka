@@ -102,10 +102,13 @@ The income date uses the normal new-paycheck default and must be reviewed before
 created. Duplicate names are allowed and Yuuka does not prepend `Copy of`.
 
 The entry draft copies live source entries in saved custom order, excluding generated `LEFTOVER`
-entries and Bills carrying both recurring-definition and occurrence provenance. The draft reports
-the recurring omissions and keeps Import recurring Bills available so the user explicitly chooses
-the occurrences funded by the new paycheck. It copies entry type, name, amount, notes, Bill payment method/account/payee/due-date
-relationship, and unlinked Planned Savings target fields. It does not copy entry IDs, versions,
+entries. Bills carrying both recurring-definition and occurrence provenance retain their previous
+amount as context, but require explicit review of the occurrence funded by the new paycheck. Their
+new amount uses the selected occurrence's current actual or Fixed amount, then its configured
+estimate, then an explicitly confirmed manual estimate. Missing amounts never become zero
+placeholders; a genuine zero remains valid. Import recurring Bills remains available. The draft
+copies entry type, name, amount, notes, Bill payment method/account/payee/due-date relationship, and
+unlinked Planned Savings target fields. It does not copy entry IDs, versions,
 statuses, status history, timestamps, audit history, Spending Bucket purchases or spent totals,
 Payback assignments, Planned Savings assignments, Payback repayment history, Planned Savings
 transactions, or soft-deleted entries. Every saved duplicate entry starts as Not Paid, and the new

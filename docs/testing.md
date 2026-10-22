@@ -115,6 +115,18 @@ Springdoc and requires byte-for-byte structural equality. The version contract m
 `/health/version` outside `/api/v1`, unauthenticated, JSON-only, and limited to a required nonblank
 `version` string.
 
+Duplicate recurring Bill regressions use synthetic values to cover previous-amount retention,
+current Fixed/actual/estimated amount precedence, missing and optional estimates, reviewed zero,
+income-date invalidation, failed lookup, refresh-safe manual confirmation and current versions.
+Route coverage also verifies that revoking another-copy confirmation blocks creation for both
+imported Bills and an entry whose duplicate was selected later in the same draft. Financial draft
+claims stay incomplete until the required review is complete; no test writes to a live backend.
+
+Duplicate draft route regressions also cover compact visible actions with full entry-specific
+accessibility names, touch-target minimums, untruncated entry labels, and preserving edit, reorder,
+remove, cancel, and Back-to-details changes after failed creation. Layout engine geometry and
+physical-device checks remain separate from component assertions.
+
 ## Android end to end
 
 The current critical Maestro flows are:

@@ -2,6 +2,8 @@ import {
   applicationEntriesFromDraft,
   draftEntriesFromPaycheck,
   draftEntriesFromTemplate,
+  draftEntryFromPaycheckEntry,
+  draftEntryNeedsAmountReview,
   draftTotalMinor,
   dueDateFromOffset,
   TemplateApplicationDraftEntry,
@@ -114,7 +116,50 @@ describe('template application draft helpers', () => {
     expect(draftTotalMinor(draft.entries)).toBe(119000);
   });
 
-  it('omits linked recurring Bills while preserving unlinked entry order', () => {
+  it.each([0, 4675])(
+    'keeps copied amount %s unreviewed until an occurrence is explicitly selected',
+    (amountMinor) => {
+      const copied = draftEntryFromPaycheckEntry(
+        paycheckEntry({
+          amountMinor,
+          sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
+          sourceRecurringOccurrenceDate: '2026-07-21',
+        }),
+        '2026-07-02',
+      );
+      expect(copied.amountMinor).toBe(amountMinor);
+      expect(copied.amountEstimated).toBe(false);
+      expect(draftEntryNeedsAmountReview(copied, '2026-08-02')).toBe(true);
+      const reviewed = {
+        ...copied,
+        sourceRecurringOccurrenceDate: '2026-08-21',
+        reviewedIncomeDate: '2026-08-02',
+      };
+      expect(draftEntryNeedsAmountReview(reviewed, '2026-08-02')).toBe(false);
+      expect(draftEntryNeedsAmountReview(reviewed, '2026-08-03')).toBe(true);
+    },
+  );
+
+  it('keeps partial recurring provenance as an ordinary independent snapshot', () => {
+    const copied = draftEntryFromPaycheckEntry(
+      paycheckEntry({
+        amountMinor: 4675,
+        amountEstimated: true,
+        sourceRecurringBillDefinitionId: null,
+        sourceRecurringOccurrenceDate: '2026-07-21',
+      }),
+      '2026-07-02',
+    );
+    expect(copied).toMatchObject({
+      amountMinor: 4675,
+      amountEstimated: false,
+      sourceRecurringBillDefinitionId: null,
+      sourceRecurringOccurrenceDate: null,
+    });
+    expect(draftEntryNeedsAmountReview(copied, '2026-08-02')).toBe(false);
+  });
+
+  it('retains linked recurring Bill amounts while preserving entry order and requiring review', () => {
     const source = paycheck();
     source.entries.splice(
       1,
@@ -122,6 +167,8 @@ describe('template application draft helpers', () => {
       paycheckEntry({
         id: 'entry-recurring',
         name: 'Electric',
+        amountMinor: 4675,
+        amountEstimated: true,
         position: 1,
         sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
         sourceRecurringOccurrenceDate: '2026-07-21',
@@ -142,7 +189,8 @@ describe('template application draft helpers', () => {
       expect.objectContaining({
         sourceRecurringBillDefinitionId: '11111111-1111-4111-8111-111111111778',
         sourceRecurringOccurrenceDate: null,
-        amountMinor: 0,
+        amountMinor: 4675,
+        amountEstimated: true,
       }),
     );
     expect(source.entries[1].sourceRecurringOccurrenceDate).toBe('2026-07-21');
