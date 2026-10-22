@@ -33,5 +33,6 @@ if [[ "$mode" == "full" ]]; then
   echo "Mobile: Android export"
   (cd "$mobile_dir" && npx expo export --platform android --output-dir dist/android)
   run_npm test:audit-policy
+  run_npm test:dependency-compatibility
   run_npm audit:production
 fi
