@@ -80,6 +80,7 @@ public class SearchEntriesTool implements McpTool {
             .required("paycheckId", uuid())
             .required("entryName", string())
             .required("amount", integerString())
+            .required("amountEstimated", bool())
             .required("entryType", enumOf(EntryType.class))
             .required("paymentMethod", nullable(enumOf(EntryPaymentMethod.class)))
             .required("status", enumOf(EntryStatus.class))

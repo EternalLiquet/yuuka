@@ -17,6 +17,8 @@ public interface EntrySearchProjection {
 
   long getAmountMinor();
 
+  boolean getAmountEstimated();
+
   EntryType getEntryType();
 
   EntryPaymentMethod getPaymentMethod();

@@ -198,10 +198,10 @@ public class McpProtocolHandler {
   }
 
   private McpHttpResult initialize(JsonNode id, JsonNode params) {
-    String requested =
-        params != null && params.path("protocolVersion").isTextual()
-            ? params.path("protocolVersion").asText()
-            : null;
+    if (params == null || !params.isObject() || !params.path("protocolVersion").isTextual()) {
+      return error(200, id, McpProtocol.INVALID_PARAMS, "Invalid params", null);
+    }
+    String requested = params.path("protocolVersion").asText();
     String negotiated =
         McpProtocol.SUPPORTED_PROTOCOL_VERSIONS.contains(requested)
                 && !McpProtocol.STATELESS_VERSION.equals(requested)

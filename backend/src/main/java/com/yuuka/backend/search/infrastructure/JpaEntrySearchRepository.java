@@ -16,6 +16,7 @@ public interface JpaEntrySearchRepository extends JpaRepository<PaycheckEntry, U
                  paycheck.id as paycheckId,
                  entry.name as entryName,
                  entry.amountMinor as amountMinor,
+                 entry.amountEstimated as amountEstimated,
                  entry.entryType as entryType,
                  entry.paymentMethod as paymentMethod,
                  entry.status as status,
