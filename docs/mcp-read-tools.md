@@ -159,10 +159,12 @@ added by registering another `McpTool` bean.
 * `MULTI_READ`: lists and pages are read separately and may reflect different moments.
 * Unlinked recurring coverage means no paycheck entry is linked, not that a bill is unpaid. A null
   amount is unknown. There is no bank feed.
-* Existing inconsistency (not fixed here): the Active list SQL (`findActivePage`) treats
-  `amount_estimated` entries as needing attention, while `PaycheckVisibilityPolicy` (used by entry
-  search `paycheckContext`) does not. `yuuka_list_paychecks` ACTIVE follows `PaycheckService.active`
-  (authoritative); search may label an estimated-only paycheck `HISTORY`.
+* Estimated amounts keep a paycheck Active in both the Active list and entry search. The Active
+  list SQL (`findActivePage`) counts a live `amount_estimated` entry as needing attention, and
+  entry search computes `requiresAttention` with the same estimate condition
+  (`JpaEntrySearchRepository`) before passing it to `PaycheckVisibilityPolicy`. A paycheck that is
+  open only because of an estimated entry is therefore `ACTIVE` in `yuuka_list_paychecks` and in
+  search `paycheckContext`.
 * `yuuka.mcp.allowed-origins` and the `resource-uri` startup requirement were added to the frozen
   configuration record (additive).
 
