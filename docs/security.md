@@ -29,8 +29,18 @@ This document tracks foundation-level security controls. It does not define budg
 - API responses include baseline security headers.
 - Mobile auth responses are schema-validated before storage.
 - Mobile auth response payloads must be JSON and access tokens are capped to a bounded size before storage.
-- Expired or corrupt mobile auth sessions are cleared automatically.
+- Corrupt or locally refresh-expired mobile auth sessions, and sessions the server rejects with HTTP 401 on refresh, are cleared automatically. Connectivity failures, 403, 429, 5xx, malformed responses, and secure-storage errors keep the saved sign-in and show a recovery screen; no protected data is shown until the server validates the session. Sign out clears local credentials and cache even when the server is unreachable, and late refresh or storage results cannot resurrect a signed-out session or overwrite a newer sign-in.
 - Mobile sessions within 30 seconds of expiry are treated as expired.
+- Sessions retain their issuing API base URL in secure storage. Refreshes, protected requests,
+  and best-effort revocation use that bound URL, including cleanup of late auth results. Changing
+  the configured server invalidates in-flight auth work; saved sessions from another server are
+  cleared without sending their credentials to the replacement server. Legacy records without an
+  issuer bind to the configured URL at startup; Settings deletes them before changing that URL.
+- Protected responses are checked against their initiating auth epoch before refresh, replay, or
+  delivery. A late response cannot invalidate a replacement login or revive a signed-out session.
+- Sign-out storage failures keep all routes locked behind an auth-level cleanup warning and retry.
+  Sign-out is only reported complete after deletion succeeds. If storage remains unavailable,
+  credentials may still exist on disk; the UI instructs the user to retry before closing the app.
 - Native mobile token storage uses Expo SecureStore with device-local keychain accessibility on iOS.
 - Web sessions use `sessionStorage` instead of persistent `localStorage`.
 - Production mobile builds require an HTTPS API base URL.

@@ -13,6 +13,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import { ColorValue } from 'react-native';
 
 import { useAuth } from '@/auth/auth-provider';
+import { AuthRecoveryScreen } from '@/components/auth-recovery';
 import { Screen } from '@/components/screen';
 import { AppMenuButton } from '@/components/app-menu';
 import { useAppTheme } from '@/theme/use-app-theme';
@@ -23,10 +24,14 @@ function TabIcon({ icon: Icon, color }: { icon: LucideIcon; color: ColorValue })
 
 export default function TabLayout() {
   const { colors } = useAppTheme();
-  const { isLoading, session } = useAuth();
+  const { isLoading, session, status } = useAuth();
 
   if (isLoading) {
     return <Screen />;
+  }
+
+  if (status === 'recovering') {
+    return <AuthRecoveryScreen />;
   }
 
   if (!session) {
