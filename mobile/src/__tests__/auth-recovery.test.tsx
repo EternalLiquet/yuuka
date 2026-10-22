@@ -9,7 +9,7 @@ import TabLayout from '../../app/(tabs)/_layout';
 
 type MockAuth = {
   isLoading: boolean;
-  recovery: { pending: boolean; reason: 'network' | 'server' | 'storage' } | null;
+  recovery: { pending: boolean; reason: 'network' | 'server' | 'storage' | 'signOut' } | null;
   retryRecovery: jest.Mock;
   session: { accessToken: string } | null;
   signOut: jest.Mock;
@@ -47,7 +47,7 @@ const GENERIC =
   "Yuuka couldn't confirm your sign-in right now. Your saved sign-in has not been removed. Try again, or sign out.";
 
 function recovering(
-  reason: 'network' | 'server' | 'storage',
+  reason: 'network' | 'server' | 'storage' | 'signOut',
   pending = false,
   overrides: Partial<MockAuth> = {},
 ): MockAuth {
@@ -122,6 +122,31 @@ describe('auth recovery screen', () => {
 });
 
 describe('route gates while recovering', () => {
+  it('keeps a sign-out cleanup warning and retry across all auth route gates', async () => {
+    mockAuth = recovering('signOut');
+    for (const Gate of [TabLayout, AuthLayout, IndexScreen]) {
+      const view = await render(<Gate />);
+      expect(view.getByText('Sign-out incomplete')).toBeTruthy();
+      expect(view.getByText(/Saved sign-in data could not be removed/)).toBeTruthy();
+      expect(view.queryByText(/Tailscale/)).toBeNull();
+      expect(view.queryByTestId('protected-tabs')).toBeNull();
+      expect(view.queryByTestId('sign-in-stack')).toBeNull();
+      expect(view.queryByTestId('redirect')).toBeNull();
+      expect(view.queryByRole('button', { name: 'Sign out' })).toBeNull();
+      await fireEvent.press(view.getByRole('button', { name: 'Retry sign out' }));
+      expect(mockAuth.retryRecovery).toHaveBeenCalled();
+      await view.unmount();
+    }
+  });
+
+  it('shows cleanup progress without claiming sign-out succeeded', async () => {
+    mockAuth = recovering('signOut', true);
+    const view = await render(<AuthRecoveryScreen />);
+    expect(view.getByText('Signing out')).toBeTruthy();
+    expect(
+      view.getByRole('button', { name: 'Retry sign out' }).props.accessibilityState,
+    ).toMatchObject({ busy: true, disabled: true });
+  });
   it('renders recovery instead of protected tabs, sign-in, or redirects', async () => {
     mockAuth = recovering('network');
     for (const Gate of [TabLayout, AuthLayout, IndexScreen]) {

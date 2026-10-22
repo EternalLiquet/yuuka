@@ -43,6 +43,12 @@ describe('auth storage', () => {
     await expect(getStoredSession()).resolves.toEqual(session());
   });
 
+  it('retains the issuing server when reading stored credentials', async () => {
+    const stored = { ...session(), apiBaseUrl: 'https://issuer.test/api/v1' };
+    secureStore.getItemAsync.mockResolvedValue(JSON.stringify(stored));
+    await expect(getStoredSession()).resolves.toEqual(stored);
+  });
+
   it('deletes corrupt data and refresh-expired sessions as definitively unusable', async () => {
     secureStore.getItemAsync.mockResolvedValueOnce('not json');
     await expect(getStoredSession()).resolves.toBeNull();

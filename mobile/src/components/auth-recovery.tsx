@@ -13,6 +13,8 @@ const NETWORK_MESSAGE =
   'Cannot connect to Yuuka. Turn on Tailscale, then return here and tap Retry. Your saved sign-in has not been removed.';
 const GENERIC_MESSAGE =
   "Yuuka couldn't confirm your sign-in right now. Your saved sign-in has not been removed. Try again, or sign out.";
+const CLEANUP_MESSAGE =
+  'Saved sign-in data could not be removed. Your private data is locked, but sign-out is not complete. Keep Yuuka open and retry before closing the app.';
 
 /**
  * Shown instead of any protected route while a saved sign-in cannot be
@@ -25,6 +27,21 @@ export function AuthRecoveryScreen() {
   const signingOutRef = useRef(false);
   const pending = Boolean(recovery?.pending);
   const network = recovery?.reason === 'network';
+  const cleanup = recovery?.reason === 'signOut';
+  const title = cleanup
+    ? pending
+      ? 'Signing out'
+      : 'Sign-out incomplete'
+    : network
+      ? 'Cannot connect to Yuuka'
+      : 'Sign-in not confirmed';
+  const message = cleanup
+    ? pending
+      ? 'Removing saved sign-in data. Your private data is locked.'
+      : CLEANUP_MESSAGE
+    : network
+      ? NETWORK_MESSAGE
+      : GENERIC_MESSAGE;
 
   async function onSignOut() {
     if (signingOutRef.current) return;
@@ -33,7 +50,7 @@ export function AuthRecoveryScreen() {
     try {
       await signOut();
     } catch {
-      // Local state is already cleared; a storage failure must not crash the screen.
+      // The provider keeps the cleanup failure and retry visible across navigation.
     } finally {
       signingOutRef.current = false;
       setSigningOut(false);
@@ -48,27 +65,27 @@ export function AuthRecoveryScreen() {
         ) : (
           <AlertCircle color={colors.danger} size={32} testID="recovery-alert-icon" />
         )}
-        <AppText variant="headline">
-          {network ? 'Cannot connect to Yuuka' : 'Sign-in not confirmed'}
-        </AppText>
+        <AppText variant="headline">{title}</AppText>
         <AppText accessibilityLiveRegion="polite" style={{ color: colors.muted }}>
-          {network ? NETWORK_MESSAGE : GENERIC_MESSAGE}
+          {message}
         </AppText>
       </View>
       <View style={styles.actions}>
         <Button
           icon={RefreshCw}
-          label="Retry"
+          label={cleanup ? 'Retry sign out' : 'Retry'}
           loading={pending}
           onPress={() => void retryRecovery()}
         />
-        <Button
-          disabled={signingOut}
-          icon={LogOut}
-          label="Sign out"
-          onPress={onSignOut}
-          variant="secondary"
-        />
+        {!cleanup && (
+          <Button
+            disabled={signingOut}
+            icon={LogOut}
+            label="Sign out"
+            onPress={onSignOut}
+            variant="secondary"
+          />
+        )}
       </View>
     </Screen>
   );

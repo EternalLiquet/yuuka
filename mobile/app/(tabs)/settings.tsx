@@ -95,13 +95,14 @@ function SettingsDraft() {
         throw new Error('Recurring Bill suggestion window must be from 1 through 31 days.');
       }
       await api.updateOwnerSettings(parsedSuggestionDays);
+      // Clear even legacy, unbound credentials before persisting a different issuer.
+      if (changedServer) await signOut();
       await updateSettings({
         apiBaseUrl: normalized,
         timezone: timezone.trim(),
         currencyCode: currencyCode.trim().toUpperCase(),
         recurringBillSuggestionDays: parsedSuggestionDays,
       });
-      if (changedServer) await signOut();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Settings were not saved.');
     } finally {
@@ -113,7 +114,7 @@ function SettingsDraft() {
     try {
       await signOut();
     } catch {
-      setError('Signed out on this device, but saved sign-in data could not be fully cleared.');
+      // AuthProvider owns the surviving cleanup warning and retry screen.
     }
   }
 

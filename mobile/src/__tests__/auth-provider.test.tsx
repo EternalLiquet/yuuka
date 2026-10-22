@@ -20,6 +20,9 @@ const mockLogin = jest.fn();
 const mockLogout = jest.fn();
 const mockRefreshSession = jest.fn();
 const mockApiRequest = jest.fn();
+const SERVER_A = 'http://localhost:8080/api/v1';
+const SERVER_B = 'https://replacement.test/api/v1';
+let mockApiBaseUrl = SERVER_A;
 
 jest.mock('@/auth/auth-storage', () => ({
   clearSession: () => {
@@ -49,7 +52,7 @@ jest.mock('@/api/api-client', () => ({
 jest.mock('@/settings/settings-provider', () => ({
   useSettings: () => ({
     settings: {
-      apiBaseUrl: 'http://localhost:8080/api/v1',
+      apiBaseUrl: mockApiBaseUrl,
       currencyCode: 'USD',
       theme: 'dark',
       timezone: 'America/Indianapolis',
@@ -69,6 +72,7 @@ describe('AuthProvider session behavior', () => {
     jest.restoreAllMocks();
     jest.clearAllMocks();
     operations.length = 0;
+    mockApiBaseUrl = SERVER_A;
     appStateListener = null;
     jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
       appStateListener = listener as (state: string) => void;
@@ -97,6 +101,135 @@ describe('AuthProvider session behavior', () => {
     );
     expect(operations).toEqual(['get', 'clear']);
     expect(queryClient.getQueryData(['paychecks', 'active'])).toBeUndefined();
+  });
+
+  describe('server changes', () => {
+    it('revokes on the issuing server when storage deletion spans a server change', async () => {
+      mockGetStoredSession.mockResolvedValue(freshSession());
+      const view = await renderWithAuth(newQueryClient());
+      await view.findByText('status:authenticated');
+      const clear = deferred<void>();
+      mockClearSession.mockReturnValueOnce(clear.promise);
+      let signedOut: Promise<void> = Promise.resolve();
+      await act(async () => {
+        signedOut = auth.signOut();
+      });
+      mockApiBaseUrl = SERVER_B;
+      await view.rerender(<AuthProbe />);
+      await act(async () => {
+        clear.resolve();
+        await signedOut;
+      });
+      expect(mockLogout).toHaveBeenCalledWith(SERVER_A, freshSession().refreshToken);
+      expect(mockLogout.mock.calls.every(([url]) => url === SERVER_A)).toBe(true);
+    });
+
+    it('discards a late login and revokes it on its original server', async () => {
+      mockGetStoredSession.mockResolvedValue(null);
+      const view = await renderWithAuth(newQueryClient());
+      await view.findByText('status:signedOut');
+      const login = deferred<AuthSession>();
+      mockLogin.mockReturnValueOnce(login.promise);
+      let signedIn: Promise<void> = Promise.resolve();
+      await act(async () => {
+        signedIn = auth.signIn(signInValues);
+      });
+      mockApiBaseUrl = SERVER_B;
+      await view.rerender(<AuthProbe />);
+      await act(async () => {
+        login.resolve(rotatedSession('old-login'));
+        await signedIn;
+      });
+      expect(view.getByText('session:none')).toBeTruthy();
+      expect(mockStoreSession).not.toHaveBeenCalled();
+      expect(mockLogout).toHaveBeenCalledWith(SERVER_A, rotatedSession('old-login').refreshToken);
+    });
+
+    it('discards a late refresh and revokes it on its original server', async () => {
+      mockGetStoredSession.mockResolvedValue(expiredAccessSession());
+      const refresh = deferred<AuthSession>();
+      mockRefreshSession.mockReturnValueOnce(refresh.promise);
+      const view = await renderWithAuth(newQueryClient());
+      await waitFor(() => expect(mockRefreshSession).toHaveBeenCalled());
+      mockApiBaseUrl = SERVER_B;
+      await view.rerender(<AuthProbe />);
+      await act(async () => {
+        refresh.resolve(rotatedSession('old-refresh'));
+      });
+      expect(view.getByText('session:none')).toBeTruthy();
+      expect(mockStoreSession).not.toHaveBeenCalled();
+      expect(mockLogout).toHaveBeenCalledWith(SERVER_A, rotatedSession('old-refresh').refreshToken);
+    });
+
+    it('revokes a rotated token on its issuer when a late storage write rejects after a server change', async () => {
+      mockGetStoredSession.mockResolvedValue(expiredAccessSession());
+      mockRefreshSession.mockResolvedValueOnce(rotatedSession('unsaved-rotation'));
+      const write = deferred<void>();
+      mockStoreSession.mockReturnValueOnce(write.promise);
+      const view = await renderWithAuth(newQueryClient());
+      await waitFor(() => expect(mockStoreSession).toHaveBeenCalled());
+      mockApiBaseUrl = SERVER_B;
+      await view.rerender(<AuthProbe />);
+      await act(async () => {
+        write.reject(new AuthStorageError('write'));
+      });
+      await view.findByText('status:signedOut');
+      expect(mockLogout).toHaveBeenCalledWith(
+        SERVER_A,
+        rotatedSession('unsaved-rotation').refreshToken,
+      );
+      expect(mockLogout.mock.calls.every(([url]) => url === SERVER_A)).toBe(true);
+      expect(view.getByText('session:none')).toBeTruthy();
+      expect(operations).toEqual(['get', 'store:unsaved-rotation', 'clear']);
+    });
+
+    it('clears a late login write and revokes on its original server', async () => {
+      mockGetStoredSession.mockResolvedValue(null);
+      mockLogin.mockResolvedValueOnce(rotatedSession('old-write'));
+      const write = deferred<void>();
+      mockStoreSession.mockReturnValueOnce(write.promise);
+      const view = await renderWithAuth(newQueryClient());
+      await view.findByText('status:signedOut');
+      let signedIn: Promise<void> = Promise.resolve();
+      await act(async () => {
+        signedIn = auth.signIn(signInValues);
+      });
+      await waitFor(() => expect(mockStoreSession).toHaveBeenCalled());
+      mockApiBaseUrl = SERVER_B;
+      await view.rerender(<AuthProbe />);
+      await act(async () => {
+        write.resolve();
+        await signedIn;
+      });
+      await view.findByText('status:signedOut');
+      expect(view.getByText('session:none')).toBeTruthy();
+      expect(operations).toEqual(['get', 'store:old-write', 'clear']);
+      expect(mockLogout).toHaveBeenCalledWith(SERVER_A, rotatedSession('old-write').refreshToken);
+    });
+
+    it('never restores stored credentials issued by a different server', async () => {
+      mockApiBaseUrl = SERVER_B;
+      mockGetStoredSession.mockResolvedValue({ ...expiredAccessSession(), apiBaseUrl: SERVER_A });
+      mockRefreshSession.mockResolvedValue(rotatedSession('wrong-server'));
+      const view = await renderWithAuth(newQueryClient());
+      await waitFor(() => expect(auth.isLoading).toBe(false));
+      expect(view.getByText('session:none')).toBeTruthy();
+      expect(mockRefreshSession).not.toHaveBeenCalled();
+      expect(mockApiRequest).not.toHaveBeenCalled();
+      expect(mockClearSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('persists the issuing server with a new login', async () => {
+      mockGetStoredSession.mockResolvedValue(null);
+      mockLogin.mockResolvedValueOnce(rotatedSession('new-login'));
+      const view = await renderWithAuth(newQueryClient());
+      await view.findByText('status:signedOut');
+      await act(() => auth.signIn(signInValues));
+      expect(mockStoreSession).toHaveBeenCalledWith({
+        ...rotatedSession('new-login'),
+        apiBaseUrl: SERVER_A,
+      });
+    });
   });
 
   describe('startup refresh that cannot reach Yuuka', () => {
@@ -211,7 +344,10 @@ describe('AuthProvider session behavior', () => {
 
       expect(view.getByText('status:authenticated')).toBeTruthy();
       expect(view.getByText('session:recovered')).toBeTruthy();
-      expect(mockStoreSession).toHaveBeenCalledWith(rotatedSession('recovered'));
+      expect(mockStoreSession).toHaveBeenCalledWith({
+        ...rotatedSession('recovered'),
+        apiBaseUrl: SERVER_A,
+      });
       expect(operations).toEqual(['get', 'store:recovered']);
       expect(mockLogin).not.toHaveBeenCalled();
       expect(mockRefreshSession).toHaveBeenLastCalledWith(
@@ -327,14 +463,15 @@ describe('AuthProvider session behavior', () => {
       expect(view.getByText('expired:false')).toBeTruthy();
     });
 
-    it('tolerates a failing credential clear after a rejection', async () => {
+    it('keeps failed credential cleanup visible after a rejection', async () => {
       mockGetStoredSession.mockResolvedValue(expiredAccessSession());
       mockRefreshSession.mockRejectedValue(apiError(401, 'INVALID_REFRESH_TOKEN'));
       mockClearSession.mockRejectedValue(new AuthStorageError('clear'));
 
       const view = await renderWithAuth(newQueryClient());
 
-      await view.findByText('status:signedOut');
+      await view.findByText('reason:signOut');
+      expect(view.getByText('session:none')).toBeTruthy();
       expect(view.getByText('expired:true')).toBeTruthy();
     });
   });
@@ -346,6 +483,50 @@ describe('AuthProvider session behavior', () => {
       await view.findByText('status:authenticated');
       return view;
     }
+
+    it.each([
+      ['sign-out', 401],
+      ['replacement sign-in', 401],
+      ['sign-out', 200],
+      ['replacement sign-in', 200],
+    ] as const)(
+      'discards an original request returning %s / %s after the auth epoch changes',
+      async (transition, status) => {
+        const client = newQueryClient();
+        const view = await openSession(client);
+        const original = deferred<Response>();
+        mockApiRequest.mockReturnValueOnce(original.promise);
+        mockRefreshSession.mockRejectedValue(apiError(401, 'INVALID_REFRESH_TOKEN'));
+        let result: Promise<unknown> = Promise.resolve();
+        await act(async () => {
+          result = auth.authenticatedRequest('/me').catch((error: unknown) => error);
+        });
+        if (transition === 'sign-out') {
+          await act(() => auth.signOut());
+        } else {
+          mockLogin.mockResolvedValueOnce(rotatedSession('replacement'));
+          await act(() => auth.signIn(signInValues));
+          client.setQueryData(['new-login'], 'private');
+        }
+        const before = [...operations];
+        let outcome: unknown;
+        await act(async () => {
+          original.resolve({ status } as Response);
+          outcome = await result;
+        });
+        expect(outcome).toEqual(new Error('Authentication is required'));
+        expect(mockRefreshSession).not.toHaveBeenCalled();
+        expect(mockApiRequest).toHaveBeenCalledTimes(1);
+        expect(operations).toEqual(before);
+        expect(view.getByText('expired:false')).toBeTruthy();
+        if (transition === 'sign-out') {
+          expect(view.getByText('status:signedOut')).toBeTruthy();
+        } else {
+          expect(view.getByText('session:replacement')).toBeTruthy();
+          expect(client.getQueryData(['new-login'])).toBe('private');
+        }
+      },
+    );
 
     it('keeps session and cache when the refresh cannot connect, then recovers', async () => {
       const queryClient = newQueryClient();
@@ -513,9 +694,11 @@ describe('AuthProvider session behavior', () => {
       expect(operations).toEqual(['get', 'clear']);
     });
 
-    it('still clears local state and reports when secure storage cannot be cleared', async () => {
+    it('locks private data and keeps cleanup retry available when secure storage cannot be cleared', async () => {
       mockGetStoredSession.mockResolvedValue(freshSession());
-      const view = await renderWithAuth(newQueryClient());
+      const client = newQueryClient();
+      client.setQueryData(['private'], 'private');
+      const view = await renderWithAuth(client);
       await view.findByText('status:authenticated');
       mockClearSession.mockRejectedValueOnce(new AuthStorageError('clear'));
 
@@ -523,8 +706,34 @@ describe('AuthProvider session behavior', () => {
         await expect(auth.signOut()).rejects.toBeInstanceOf(AuthStorageError);
       });
 
-      expect(view.getByText('status:signedOut')).toBeTruthy();
+      expect(view.getByText('status:recovering')).toBeTruthy();
+      expect(view.getByText('reason:signOut')).toBeTruthy();
+      expect(view.getByText('pending:false')).toBeTruthy();
+      expect(view.getByText('session:none')).toBeTruthy();
+      expect(client.getQueryData(['private'])).toBeUndefined();
       expect(mockLogout).toHaveBeenCalledTimes(1);
+      await expect(auth.authenticatedRequest('/me')).rejects.toThrow('Authentication is required');
+      await expect(auth.signIn(signInValues)).rejects.toThrow('Sign-out cleanup is required');
+      expect(mockLogin).not.toHaveBeenCalled();
+
+      const clear = deferred<void>();
+      mockClearSession.mockReturnValueOnce(clear.promise);
+      let retry: Promise<void> = Promise.resolve();
+      await act(async () => {
+        retry = auth.retryRecovery();
+        void auth.retryRecovery();
+        appStateListener?.('active');
+      });
+      expect(view.getByText('pending:true')).toBeTruthy();
+      expect(mockClearSession).toHaveBeenCalledTimes(2);
+      expect(mockGetStoredSession).toHaveBeenCalledTimes(1);
+      expect(mockRefreshSession).not.toHaveBeenCalled();
+      await act(async () => {
+        clear.resolve();
+        await retry;
+      });
+      expect(view.getByText('status:signedOut')).toBeTruthy();
+      expect(operations).toEqual(['get', 'clear', 'clear']);
     });
 
     it('does not resurrect a signed-out session from a late successful refresh', async () => {
@@ -574,7 +783,8 @@ describe('AuthProvider session behavior', () => {
       await act(async () => {
         signedOut = auth.signOut();
       });
-      expect(view.getByText('status:signedOut')).toBeTruthy();
+      expect(view.getByText('reason:signOut')).toBeTruthy();
+      expect(view.getByText('pending:true')).toBeTruthy();
       await act(async () => {
         read.resolve(freshSession());
         await signedOut;

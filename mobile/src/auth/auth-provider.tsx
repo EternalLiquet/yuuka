@@ -15,7 +15,7 @@ import { apiRequest, ApiRequestOptions } from '@/api/api-client';
 import { useSettings } from '@/settings/settings-provider';
 
 import { login, logout, refreshSession } from './auth-api';
-import { clearSession, getStoredSession, storeSession } from './auth-storage';
+import { clearSession, getStoredSession, storeSession, StoredAuthSession } from './auth-storage';
 import {
   AuthRecoverableError,
   classifyRefreshFailure,
@@ -26,7 +26,7 @@ import { SignInFormValues } from './schemas';
 import { AuthSession, isAccessTokenExpired, isRefreshTokenExpired } from './session';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'recovering' | 'signedOut';
-export type AuthRecovery = { pending: boolean; reason: RecoverableFailureKind };
+export type AuthRecovery = { pending: boolean; reason: RecoverableFailureKind | 'signOut' };
 
 type AuthContextValue = {
   authenticatedRequest: (path: string, options?: ApiRequestOptions) => Promise<Response>;
@@ -57,24 +57,25 @@ const INITIAL_STATE: AuthState = {
 const SIGNED_OUT: AuthState = { ...INITIAL_STATE, status: 'signedOut' };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+type BoundSession = AuthSession & { apiBaseUrl: string };
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const { settings } = useSettings();
   const queryClient = useQueryClient();
   const [state, setState] = useState<AuthState>(INITIAL_STATE);
   const apiBaseUrlRef = useRef(settings.apiBaseUrl);
-  useEffect(() => {
-    apiBaseUrlRef.current = settings.apiBaseUrl;
-  }, [settings.apiBaseUrl]);
   const statusRef = useRef<AuthStatus>('loading');
   // Validated session, handed to screens.
-  const sessionRef = useRef<AuthSession | null>(null);
+  const sessionRef = useRef<BoundSession | null>(null);
   // Saved but unvalidated session kept while recovering. Never handed to screens.
-  const pendingSessionRef = useRef<AuthSession | null>(null);
+  const pendingSessionRef = useRef<BoundSession | null>(null);
   // Incremented on sign-in and sign-out; stale async continuations become no-ops.
   const epochRef = useRef(0);
-  const refreshInFlight = useRef<Promise<AuthSession> | null>(null);
+  const refreshInFlight = useRef<Promise<BoundSession> | null>(null);
   const retryInFlight = useRef<Promise<void> | null>(null);
+  const signOutInFlight = useRef<Promise<void> | null>(null);
+  const cleanupRequired = useRef(false);
+  const cleanupExpired = useRef(false);
   // Secure-storage operations run strictly in order so late writes cannot
   // overwrite a newer sign-in or resurrect a signed-out session.
   const storageQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -100,22 +101,56 @@ export function AuthProvider({ children }: PropsWithChildren) {
     retryInFlight.current = null;
   }, []);
 
-  const bestEffortLogout = useCallback((refreshToken: string) => {
-    void logout(apiBaseUrlRef.current, refreshToken).catch(() => undefined);
+  const bestEffortLogout = useCallback((session: BoundSession) => {
+    void logout(session.apiBaseUrl, session.refreshToken).catch(() => undefined);
   }, []);
+
+  const clearLocalSession = useCallback(
+    (sessionExpired = false): Promise<void> => {
+      if (signOutInFlight.current) return signOutInFlight.current;
+      invalidate();
+      const epoch = epochRef.current;
+      const candidate = pendingSessionRef.current ?? sessionRef.current;
+      sessionRef.current = null;
+      pendingSessionRef.current = null;
+      cleanupRequired.current = true;
+      cleanupExpired.current = sessionExpired;
+      const locked: AuthState = { ...SIGNED_OUT, sessionExpired, status: 'recovering' };
+      applyState({ ...locked, recovery: { pending: true, reason: 'signOut' } });
+      queryClient.clear();
+      // Independent of storage and network availability; always use the issuer.
+      if (candidate) bestEffortLogout(candidate);
+      const attempt = enqueueStorage(clearSession).then(
+        () => {
+          if (epochRef.current !== epoch) return;
+          cleanupRequired.current = false;
+          applyState({ ...SIGNED_OUT, sessionExpired });
+        },
+        (error: unknown) => {
+          if (epochRef.current === epoch) {
+            applyState({ ...locked, recovery: { pending: false, reason: 'signOut' } });
+          }
+          throw error;
+        },
+      );
+      signOutInFlight.current = attempt;
+      const clear = () => {
+        if (signOutInFlight.current === attempt) signOutInFlight.current = null;
+      };
+      attempt.then(clear, clear);
+      return attempt;
+    },
+    [applyState, bestEffortLogout, enqueueStorage, invalidate, queryClient],
+  );
+
+  const signOut = useCallback(() => clearLocalSession(), [clearLocalSession]);
 
   const expireSession = useCallback(
     async (epoch: number) => {
       if (epochRef.current !== epoch) return;
-      sessionRef.current = null;
-      pendingSessionRef.current = null;
-      applyState({ ...SIGNED_OUT, sessionExpired: true });
-      queryClient.clear();
-      await enqueueStorage(async () => {
-        if (epochRef.current === epoch) await clearSession();
-      }).catch(() => undefined);
+      await clearLocalSession(true).catch(() => undefined);
     },
-    [applyState, enqueueStorage, queryClient],
+    [clearLocalSession],
   );
 
   const enterRecovery = useCallback(
@@ -132,19 +167,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   const runRefresh = useCallback(
-    (requested: AuthSession): Promise<AuthSession> => {
+    (requested: BoundSession): Promise<BoundSession> => {
       if (refreshInFlight.current) return refreshInFlight.current;
       const epoch = epochRef.current;
       // A rotated-but-unsaved session supersedes the stale refresh token.
       const candidate = pendingSessionRef.current ?? requested;
-      const attempt = (async (): Promise<AuthSession> => {
-        let rotated: AuthSession | null = null;
+      const attempt = (async (): Promise<BoundSession> => {
+        let rotated: BoundSession | null = null;
         try {
           if (isRefreshTokenExpired(candidate)) throw new LocalRefreshExpiredError();
-          rotated = await refreshSession(apiBaseUrlRef.current, candidate.refreshToken);
+          rotated = {
+            ...(await refreshSession(candidate.apiBaseUrl, candidate.refreshToken)),
+            apiBaseUrl: candidate.apiBaseUrl,
+          };
           if (epochRef.current !== epoch) {
             // Signed out or replaced by a newer sign-in while refreshing.
-            bestEffortLogout(rotated.refreshToken);
             throw new Error('Authentication is required');
           }
           const next = rotated;
@@ -154,7 +191,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
             return true;
           });
           if (!written || epochRef.current !== epoch) {
-            bestEffortLogout(next.refreshToken);
             throw new Error('Authentication is required');
           }
           sessionRef.current = next;
@@ -167,7 +203,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
           });
           return next;
         } catch (error) {
-          if (epochRef.current !== epoch) throw error;
+          if (epochRef.current !== epoch) {
+            if (rotated) bestEffortLogout(rotated);
+            throw error;
+          }
           const kind = classifyRefreshFailure(error);
           if (kind === 'invalid') {
             await expireSession(epoch);
@@ -196,7 +235,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const loadStored = useCallback(
     async (epoch: number) => {
-      let stored: AuthSession | null;
+      const apiBaseUrl = apiBaseUrlRef.current;
+      let stored: StoredAuthSession | null;
       try {
         stored = await enqueueStorage(getStoredSession);
       } catch {
@@ -206,20 +246,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (epochRef.current !== epoch) return;
       if (!stored) {
         applyState(SIGNED_OUT);
-      } else if (isAccessTokenExpired(stored)) {
-        pendingSessionRef.current = stored;
-        await runRefresh(stored).catch(() => undefined);
       } else {
-        sessionRef.current = stored;
+        if (stored.apiBaseUrl && stored.apiBaseUrl !== apiBaseUrl) {
+          await expireSession(epoch);
+          return;
+        }
+        const bound = { ...stored, apiBaseUrl };
+        if (isAccessTokenExpired(bound)) {
+          pendingSessionRef.current = bound;
+          await runRefresh(bound).catch(() => undefined);
+          return;
+        }
+        sessionRef.current = bound;
         applyState({
           recovery: null,
-          session: stored,
+          session: bound,
           sessionExpired: false,
           status: 'authenticated',
         });
       }
     },
-    [applyState, enqueueStorage, enterRecovery, runRefresh],
+    [applyState, enqueueStorage, enterRecovery, expireSession, runRefresh],
   );
 
   useEffect(() => {
@@ -230,6 +277,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const retryRecovery = useCallback((): Promise<void> => {
     if (statusRef.current !== 'recovering') return Promise.resolve();
+    if (cleanupRequired.current) {
+      return clearLocalSession(cleanupExpired.current).catch(() => undefined);
+    }
     if (retryInFlight.current) return retryInFlight.current;
     const epoch = epochRef.current;
     setState((current) =>
@@ -249,7 +299,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
     attempt.then(clear, clear);
     return attempt;
-  }, [loadStored, runRefresh]);
+  }, [clearLocalSession, loadStored, runRefresh]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (next) => {
@@ -260,6 +310,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const authenticatedRequest = useCallback(
     async (path: string, options: ApiRequestOptions = {}) => {
+      const epoch = epochRef.current;
+      const assertCurrent = () => {
+        if (epochRef.current !== epoch) throw new Error('Authentication is required');
+      };
       let current = sessionRef.current;
       if (!current) {
         throw new Error('Authentication is required');
@@ -267,10 +321,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       let refreshed = false;
       if (isAccessTokenExpired(current)) {
         current = await runRefresh(current);
+        assertCurrent();
         refreshed = true;
       }
-      const execute = (activeSession: AuthSession) =>
-        apiRequest(`${apiBaseUrlRef.current}${path}`, {
+      const execute = (activeSession: BoundSession) =>
+        apiRequest(`${activeSession.apiBaseUrl}${path}`, {
           ...options,
           headers: {
             ...options.headers,
@@ -278,9 +333,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
           },
         });
       let response = await execute(current);
+      assertCurrent();
       if (response.status === 401 && !refreshed) {
         current = await runRefresh(current);
+        assertCurrent();
         response = await execute(current);
+        assertCurrent();
       }
       return response;
     },
@@ -289,11 +347,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const signIn = useCallback(
     async (values: SignInFormValues) => {
+      if (cleanupRequired.current) throw new Error('Sign-out cleanup is required');
       const startEpoch = epochRef.current;
-      const next = await login(apiBaseUrlRef.current, values);
+      const apiBaseUrl = apiBaseUrlRef.current;
+      const next = { ...(await login(apiBaseUrl, values)), apiBaseUrl };
       if (epochRef.current !== startEpoch) {
         // Signed out, or another sign-in won, while this one was in flight.
-        bestEffortLogout(next.refreshToken);
+        bestEffortLogout(next);
         return;
       }
       invalidate();
@@ -303,30 +363,26 @@ export function AuthProvider({ children }: PropsWithChildren) {
       try {
         await enqueueStorage(() => storeSession(next));
       } catch (error) {
+        bestEffortLogout(next);
         if (epochRef.current === epoch) applyState(SIGNED_OUT);
         throw error;
       }
-      if (epochRef.current !== epoch) return;
+      if (epochRef.current !== epoch) {
+        bestEffortLogout(next);
+        return;
+      }
       sessionRef.current = next;
       applyState({ recovery: null, session: next, sessionExpired: false, status: 'authenticated' });
     },
     [applyState, bestEffortLogout, enqueueStorage, invalidate],
   );
 
-  const signOut = useCallback(async () => {
-    invalidate();
-    const candidate = pendingSessionRef.current ?? sessionRef.current;
-    sessionRef.current = null;
-    pendingSessionRef.current = null;
-    applyState(SIGNED_OUT);
-    queryClient.clear();
-    try {
-      await enqueueStorage(clearSession);
-    } finally {
-      // Best effort and never awaited, so signing out works offline.
-      if (candidate) bestEffortLogout(candidate.refreshToken);
-    }
-  }, [applyState, bestEffortLogout, enqueueStorage, invalidate, queryClient]);
+  useEffect(() => {
+    if (apiBaseUrlRef.current === settings.apiBaseUrl) return;
+    apiBaseUrlRef.current = settings.apiBaseUrl;
+    // A new server must never inherit an old session or an in-flight login.
+    void signOut().catch(() => undefined);
+  }, [settings.apiBaseUrl, signOut]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

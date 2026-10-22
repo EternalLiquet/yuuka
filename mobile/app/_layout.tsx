@@ -5,7 +5,8 @@ import 'react-native-reanimated';
 import { LogBox, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AuthProvider } from '@/auth/auth-provider';
+import { AuthProvider, useAuth } from '@/auth/auth-provider';
+import { AuthRecoveryScreen } from '@/components/auth-recovery';
 import { Screen } from '@/components/screen';
 import { QueryProvider } from '@/providers/query-provider';
 import { SettingsProvider, useSettings } from '@/settings/settings-provider';
@@ -54,14 +55,19 @@ const styles = StyleSheet.create({
 
 function RootNavigation() {
   const { colorMode, colors } = useAppTheme();
+  const { recovery } = useAuth();
   return (
     <ThemeProvider value={navigationThemes[colorMode]}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.background },
-        }}
-      />
+      {recovery?.reason === 'signOut' ? (
+        <AuthRecoveryScreen />
+      ) : (
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        />
+      )}
       <StatusBar style={colorMode === 'dark' ? 'light' : 'dark'} />
     </ThemeProvider>
   );

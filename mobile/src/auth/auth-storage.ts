@@ -1,23 +1,28 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { z } from 'zod';
 
 import { AuthStorageError } from './auth-storage-error';
-import { AuthSession, authSessionSchema, isRefreshTokenExpired } from './session';
+import { authSessionSchema, isRefreshTokenExpired } from './session';
+
+// Older installs have no issuer field. Bind those to the configured server on load.
+const storedSessionSchema = authSessionSchema.extend({ apiBaseUrl: z.url().optional() });
+export type StoredAuthSession = z.infer<typeof storedSessionSchema>;
 
 const SESSION_KEY = 'yuuka.auth.session';
 const secureStoreOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
 
-export async function getStoredSession(): Promise<AuthSession | null> {
+export async function getStoredSession(): Promise<StoredAuthSession | null> {
   const value = await readValue();
   if (!value) {
     return null;
   }
 
-  let session: AuthSession | null = null;
+  let session: StoredAuthSession | null = null;
   try {
-    session = authSessionSchema.parse(JSON.parse(value));
+    session = storedSessionSchema.parse(JSON.parse(value));
   } catch {
     session = null;
   }
@@ -29,7 +34,7 @@ export async function getStoredSession(): Promise<AuthSession | null> {
   return session;
 }
 
-export async function storeSession(session: AuthSession) {
+export async function storeSession(session: StoredAuthSession) {
   await writeValue(JSON.stringify(session));
 }
 

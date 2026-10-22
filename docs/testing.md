@@ -80,6 +80,12 @@ Reports:
 
 ## Mobile
 
+Auth regressions use deferred transport and storage promises to exercise server changes during
+logout, login, refresh, and persistence, plus delayed original protected responses after sign-out
+or replacement sign-in. Root navigation coverage verifies that failed sign-out unmounts all routes,
+shows cleanup retry, and permits a clean relaunch only after deletion succeeds. Settings coverage
+checks that a different server is not saved before credential cleanup, including deletion failure.
+
 ```sh
 cd mobile
 npm ci

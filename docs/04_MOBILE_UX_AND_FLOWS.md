@@ -39,6 +39,13 @@ secure-storage failures use generic wording ("Yuuka couldn't confirm your sign-i
 also keep the saved sign-in. Sign out is always available, works offline, and clears local
 credentials and cached data even when the server cannot be reached.
 
+Sign out locks every route immediately. Until saved credentials are deleted, the app shows
+"Signing out" rather than reporting success. If deletion fails, a surviving "Sign-out incomplete"
+screen explains that saved sign-in data remains and offers "Retry sign out". Retrying (including
+on foreground) only retries deletion; it cannot restore or refresh the discarded session. Keep
+the app open until cleanup succeeds. Settings clears the old sign-in before saving a different
+server address.
+
 An already-open session whose refresh cannot connect keeps its screens, forms, and cached data;
 the failed request shows its normal error and Retry, and no expired token is sent. A rotated token
 whose response was lost legitimately fails with 401 and requires signing in again.
