@@ -113,6 +113,14 @@ backend or documentation changes.
 
 The mobile app uses short-lived signed access JWTs and one-time rotating opaque refresh tokens. Only refresh-token hashes are stored. Replaying a rotated token revokes its family. Production is single-owner, registration-disabled, password-plus-TOTP, and private-network-first.
 
+## Read-only MCP access
+
+Assistant read access uses a thin, disabled-by-default MCP layer inside the backend.
+It has its own filter chain, accepts only externally issued `yuuka:budget:read` tokens bound to
+the MCP audience, and resolves the owner from a configured subject mapping. Owner JWTs and
+refresh tokens are never shared. See `docs/mcp-read-access-adr.md`; the design was approved by the owner
+(#146); deployment and credentials remain separately gated.
+
 ## Deferred search typo tolerance
 
 Global entry search currently supports exact amount matching plus case-insensitive partial text
