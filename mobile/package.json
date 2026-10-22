@@ -57,11 +57,12 @@
     "test:audit-policy": "node scripts/audit-production.test.mjs",
     "audit:production": "node scripts/audit-production.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:dependency-compatibility": "node scripts/dependency-compatibility.test.mjs"
   },
   "overrides": {
     "@istanbuljs/load-nyc-config": {
-      "js-yaml": "3.15.2"
+      "js-yaml": "4.3.2"
     },
     "@xmldom/xmldom": "0.9.12",
     "image-size": "2.0.4",
